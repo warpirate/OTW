@@ -1,0 +1,613 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, 
+  MapPin, 
+  Clock, 
+  Home, 
+  Wrench, 
+  Zap, 
+  Scissors, 
+  Paintbrush, 
+  Car, 
+  Bike, 
+  Shield, 
+  CreditCard, 
+  Users, 
+  Smartphone, 
+  Phone, 
+  Star,
+  ChevronRight,
+  Mail,
+  Moon,
+  Sun,
+  Hammer,
+  Wind,
+  Droplets,
+  Bug,
+  Sparkles,
+  ChefHat,
+  UserCheck
+} from 'lucide-react';
+
+const LandingPage = () => {
+  const [activeTab, setActiveTab] = useState('maintenance');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const serviceCategories = {
+    maintenance: {
+      id: 'maintenance',
+      name: 'Maintenance',
+      services: [
+        {
+          id: 'carpenter',
+          name: 'Carpenter',
+          icon: Hammer,
+          description: 'Furniture repair, woodwork, installations',
+          price: 'Starting ₹299',
+          rating: 4.8
+        },
+        {
+          id: 'ac-services',
+          name: 'AC Services',
+          icon: Wind,
+          description: 'AC repair, installation, maintenance',
+          price: 'Starting ₹199',
+          rating: 4.7
+        },
+        {
+          id: 'plumber',
+          name: 'Plumber',
+          icon: Droplets,
+          description: 'Pipe repair, bathroom fittings, leakage',
+          price: 'Starting ₹149',
+          rating: 4.9
+        },
+        {
+          id: 'electrician',
+          name: 'Electrician',
+          icon: Zap,
+          description: 'Wiring, switch repair, appliance installation',
+          price: 'Starting ₹199',
+          rating: 4.8
+        },
+        {
+          id: 'pest-control',
+          name: 'Pest Control',
+          icon: Bug,
+          description: 'Cockroach, ant, termite control',
+          price: 'Starting ₹299',
+          rating: 4.6
+        }
+      ]
+    },
+    maid: {
+      id: 'maid',
+      name: 'Maid',
+      services: [
+        {
+          id: 'cleaner',
+          name: 'Cleaner',
+          icon: Sparkles,
+          description: 'House cleaning, deep cleaning services',
+          price: 'Starting ₹199',
+          rating: 4.7
+        },
+        {
+          id: 'cook',
+          name: 'Cook',
+          icon: ChefHat,
+          description: 'Home cooking, meal preparation',
+          price: 'Starting ₹399',
+          rating: 4.8
+        },
+        {
+          id: 'general-help',
+          name: 'General Help',
+          icon: UserCheck,
+          description: 'Household assistance, general tasks',
+          price: 'Starting ₹249',
+          rating: 4.5
+        }
+      ]
+    },
+    driver: {
+      id: 'driver',
+      name: 'Driver',
+      options: {
+        carType: ['With Car', 'Without Car'],
+        timeType: ['Per Hour Basis', 'Per Day Basis']
+      },
+      services: [
+        {
+          id: 'with-car-hourly',
+          name: 'With Car - Hourly',
+          icon: Car,
+          description: 'Driver with car for hourly service',
+          price: '₹150/hour',
+          rating: 4.6
+        },
+        {
+          id: 'with-car-daily',
+          name: 'With Car - Daily',
+          icon: Car,
+          description: 'Driver with car for full day',
+          price: '₹1200/day',
+          rating: 4.7
+        },
+        {
+          id: 'without-car-hourly',
+          name: 'Without Car - Hourly',
+          icon: Users,
+          description: 'Driver only for hourly service',
+          price: '₹80/hour',
+          rating: 4.5
+        },
+        {
+          id: 'without-car-daily',
+          name: 'Without Car - Daily',
+          icon: Users,
+          description: 'Driver only for full day',
+          price: '₹600/day',
+          rating: 4.6
+        }
+      ]
+    }
+  };
+
+  const rideOptions = [
+    {
+      id: 'sedan',
+      name: 'Sedan',
+      icon: Car,
+      description: 'Comfortable rides for 4',
+      price: '₹12/km',
+      eta: '3-5 min',
+      bgColor: 'bg-white',
+      iconColor: 'text-brand'
+    },
+    {
+      id: 'bike',
+      name: 'Bike',
+      icon: Bike,
+      description: 'Quick & affordable',
+      price: '₹8/km',
+      eta: '2-4 min',
+      bgColor: 'bg-white',
+      iconColor: 'text-brand'
+    }
+  ];
+
+  const features = [
+    {
+      icon: Shield,
+      title: 'Verified Professionals',
+      description: 'All service providers are background verified and trained',
+      bgColor: 'bg-purple-100',
+      iconColor: 'text-purple-600'
+    },
+    {
+      icon: CreditCard,
+      title: 'Secure Payments',
+      description: 'Multiple payment options with 100% secure transactions',
+      bgColor: 'bg-green-100',
+      iconColor: 'text-green-600'
+    },
+    {
+      icon: Clock,
+      title: '24/7 Support',
+      description: 'Round-the-clock customer support for all your needs',
+      bgColor: 'bg-blue-100',
+      iconColor: 'text-blue-600'
+    },
+    {
+      icon: Users,
+      title: 'Trusted by Millions',
+      description: 'Join over 1M+ satisfied customers across Canada',
+      bgColor: 'bg-orange-100',
+      iconColor: 'text-orange-600'
+    }
+  ];
+
+  return (
+    <div className={`min-h-screen transition-colors ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
+      {/* Header */}
+      <header className={`${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} shadow-sm border-b transition-colors`}>
+        <div className="container-custom">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="flex items-center space-x-1">
+                  <span className="text-2xl font-bold text-orange-500">O</span>
+                  <span className="text-2xl font-bold text-blue-500">T</span>
+                  <span className="text-2xl font-bold text-green-500">W</span>
+                </div>
+              </div>
+            </div>
+            <div className="hidden md:block">
+              <div className="ml-10 flex items-baseline space-x-4">
+                <button 
+                  onClick={() => setActiveTab('hourly')}
+                  className={`${
+                    activeTab === 'hourly' 
+                      ? 'nav-tab-active' 
+                      : 'nav-tab-inactive'
+                  } ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+                >
+                  Hourly Services
+                </button>
+                <button 
+                  onClick={() => setActiveTab('daily')}
+                  className={`${
+                    activeTab === 'daily' 
+                      ? 'nav-tab-active' 
+                      : 'nav-tab-inactive'
+                  } ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+                >
+                  Daily Services
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className={`p-2 rounded-lg transition-colors ${
+                  isDarkMode 
+                    ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+              <button className={`btn-ghost ${isDarkMode ? 'text-white hover:bg-gray-800' : ''}`}>
+                Sign In
+              </button>
+              <button className="btn-brand">
+                Sign Up
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="relative bg-brand-gradient-side py-20 md:py-32">
+        <div className="container-custom">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            {/* Left side with branding */}
+            <div className="w-full md:w-1/2 text-white mb-10 md:mb-0 text-center md:text-left">
+              <h1 className="heading-primary text-white mb-6">Service at your doorstep</h1>
+              <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-xl">
+                From home services to professional help, get everything you need with just a few taps.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                <button className="btn-accent py-3 px-8 rounded-xl">
+                  Book a Service
+                </button>
+              </div>
+            </div>
+            
+            {/* Right side with search & quick access */}
+            <div className="w-full md:w-5/12">
+              <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-6 md:p-8 transition-colors`}>
+                <div className="flex items-center mb-2">
+                  <div className="flex items-center space-x-1 mr-3">
+                    <span className="text-3xl font-bold text-orange-500">O</span>
+                    <span className="text-3xl font-bold text-blue-500">T</span>
+                    <span className="text-3xl font-bold text-green-500">W</span>
+                  </div>
+                  <span className="text-yellow-400 text-2xl">👋</span>
+                </div>
+                <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-6`}>Explore our services</p>
+                
+                {/* Search Bar */}
+                <div className="mb-6">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <input
+                      type="text"
+                      placeholder="Are you looking for services?"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="input-search"
+                    />
+                  </div>
+                </div>
+                
+                {/* Quick Service Categories */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold">Popular Categories</h3>
+                    <button onClick={() => setActiveTab('maintenance')} className="text-sm text-brand flex items-center hover:underline">
+                      View all <ChevronRight className="h-4 w-4 ml-1" />
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-3">
+                    {Object.values(serviceCategories).map(category => (
+                      <div key={category.id} className={`${isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}>
+                        <div className={`${isDarkMode ? 'bg-gray-600' : 'bg-white'} rounded-full p-2 mb-2`}>
+                          {category.id === 'maintenance' && <Wrench className="h-6 w-6 text-brand" />}
+                          {category.id === 'maid' && <Sparkles className="h-6 w-6 text-brand" />}
+                          {category.id === 'driver' && <Car className="h-6 w-6 text-brand" />}
+                        </div>
+                        <span className="text-sm font-medium">{category.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Service Categories Section */}
+      <section className={`py-16 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors`}>
+        <div className="container-custom">
+          {/* Section Title */}
+          <div className="text-center mb-12">
+            <h2 className={`heading-secondary mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Our Services</h2>
+            <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} max-w-2xl mx-auto`}>Choose from our wide range of professional services</p>
+          </div>
+          
+          {/* Tab Navigation */}
+          <div className="flex justify-center mb-12">
+            <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} p-1 rounded-xl`}>
+              <button
+                onClick={() => setActiveTab('maintenance')}
+                className={`px-8 py-3 rounded-lg font-medium transition-all ${
+                  activeTab === 'maintenance'
+                    ? `${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-primary-600'} shadow-md`
+                    : `${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`
+                }`}
+              >
+                Maintenance
+              </button>
+              <button
+                onClick={() => setActiveTab('maid')}
+                className={`px-8 py-3 rounded-lg font-medium transition-all ${
+                  activeTab === 'maid'
+                    ? `${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-primary-600'} shadow-md`
+                    : `${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`
+                }`}
+              >
+                Maid
+              </button>
+              <button
+                onClick={() => setActiveTab('driver')}
+                className={`px-8 py-3 rounded-lg font-medium transition-all ${
+                  activeTab === 'driver'
+                    ? `${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-primary-600'} shadow-md`
+                    : `${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`
+                }`}
+              >
+                Driver
+              </button>
+            </div>
+          </div>
+
+          {/* Services Grid */}
+          {Object.keys(serviceCategories).map(categoryKey => {
+            const category = serviceCategories[categoryKey];
+            return activeTab === categoryKey && (
+              <div key={categoryKey}>
+                <h2 className={`text-3xl font-bold text-center mb-12 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {category.name} Services
+                </h2>
+                {categoryKey === 'driver' ? (
+                  <div className="max-w-4xl mx-auto">
+                    <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} rounded-xl shadow-lg p-8 border ${isDarkMode ? 'border-gray-700' : 'border-gray-100'} mb-8`}>
+                      <h3 className="text-2xl font-bold mb-6 text-center">Choose Your Driver Service</h3>
+                      <div className="text-center mb-6">
+                        <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>Step 1: Choose car option</p>
+                        <div className="flex justify-center gap-4 mb-6">
+                          {category.options.carType.map(option => (
+                            <button key={option} className={`px-6 py-3 rounded-lg border-2 transition-all ${
+                              isDarkMode 
+                                ? 'border-gray-600 hover:border-purple-500 hover:bg-gray-700' 
+                                : 'border-gray-200 hover:border-purple-500 hover:bg-purple-50'
+                            }`}>
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                        <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>Step 2: Choose time basis</p>
+                        <div className="flex justify-center gap-4">
+                          {category.options.timeType.map(option => (
+                            <button key={option} className={`px-6 py-3 rounded-lg border-2 transition-all ${
+                              isDarkMode 
+                                ? 'border-gray-600 hover:border-purple-500 hover:bg-gray-700' 
+                                : 'border-gray-200 hover:border-purple-500 hover:bg-purple-50'
+                            }`}>
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {category.services.map((service) => {
+                        const IconComponent = service.icon;
+                        return (
+                          <div key={service.id} className={`service-card hover:shadow-xl ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+                            <div className="flex flex-col items-center text-center p-8">
+                              <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-primary-50'} rounded-full p-4`}>
+                                <IconComponent className="service-icon" />
+                              </div>
+                              <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.name}</h3>
+                              <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>{service.description}</p>
+                              <div className="flex items-center mb-4 bg-success-50 px-2 py-1 rounded-full">
+                                <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                                <span className="text-sm text-success-700 ml-1 font-medium">{service.rating}</span>
+                              </div>
+                              <div className="w-full mt-2">
+                                <div className={`text-lg font-bold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.price}</div>
+                                <button className="w-full btn-brand text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
+                                  Book Now
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {category.services.map((service) => {
+                      const IconComponent = service.icon;
+                      return (
+                        <div key={service.id} className={`service-card hover:shadow-xl ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+                          <div className="flex flex-col items-center text-center p-8">
+                            <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-primary-50'} rounded-full p-4`}>
+                              <IconComponent className="service-icon" />
+                            </div>
+                            <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.name}</h3>
+                            <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>{service.description}</p>
+                            <div className="flex items-center mb-4 bg-success-50 px-2 py-1 rounded-full">
+                              <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                              <span className="text-sm text-success-700 ml-1 font-medium">{service.rating}</span>
+                            </div>
+                            <div className="w-full mt-2">
+                              <div className={`text-lg font-bold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.price}</div>
+                              <button className="w-full btn-brand text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
+                                Book Now
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Why Choose Section */}
+      <section className={`py-16 transition-colors ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+        <div className="container-custom">
+          <div className="text-center mb-16">
+            <h2 className={`heading-secondary mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              Why Choose OTW?
+            </h2>
+            <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} max-w-2xl mx-auto`}>
+              Experience the best in-home services with our trusted platform
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {features.map((feature, index) => {
+              const IconComponent = feature.icon;
+              return (
+                <div key={index} className={`card p-6 hover:translate-y-[-8px] transition-all duration-300 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
+                  <div className={`p-3 rounded-full w-fit mb-5 ${feature.bgColor}`}>
+                    <IconComponent className={`h-6 w-6 ${feature.iconColor}`} />
+                  </div>
+                  <h3 className={`heading-tertiary mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{feature.title}</h3>
+                  <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} text-sm`}>{feature.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-20 bg-brand-gradient text-white">
+        <div className="container-custom">
+          <div className="text-center max-w-3xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Get Started?</h2>
+            <p className="text-lg mb-10 opacity-90">
+              Download the OTW app and experience hassle-free services at your doorstep.
+            </p>
+            <div className="flex flex-col md:flex-row justify-center gap-6">
+              <button className="btn-accent py-4 px-8 rounded-xl flex items-center justify-center gap-3 text-lg">
+                <Smartphone className="h-6 w-6" />
+                Download App
+              </button>
+              <button className="btn-outline text-white border-white hover:bg-white/10 py-4 px-8 rounded-xl flex items-center justify-center gap-3 text-lg">
+                <Phone className="h-6 w-6" />
+                Book via Call
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-20">
+        <div className="container-custom">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+            <div>
+              <div className="flex items-center space-x-1 mb-6">
+                <span className="text-2xl font-bold text-orange-500">O</span>
+                <span className="text-2xl font-bold text-blue-500">T</span>
+                <span className="text-2xl font-bold text-green-500">W</span>
+              </div>
+              <p className="text-gray-400 mb-8">
+                Your trusted partner for professional home services.
+              </p>
+              <div className="flex space-x-4">
+                <a href="#" className="bg-gray-800 p-3 rounded-full hover:bg-primary-500 transition-all duration-200 transform hover:scale-110">
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z" /></svg>
+                </a>
+                <a href="#" className="bg-gray-800 p-3 rounded-full hover:bg-primary-500 transition-all duration-200 transform hover:scale-110">
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z" /></svg>
+                </a>
+                <a href="#" className="bg-gray-800 p-3 rounded-full hover:bg-primary-500 transition-all duration-200 transform hover:scale-110">
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.623 3.872 10.328 9.092 11.63-.064-.902-.092-2.278.038-3.26.134-.986.9-6.302.9-6.302s-.23-.468-.23-1.148c0-1.076.624-1.88 1.402-1.88.66 0 .98.496.98 1.092 0 .665-.424 1.663-.646 2.588-.182.775.39 1.404 1.15 1.404 1.38 0 2.31-1.457 2.31-3.568 0-1.863-1.334-3.17-3.246-3.17-2.208 0-3.506 1.664-3.506 3.383 0 .67.23 1.388.516 1.78.058.07.082.13.07.2-.076.316-.246.996-.28 1.134-.044.183-.145.222-.335.134-1.25-.58-2.03-2.407-2.03-3.874 0-3.154 2.292-6.052 6.608-6.052 3.469 0 6.165 2.473 6.165 5.776 0 3.447-2.173 6.22-5.19 6.22-1.012 0-1.965-.525-2.29-1.148l-.623 2.378c-.226.87-.834 1.958-1.244 2.62 1.12.345 2.29.535 3.5.535 6.627 0 12-5.373 12-12S18.627 0 12 0z" /></svg>
+                </a>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold mb-6 text-white">Services</h3>
+              <ul className="space-y-3">
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Maintenance</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Maid Services</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Driver Services</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Plumbing</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">AC Services</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold mb-6 text-white">Company</h3>
+              <ul className="space-y-3">
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">About Us</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms & Conditions</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold mb-6 text-white">Contact</h3>
+              <p className="text-gray-400 mb-4">
+                123 Street, Toronto, ON, Canada
+              </p>
+              <p className="text-gray-400 mb-2 flex items-center">
+                <Phone className="h-4 w-4 mr-2" /> +1 234-567-8900
+              </p>
+              <p className="text-gray-400 flex items-center">
+                <Mail className="h-4 w-4 mr-2" /> contact@otw.ca
+              </p>
+            </div>
+          </div>
+          
+          <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400 text-sm">
+            <p>&copy; {new Date().getFullYear()} OTW. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default LandingPage;
