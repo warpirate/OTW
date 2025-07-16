@@ -4,6 +4,7 @@ const pool = require('../../config/db');
 router.post('/create-sub-category', async (req, res) => {
     try {
         
+        
         console.log(req.body);
         const { name,category_id, description, base_price } = req.body;
         if (!name || !category_id) {

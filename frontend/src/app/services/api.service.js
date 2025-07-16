@@ -14,9 +14,21 @@ const apiClient = axios.create({
 // Categories API
 export const CategoryService = {
   // Get all categories
-  getAllCategories: async () => {
+  getAllCategories: async (page = 1, limit = 10) => {
     try {
-      const response = await apiClient.get('/get-categories');
+      const response = await apiClient.get('/get-categories',
+        {
+        params: { page, limit } // Pass page and limit as query parameters
+      }
+      );
+      console.log('Fetched categories:', response);
+      if (Array.isArray(response.data)) {
+        response.data.category_data = response.data.category_data.map(category => ({
+          ...category,
+          isActive: category.is_active,
+        }));
+      }
+      console.log('Processed categories:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -49,7 +61,12 @@ export const CategoryService = {
   // Update existing category
   updateCategory: async (id, category) => {
     try {
-      const response = await apiClient.put(`/edit-category/${id}`, category);
+      // Ensure is_active is set based on isActive
+      const updatedCategory = {
+      ...category,
+      is_active: category.isActive !== undefined ? category.isActive : category.is_active
+      };
+      const response = await apiClient.put(`/edit-category/${id}`, updatedCategory);
       return response.data;
     } catch (error) {
       console.error(`Error updating category ${id}:`, error);
@@ -99,7 +116,9 @@ export const CategoryService = {
     try {
       console.log("CATE ID ", categoryId);
       const response = await apiClient.get(`/sub-categories?categoryId=${categoryId}`);
+      console.log('Fetched subcategories:', response);
       return response.data;
+
     } catch (error) {
       console.error('Error fetching subcategories:', error);
       throw error;

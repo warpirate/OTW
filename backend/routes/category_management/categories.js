@@ -7,8 +7,8 @@ router.post('/create-category', async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Name is required' });
 
-    const sql = 'INSERT INTO service_categories (name) VALUES (?)';
-    const [result] = await pool.query(sql, [name]);
+    const sql = 'INSERT INTO service_categories (name , is_active) VALUES (?, ?)';
+    const [result] = await pool.query(sql, [name, 1]);
 
     res.status(201).json({ id: result.insertId, name });
   } catch (err) {
@@ -18,9 +18,35 @@ router.post('/create-category', async (req, res) => {
 });
 router.get('/get-categories', async (req, res) => {
   try {
-    const sql = 'SELECT id, name FROM service_categories';
-    const [rows] = await pool.query(sql);
-    res.json(rows);
+
+    // Pagination implementation
+    let { page = 1, limit = 10 } = req.query;
+    page = parseInt(page, 10);
+    limit = parseInt(limit, 10);
+
+    if (isNaN(page) || page < 1) page = 1;
+    if (isNaN(limit) || limit < 1) limit = 10;
+
+    const offset = (page - 1) * limit;
+
+    // Get total count for pagination metadata
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM service_categories');
+
+    // Fetch paginated results
+    const [rows] = await pool.query(
+      'SELECT id, name, is_active FROM service_categories LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+
+    res.json({
+      category_data: rows,
+      pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (err) {
     console.error('Error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -44,11 +70,12 @@ router.get('/get-category/:id', async (req, res) => {
 router.put('/edit-category/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, is_active } = req.body;
+    console.log("EDIT CATEGORY ", req.body);
     if (!name) return res.status(400).json({ message: 'Name is required' });
 
-    const sql = 'UPDATE service_categories SET name = ? WHERE id = ?';
-    const [result] = await pool.query(sql, [name, id]);
+    const sql = 'UPDATE service_categories SET name = ?, is_active = ? WHERE id = ?';
+    const [result] = await pool.query(sql, [name, is_active, id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Category not found' });
