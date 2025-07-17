@@ -8,12 +8,11 @@ const CategoryManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('view'); // view, edit, add
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categoryTypes, setCategoryTypes] = useState(['maintenance', 'maid', 'driver']);
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [subcategoryMode, setSubcategoryMode] = useState('view');
-  const [filters, setFilters] = useState({
-    search: '',
-  });
+  const [filters, setFilters] = useState({search: '', status: 'all',});
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -89,18 +88,35 @@ const CategoryManagement = () => {
 
   // Handle filter change
   const handleFilterChange = (e) => {
-    setFilters({
-      ...filters,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setFilters(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Handle status filter changes
+  const handleStatusFilterChange = (e) => {
+    const { value } = e.target;
+    setFilters(prev => ({
+      ...prev,
+      status: value
+    }));
   };
 
   // Filter categories (client-side filtering on current page)
   const filteredCategories = categories.filter(category => {
-    const matchesSearch = filters.search === '' ||
-      category.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-      (category.description && category.description.toLowerCase().includes(filters.search.toLowerCase()));
-    return matchesSearch;
+    // Filter by search text
+    const matchesSearch = !filters.search || 
+      category.name.toLowerCase().includes(filters.search.toLowerCase());
+    
+    // Filter by status
+    const matchesStatus = 
+      filters.status === 'all' || 
+      (filters.status === 'active' && category.is_active) || 
+      (filters.status === 'inactive' && !category.is_active);
+    
+    return matchesSearch && matchesStatus;
   });
 
   // Handle view category
@@ -152,7 +168,8 @@ const CategoryManagement = () => {
     setSelectedCategory({
       name: '',
       is_active: true, // Default to active for new categories
-      subcategories: []
+      subcategories: [],
+      category_type: 'maintenance' // Default type
     });
     setModalMode('add');
     setShowModal(true);
@@ -479,7 +496,22 @@ const CategoryManagement = () => {
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subcategories</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <div className="flex items-center">
+                    <span className="mr-2">Status</span>
+                    <select 
+                      name="status" 
+                      value={filters.status} 
+                      onChange={handleStatusFilterChange}
+                      className="text-xs border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 py-1 pl-2 pr-7"
+                      style={{ minWidth: '90px' }}
+                    >
+                      <option value="all">All</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -642,6 +674,10 @@ const CategoryManagement = () => {
                         {selectedCategory.is_active ? 'Active' : 'Inactive'}
                       </p>
                     </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Category Type</p>
+                      <p className="mt-1 text-sm text-gray-900">{selectedCategory.category_type ? selectedCategory.category_type.charAt(0).toUpperCase() + selectedCategory.category_type.slice(1) : 'N/A'}</p>
+                    </div>
                     {selectedCategory.description && (
                       <div className="col-span-2">
                         <p className="text-sm font-medium text-gray-500">Description</p>
@@ -729,7 +765,22 @@ const CategoryManagement = () => {
                           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         />
                       </div>
-              
+
+                      <div>
+                        <label htmlFor="category_type" className="block text-sm font-medium text-gray-700">Category Type</label>
+                        <select
+                          name="category_type"
+                          id="category_type"
+                          value={selectedCategory.category_type || 'maintenance'}
+                          onChange={handleCategoryChange}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        >
+                          {categoryTypes.map((type) => (
+                            <option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
+                          ))}
+                        </select>
+                      </div>
+
                       <div>
                         <label className="flex items-center">
                           <input
