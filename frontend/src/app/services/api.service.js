@@ -11,6 +11,20 @@ const apiClient = axios.create({
   }
 });
 
+// Add a request interceptor to include JWT token in the headers
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Categories API
 export const CategoryService = {
   // Get all categories
