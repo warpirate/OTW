@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
-router.post('/create-sub-category', async (req, res) => {
+const verifyToken = require('../middlewares/verify_token');
+router.post('/create-sub-category', verifyToken, async (req, res) => {
     try {
         
         
         console.log(req.body);
-        const { name,category_id, description, base_price } = req.body;
+        const { name, category_id, description, base_price } = req.body;
         if (!name || !category_id) {
             return res.status(400).json({ message: 'Name and category_id are required' });
         }
@@ -19,7 +20,7 @@ router.post('/create-sub-category', async (req, res) => {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
-router.get('/sub-categories', async (req, res) => {
+router.get('/sub-categories', verifyToken, async (req, res) => {
     try {
         const { categoryId } = req.query;
         console.log("categoryId from query:", categoryId);
@@ -33,7 +34,7 @@ router.get('/sub-categories', async (req, res) => {
 });
 
 
-router.get('/sub-categories/:id', async (req, res) => {
+router.get('/sub-categories/:id', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
         const sql = 'SELECT * FROM subcategories WHERE id = ?';
@@ -48,7 +49,7 @@ router.get('/sub-categories/:id', async (req, res) => {
     }
 });
 
-router.put('/:category_id/subcategories/:id', async (req, res) => {
+router.put('/:category_id/subcategories/:id', verifyToken, async (req, res) => {
     try {
         const { category_id, id } = req.params;
         console.log("Updating subcategory with ID:", id, "in category:", category_id);
@@ -65,7 +66,7 @@ router.put('/:category_id/subcategories/:id', async (req, res) => {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
-router.delete('/delete-sub-category/:categoryId/:subcategoryId', async (req, res) => {
+router.delete('/delete-sub-category/:categoryId/:subcategoryId', verifyToken, async (req, res) => {
     try {
         const { categoryId, subcategoryId } = req.params;
         const sql = 'DELETE FROM subcategories WHERE id = ? AND category_id = ?';

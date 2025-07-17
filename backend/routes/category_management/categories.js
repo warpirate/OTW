@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
- 
-router.post('/create-category', async (req, res) => {
+ const verifyToken = require('../middlewares/verify_token');
+
+router.post('/create-category', verifyToken, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ message: 'Name is required' });
@@ -16,7 +17,7 @@ router.post('/create-category', async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
-router.get('/get-categories', async (req, res) => {
+router.get('/get-categories', verifyToken, async (req, res) => {
   try {
 
     // Pagination implementation
@@ -52,7 +53,7 @@ router.get('/get-categories', async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
-router.get('/get-category/:id', async (req, res) => {
+router.get('/get-category/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const sql = 'SELECT id, name FROM service_categories WHERE id = ?';
@@ -67,7 +68,7 @@ router.get('/get-category/:id', async (req, res) => {
   }
 });
 // edit category name
-router.put('/edit-category/:id', async (req, res) => {
+router.put('/edit-category/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, is_active } = req.body;
@@ -88,7 +89,7 @@ router.put('/edit-category/:id', async (req, res) => {
   }
 });
 
-router.delete('/delete-category/:id', async (req, res) => {
+router.delete('/delete-category/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
