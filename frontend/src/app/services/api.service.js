@@ -166,17 +166,6 @@ export const CategoryService = {
 };
 
 
-// Export other services as needed
-export const UserService = {
-  // User-related API calls would go here
-};
-
-export const BookingService = {
-  // Booking-related API calls would go here
-};
-
 export default {
-  CategoryService,
-  UserService,
-  BookingService
+  CategoryService
 };

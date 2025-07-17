@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
   MapPin, 
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 
 const LandingPage = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('maintenance');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -259,10 +261,22 @@ const LandingPage = () => {
               >
                 {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
-              <button className={`btn-ghost ${isDarkMode ? 'text-white hover:bg-gray-800' : ''}`}>
+              <button 
+                onClick={() => {
+                  localStorage.setItem('prefersDarkMode', isDarkMode);
+                  navigate('/login');
+                }} 
+                className={`btn-ghost ${isDarkMode ? 'text-white hover:bg-gray-800' : ''}`}
+              >
                 Sign In
               </button>
-              <button className="btn-brand">
+              <button 
+                onClick={() => {
+                  localStorage.setItem('prefersDarkMode', isDarkMode);
+                  navigate('/signup');
+                }} 
+                className="btn-brand"
+              >
                 Sign Up
               </button>
             </div>

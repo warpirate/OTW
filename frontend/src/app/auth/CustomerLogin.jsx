@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Mail, Phone, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Eye, EyeOff, Phone, Mail } from 'lucide-react';
+import AuthService from '../services/auth.service';
+import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 
 const CustomerLogin = () => {
+  const navigate = useNavigate();
   const [loginMethod, setLoginMethod] = useState('email'); // 'email' or 'phone'
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -12,6 +15,21 @@ const CustomerLogin = () => {
     otp: ''
   });
   const [isOtpSent, setIsOtpSent] = useState(false);
+  const [darkMode, setDarkMode] = useState(isDarkMode());
+  
+  // Listen for theme changes
+  useEffect(() => {
+    // Set initial dark mode
+    setDarkMode(isDarkMode());
+    
+    // Add listener for theme changes
+    const cleanup = addThemeListener((isDark) => {
+      setDarkMode(isDark);
+    });
+    
+    // Cleanup on unmount
+    return cleanup;
+  }, []);
 
   const handleInputChange = (e) => {
     setFormData({
@@ -20,15 +38,35 @@ const CustomerLogin = () => {
     });
   };
 
-  const handleSendOtp = () => {
-    // Simulate OTP sending
-    setIsOtpSent(true);
+  const handleSendOtp = async () => {
+    try {
+      // Call the requestOTP method from AuthService
+      await AuthService.requestOTP(formData.phone);
+      setIsOtpSent(true);
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      // Handle error (could add error state here if needed)
+    }
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log('Login attempt:', formData);
+    
+    try {
+      if (loginMethod === 'email') {
+        // Use email/password login
+        await AuthService.login(formData.email, formData.password);
+      } else if (loginMethod === 'phone' && isOtpSent) {
+        // Use phone/OTP login
+        await AuthService.loginWithOTP(formData.phone, formData.otp);
+      }
+      
+      // If login successful, navigate to home or dashboard
+      navigate('/');
+    } catch (error) {
+      console.error('Login failed:', error);
+      // Handle login error (could add error state here)
+    }
   };
 
   const handleSocialLogin = (provider) => {
@@ -37,23 +75,36 @@ const CustomerLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <Link to="/" className="inline-flex items-center text-blue-600 hover:text-blue-700 mb-4">
-            <ArrowLeft className="h-5 w-5 mr-2" />
-            Back to Home
-          </Link>
-          <h2 className="text-3xl font-bold text-gray-900">Welcome Back</h2>
-          <p className="mt-2 text-gray-600">Sign in to your UrbanGo account</p>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 transition-colors bg-[var(--bg-secondary)]">
+      <div className="w-full max-w-6xl lg:flex lg:items-start lg:space-x-8 text-[var(--text-primary)]">
+        {/* Left Side: Header and Title */}
+        <div className="lg:w-1/2 mb-8 lg:mb-0 lg:sticky lg:top-24">
+          <div className="md:text-center lg:text-left lg:pr-8">
+            <Link to="/" className="inline-flex items-center mb-4 text-blue-600 hover:text-blue-500">
+              <ArrowLeft className="h-5 w-5 mr-2" />
+              Back to Home
+            </Link>
+            <h2 className="text-3xl font-bold text-[var(--text-primary)]">Welcome Back</h2>
+            <p className="mt-2 text-[var(--text-secondary)]">Sign in to your OTW - On The Way account</p>
+          </div>
         </div>
 
-        {/* Login Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        {/* Right Side: Form Content */}
+        <div className="lg:w-1/2">
+          {/* Login Form */}
+          <div className="bg-[var(--bg-primary)] rounded-xl shadow-lg p-8 border border-[var(--border-color)]">
+            {/* OTW Logo */}
+            <div className="flex items-center mb-6">
+              <div className="flex items-center space-x-1 mr-3">
+                <span className="text-3xl font-bold text-orange-500">O</span>
+                <span className="text-3xl font-bold text-blue-500">T</span>
+                <span className="text-3xl font-bold text-green-500">W</span>
+              </div>
+              <span className="text-yellow-400 text-2xl">👋</span>
+            </div>
           <form onSubmit={handleLogin} className="space-y-6">
             {/* Login Method Toggle */}
-            <div className="flex bg-gray-100 p-1 rounded-lg">
+            <div className="flex p-1 rounded-lg bg-[var(--bg-secondary)]">
               <button
                 type="button"
                 onClick={() => setLoginMethod('email')}
@@ -84,7 +135,7 @@ const CustomerLogin = () => {
             {loginMethod === 'email' && (
               <>
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Email Address
                   </label>
                   <input
@@ -94,12 +145,12 @@ const CustomerLogin = () => {
                     required
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
                     placeholder="Enter your email"
                   />
                 </div>
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Password
                   </label>
                   <div className="relative">
@@ -110,7 +161,7 @@ const CustomerLogin = () => {
                       required
                       value={formData.password}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12"
+                      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12 bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
                       placeholder="Enter your password"
                     />
                     <button
@@ -129,11 +180,11 @@ const CustomerLogin = () => {
             {loginMethod === 'phone' && (
               <>
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="phone" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     Phone Number
                   </label>
                   <div className="flex">
-                    <select className="px-3 py-3 border border-gray-300 rounded-l-lg bg-gray-50 text-gray-700">
+                    <select className="px-3 py-3 border border-[var(--border-color)] rounded-l-lg bg-[var(--bg-primary)] text-[var(--text-primary)]">
                       <option>+1</option>
                       <option>+91</option>
                     </select>
@@ -144,7 +195,7 @@ const CustomerLogin = () => {
                       required
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="flex-1 px-4 py-3 border border-l-0 border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="flex-1 px-4 py-3 border border-l-0 border-[var(--border-color)] rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-[var(--bg-primary)] text-[var(--text-primary)]"
                       placeholder="Enter phone number"
                     />
                   </div>
@@ -160,7 +211,7 @@ const CustomerLogin = () => {
                   </button>
                 ) : (
                   <div>
-                    <label htmlFor="otp" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="otp" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                       Enter OTP
                     </label>
                     <input
@@ -170,7 +221,7 @@ const CustomerLogin = () => {
                       required
                       value={formData.otp}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
                       placeholder="Enter 6-digit OTP"
                       maxLength="6"
                     />
@@ -247,12 +298,13 @@ const CustomerLogin = () => {
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-[var(--text-secondary)]">
               Don't have an account?{' '}
-              <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-700">
+              <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
                 Sign up
               </Link>
             </p>
+          </div>
           </div>
         </div>
       </div>
