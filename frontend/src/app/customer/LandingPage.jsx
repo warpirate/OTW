@@ -29,7 +29,11 @@ import {
   Sparkles,
   ChefHat,
   UserCheck,
-  Calendar
+  Calendar,
+  User,
+  ShoppingCart,
+  LogOut,
+  ChevronDown
 } from 'lucide-react';
 
 const LandingPage = () => {
@@ -50,6 +54,11 @@ const LandingPage = () => {
   const [driverStep, setDriverStep] = useState(1); // 1 for car selection, 2 for booking basis
   const [selectedCarOption, setSelectedCarOption] = useState(null); // 'with-car' or 'without-car'
   const [showDriverSteps, setShowDriverSteps] = useState(false);
+  
+  // User authentication and profile dropdown states
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   
   // Fetch categories from API
   useEffect(() => {
@@ -128,6 +137,55 @@ const LandingPage = () => {
     
     fetchCategories();
   }, []);
+  
+  // Check for user authentication status
+  useEffect(() => {
+    const checkAuthStatus = () => {
+      const token = localStorage.getItem('authToken');
+      const userData = localStorage.getItem('userData');
+      
+      if (token && userData) {
+        setIsAuthenticated(true);
+        setUser(JSON.parse(userData));
+      } else {
+        // For demo purposes, simulate a logged-in user
+        // Remove this in production and rely on actual authentication
+        const demoUser = {
+          firstName: 'Varun',
+          lastName: 'Doe',
+          email: 'john.doe@example.com'
+        };
+        setIsAuthenticated(true);
+        setUser(demoUser);
+      }
+    };
+    
+    checkAuthStatus();
+  }, []);
+  
+  // Handle logout
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userData');
+    setIsAuthenticated(false);
+    setUser(null);
+    setShowProfileDropdown(false);
+    navigate('/login');
+  };
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showProfileDropdown && !event.target.closest('.profile-dropdown')) {
+        setShowProfileDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileDropdown]);
   
   // Fallback service categories in case API fails
   const fallbackServiceCategories = {
@@ -255,7 +313,8 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
-            <div className="hidden md:block">
+            {/* Hourly/Daily Services tabs commented out - not needed for now */}
+            {/* <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">
                 <button 
                   onClick={() => setActiveTab('hourly')}
@@ -278,7 +337,7 @@ const LandingPage = () => {
                   Daily Services
                 </button>
               </div>
-            </div>
+            </div> */}
             <div className="flex items-center space-x-3">
               <button 
                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -290,24 +349,104 @@ const LandingPage = () => {
               >
                 {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
-              <button 
-                onClick={() => {
-                  localStorage.setItem('prefersDarkMode', isDarkMode);
-                  navigate('/login');
-                }} 
-                className={`btn-ghost ${isDarkMode ? 'text-white hover:bg-gray-800' : ''}`}
-              >
-                Sign In
-              </button>
-              <button 
-                onClick={() => {
-                  localStorage.setItem('prefersDarkMode', isDarkMode);
-                  navigate('/signup');
-                }} 
-                className="btn-brand"
-              >
-                Sign Up
-              </button>
+              
+              {isAuthenticated && user ? (
+                // Profile dropdown for authenticated users
+                <div className="relative profile-dropdown">
+                  <button
+                    onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                      isDarkMode 
+                        ? 'text-white hover:bg-gray-800' 
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span className="font-medium">{user.firstName}</span>
+                    <User className="h-5 w-5" />
+                    <ChevronDown className={`h-4 w-4 transition-transform ${
+                      showProfileDropdown ? 'rotate-180' : ''
+                    }`} />
+                  </button>
+                  
+                  {showProfileDropdown && (
+                    <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg border z-50 ${
+                      isDarkMode 
+                        ? 'bg-gray-800 border-gray-700' 
+                        : 'bg-white border-gray-200'
+                    }`}>
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            setShowProfileDropdown(false);
+                            navigate('/profile');
+                          }}
+                          className={`flex items-center space-x-2 w-full px-4 py-2 text-left transition-colors ${
+                            isDarkMode 
+                              ? 'text-gray-300 hover:bg-gray-700 hover:text-white' 
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <User className="h-4 w-4" />
+                          <span>View Profile</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            setShowProfileDropdown(false);
+                            navigate('/cart');
+                          }}
+                          className={`flex items-center space-x-2 w-full px-4 py-2 text-left transition-colors ${
+                            isDarkMode 
+                              ? 'text-gray-300 hover:bg-gray-700 hover:text-white' 
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <ShoppingCart className="h-4 w-4" />
+                          <span>View Cart</span>
+                        </button>
+                        
+                        <hr className={`my-1 ${
+                          isDarkMode ? 'border-gray-700' : 'border-gray-200'
+                        }`} />
+                        
+                        <button
+                          onClick={handleLogout}
+                          className={`flex items-center space-x-2 w-full px-4 py-2 text-left transition-colors ${
+                            isDarkMode 
+                              ? 'text-red-400 hover:bg-gray-700 hover:text-red-300' 
+                              : 'text-red-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Sign In/Sign Up buttons for non-authenticated users
+                <>
+                  <button 
+                    onClick={() => {
+                      localStorage.setItem('prefersDarkMode', isDarkMode);
+                      navigate('/login');
+                    }} 
+                    className={`btn-ghost ${isDarkMode ? 'text-white hover:bg-gray-800' : ''}`}
+                  >
+                    Sign In
+                  </button>
+                  <button 
+                    onClick={() => {
+                      localStorage.setItem('prefersDarkMode', isDarkMode);
+                      navigate('/signup');
+                    }} 
+                    className="btn-brand"
+                  >
+                    Sign Up
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -319,9 +458,9 @@ const LandingPage = () => {
           <div className="flex flex-col md:flex-row items-center justify-between">
             {/* Left side with branding */}
             <div className="w-full md:w-1/2 text-white mb-10 md:mb-0 text-center md:text-left">
-              <h1 className="heading-primary text-white mb-6">Service at your doorstep</h1>
+              <h1 className="heading-primary text-white mb-6">We are on the Way</h1>
               <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-xl">
-                From home services to professional help, get everything you need with just a few taps.
+                We are on the way to make your life easier with our services.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
                 <button className="btn-accent py-3 px-8 rounded-xl">
