@@ -35,7 +35,7 @@ router.get('/get-categories', verifyToken, async (req, res) => {
 
     // Fetch paginated results
     const [rows] = await pool.query(
-      'SELECT id, name, is_active FROM service_categories LIMIT ? OFFSET ?',
+      'SELECT id, name, is_active, category_type FROM service_categories LIMIT ? OFFSET ?',
       [limit, offset]
     );
 
@@ -53,30 +53,31 @@ router.get('/get-categories', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
-router.get('/get-category/:id', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const sql = 'SELECT id, name FROM service_categories WHERE id = ?';
-    const [rows] = await pool.query(sql, [id]);
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Category not found' });
-    }
-    res.json(rows[0]);
-  } catch (err) {
-    console.error('Error:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
+// router.get('/get-category/:id', verifyToken, async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const sql = 'SELECT id, name,  FROM service_categories WHERE id = ?';
+//     const [rows] = await pool.query(sql, [id]);
+//     if (rows.length === 0) {
+//       return res.status(404).json({ message: 'Category not found' });
+//     }
+//     res.json(rows[0]);
+//   } catch (err) {
+//     console.error('Error:', err);
+//     res.status(500).json({ message: 'Server error', error: err.message });
+//   }
+// });
 // edit category name
 router.put('/edit-category/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, is_active } = req.body;
+    const { name, is_active, category_type } = req.body;
+    if (!id) return res.status(400).json({ message: 'ID is required' });
     console.log("EDIT CATEGORY ", req.body);
     if (!name) return res.status(400).json({ message: 'Name is required' });
 
-    const sql = 'UPDATE service_categories SET name = ?, is_active = ? WHERE id = ?';
-    const [result] = await pool.query(sql, [name, is_active, id]);
+    const sql = 'UPDATE service_categories SET name = ?, is_active = ?, category_type = ? WHERE id = ?';
+    const [result] = await pool.query(sql, [name, is_active, category_type, id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Category not found' });
