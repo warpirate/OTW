@@ -5,11 +5,12 @@ const pool = require('../../config/db');
 
 router.post('/create-category', verifyToken, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, category_type } = req.body;
     if (!name) return res.status(400).json({ message: 'Name is required' });
+    if (!category_type) return res.status(400).json({ message: 'Category type is required' });
 
-    const sql = 'INSERT INTO service_categories (name , is_active) VALUES (?, ?)';
-    const [result] = await pool.query(sql, [name, 1]);
+    const sql = 'INSERT INTO service_categories (name , category_type, is_active) VALUES (?, ?, ?)';
+    const [result] = await pool.query(sql, [name, category_type, 1]);
 
     res.status(201).json({ id: result.insertId, name });
   } catch (err) {
@@ -17,6 +18,7 @@ router.post('/create-category', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
+
 router.get('/get-categories', verifyToken, async (req, res) => {
   try {
 

@@ -52,7 +52,7 @@ const LandingPage = () => {
         setLoading(true);
         // Get all categories (no pagination for landing page)
         const response = await CategoryService.getAllCategories(1, 100);
-        
+        console.log(" response from landing page ", response);
         if (response && response.category_data) {
           // Filter active categories
           const activeCategories = response.category_data.filter(cat => cat.is_active);
