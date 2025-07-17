@@ -40,6 +40,10 @@ const LandingPage = () => {
   const [error, setError] = useState(null);
   const [categories, setCategories] = useState([]);
   const [dynamicServiceCategories, setDynamicServiceCategories] = useState({});
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [subcategories, setSubcategories] = useState([]);
+  const [showSubcategories, setShowSubcategories] = useState(false);
+  const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
   // Fetch categories from API
   useEffect(() => {
@@ -50,67 +54,50 @@ const LandingPage = () => {
         const response = await CategoryService.getAllCategories(1, 100);
         
         if (response && response.category_data) {
-          // Fetch subcategories for each category
-          const categoriesWithSubcategories = await Promise.all(
-            response.category_data.filter(cat => cat.is_active).map(async (category) => {
-              try {
-                const subcategories = await CategoryService.getAllSubCategories(category.id);
-                return {
-                  ...category,
-                  subcategories: subcategories || []
-                };
-              } catch (error) {
-                console.error(`Error fetching subcategories for category ${category.id}:`, error);
-                return {
-                  ...category,
-                  subcategories: []
-                };
-              }
-            })
-          );
+          // Filter active categories
+          const activeCategories = response.category_data.filter(cat => cat.is_active);
           
-          setCategories(categoriesWithSubcategories);
+          // Store the full categories data for later use
+          setCategories(activeCategories);
           
           // Group categories by type for display
           const groupedCategories = {};
           
-          categoriesWithSubcategories.forEach(category => {
+          activeCategories.forEach(category => {
             const type = category.category_type || 'maintenance'; // Default to maintenance if no category_type
             
             if (!groupedCategories[type]) {
               groupedCategories[type] = {
                 id: type,
                 name: type.charAt(0).toUpperCase() + type.slice(1),
-                services: []
+                categories: []
               };
             }
             
-            // Map subcategories to services
-            category.subcategories.forEach(subcategory => {
-              // Get appropriate icon based on category type
-              let icon;
-              switch (type) {
-                case 'maintenance':
-                  icon = Wrench;
-                  break;
-                case 'maid':
-                  icon = Sparkles;
-                  break;
-                case 'driver':
-                  icon = Car;
-                  break;
-                default:
-                  icon = Wrench;
-              }
-              
-              groupedCategories[type].services.push({
-                id: subcategory.id,
-                name: subcategory.name,
-                icon: icon,
-                description: subcategory.description || `Professional ${subcategory.name} services`,
-                price: `Starting ₹${subcategory.base_price}`,
-                rating: (4 + Math.random()).toFixed(1) // Generate a random rating between 4.0 and 5.0
-              });
+            // Get appropriate icon based on category type
+            let icon;
+            switch (type) {
+              case 'maintenance':
+                icon = Wrench;
+                break;
+              case 'maid':
+                icon = Sparkles;
+                break;
+              case 'driver':
+                icon = Car;
+                break;
+              default:
+                icon = Wrench;
+            }
+            
+            // Add the category to the respective group
+            groupedCategories[type].categories.push({
+              id: category.id,
+              name: category.name,
+              icon: icon,
+              description: category.description || `Professional ${category.name} services`,
+              imageUrl: category.image_url,
+              hasSubcategories: true // We'll assume all categories can have subcategories
             });
           });
           
@@ -141,58 +128,53 @@ const LandingPage = () => {
     maintenance: {
       id: 'maintenance',
       name: 'Maintenance',
-      services: [
+      categories: [
         {
           id: 'carpenter',
           name: 'Carpenter',
           icon: Hammer,
           description: 'Furniture repair, woodwork, installations',
-          price: 'Starting ₹299',
-          rating: 4.8
+          hasSubcategories: true
         },
         {
           id: 'ac-services',
           name: 'AC Services',
           icon: Wind,
           description: 'AC repair, installation, maintenance',
-          price: 'Starting ₹199',
-          rating: 4.7
+          hasSubcategories: true
         },
         {
           id: 'plumber',
           name: 'Plumber',
           icon: Droplets,
           description: 'Pipe repair, bathroom fittings, leakage',
-          price: 'Starting ₹149',
-          rating: 4.9
+          hasSubcategories: true
         }
       ]
     },
     maid: {
       id: 'maid',
       name: 'Maid',
-      services: [
+      categories: [
         {
           id: 'cleaner',
           name: 'Cleaner',
           icon: Sparkles,
           description: 'House cleaning, deep cleaning services',
-          price: 'Starting ₹199',
-          rating: 4.7
+          hasSubcategories: true
         }
       ]
     },
     driver: {
       id: 'driver',
       name: 'Driver',
-      services: [
+      categories: [
         {
-          id: 'with-car-hourly',
-          name: 'With Car - Hourly',
+          id: 'with-car',
+          name: 'With Car',
           icon: Car,
-          description: 'Driver with car for hourly service',
-          price: '₹150/hour',
-          rating: 4.6
+          description: 'Driver with car services',
+          hasSubcategories: true
         }
       ]
     }
@@ -427,7 +409,11 @@ const LandingPage = () => {
                 Object.values(dynamicServiceCategories).map(category => (
                   <button
                     key={category.id}
-                    onClick={() => setActiveTab(category.id)}
+                    onClick={() => {
+                      setActiveTab(category.id);
+                      setShowSubcategories(false);
+                      setSelectedCategory(null);
+                    }}
                     className={`px-8 py-3 rounded-lg font-medium transition-all ${
                       activeTab === category.id
                         ? `${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-primary-600'} shadow-md`
@@ -450,122 +436,190 @@ const LandingPage = () => {
           </div>
 
           {/* Services Grid */}
-          {Object.keys(dynamicServiceCategories).map(categoryKey => {
-            const category = dynamicServiceCategories[categoryKey];
-            return activeTab === categoryKey && (
-              <div key={categoryKey}>
-                <h2 className={`text-3xl font-bold text-center mb-12 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {dynamicServiceCategories[activeTab]?.name || 'Loading...'} Services
-                </h2>
-                {categoryKey === 'driver' ? (
-                  <div className="max-w-4xl mx-auto">
-                    <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} rounded-xl shadow-lg p-8 border ${isDarkMode ? 'border-gray-700' : 'border-gray-100'} mb-8`}>
-                      <h3 className="text-2xl font-bold mb-6 text-center">Choose Your Driver Service</h3>
-                      <div className="text-center mb-6">
-                        <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>Step 1: Choose car option</p>
-                        <div className="flex justify-center gap-4 mb-6">
-                          {['With Car', 'Without Car'].map(option => (
-                            <button key={option} className={`px-6 py-3 rounded-lg border-2 transition-all ${
-                              isDarkMode 
-                                ? 'border-gray-600 hover:border-purple-500 hover:bg-gray-700' 
-                                : 'border-gray-200 hover:border-purple-500 hover:bg-purple-50'
-                            }`}>
-                              {option}
-                            </button>
-                          ))}
-                        </div>
-                        <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>Step 2: Choose time basis</p>
-                        <div className="flex justify-center gap-4">
-                          {['Per Hour Basis', 'Per Day Basis'].map(option => (
-                            <button key={option} className={`px-6 py-3 rounded-lg border-2 transition-all ${
-                              isDarkMode 
-                                ? 'border-gray-600 hover:border-purple-500 hover:bg-gray-700' 
-                                : 'border-gray-200 hover:border-purple-500 hover:bg-purple-50'
-                            }`}>
-                              {option}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {category.services.map((service) => {
-                        const IconComponent = service.icon;
-                        return (
-                          <div key={service.id} className={`service-card hover:shadow-xl ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                            <div className="flex flex-col items-center text-center p-8">
-                              <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-primary-50'} rounded-full p-4`}>
-                                <IconComponent className="service-icon" />
-                              </div>
-                              <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.name}</h3>
-                              <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>{service.description}</p>
-                              <div className="flex items-center mb-4 bg-success-50 px-2 py-1 rounded-full">
-                                <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                                <span className="text-sm text-success-700 ml-1 font-medium">{service.rating}</span>
-                              </div>
-                              <div className="w-full mt-2">
-                                <div className={`text-lg font-bold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.price}</div>
-                                <button className="w-full btn-brand text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
-                                  Book Now
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {loading ? (
-                      <div className="col-span-3 flex justify-center py-16">
-                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand"></div>
-                      </div>
-                    ) : error ? (
-                      <div className="col-span-3 text-center py-16">
-                        <p className={`${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>{error}</p>
-                        <button 
-                          onClick={() => window.location.reload()} 
-                          className="mt-4 px-4 py-2 bg-brand text-white rounded-md"
-                        >
-                          Retry
-                        </button>
-                      </div>
-                    ) : dynamicServiceCategories[activeTab]?.services && dynamicServiceCategories[activeTab].services.length > 0 ? (
-                      dynamicServiceCategories[activeTab].services.map((service) => {
-                        const IconComponent = service.icon;
-                        return (
-                          <div key={service.id} className={`service-card hover:shadow-xl ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                            <div className="flex flex-col items-center text-center p-8">
-                              <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-primary-50'} rounded-full p-4`}>
-                                <IconComponent className="service-icon" />
-                              </div>
-                              <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.name}</h3>
-                              <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>{service.description}</p>
-                              <div className="flex items-center mb-4 bg-success-50 px-2 py-1 rounded-full">
-                                <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                                <span className="text-sm text-success-700 ml-1 font-medium">{service.rating}</span>
-                              </div>
-                              <div className="w-full mt-2">
-                                <div className={`text-lg font-bold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.price}</div>
-                                <button className="w-full btn-brand text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
-                                  Book Now
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="col-span-3 text-center py-16">
-                        <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>No services available</p>
-                      </div>
-                    )}
-                  </div>
-                )}
+          {showSubcategories && selectedCategory ? (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <button 
+                  onClick={() => {
+                    setShowSubcategories(false);
+                    setSelectedCategory(null);
+                  }}
+                  className={`flex items-center ${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
+                >
+                  <ChevronRight className="h-5 w-5 mr-1 transform rotate-180" /> Back to Categories
+                </button>
               </div>
-            );
-          })}
+              <h2 className={`text-3xl font-bold text-center mb-12 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {selectedCategory.name} Services
+              </h2>
+              
+              {loadingSubcategories ? (
+                <div className="flex justify-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand"></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {subcategories && subcategories.length > 0 ? (
+                    subcategories.map(subcategory => (
+                      <div 
+                        key={subcategory.id}
+                        className={`service-card ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                      >
+                        <div className="p-6">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className={`rounded-full p-3 ${isDarkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
+                              {selectedCategory.icon && <selectedCategory.icon className="service-icon" />}
+                            </div>
+                            <div className="flex items-center">
+                              <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                              <span className="ml-1 text-sm font-medium">{(4 + Math.random()).toFixed(1)}</span>
+                            </div>
+                          </div>
+                          <h3 className="font-bold text-lg mb-2">{subcategory.name}</h3>
+                          <p className={`text-sm mb-4 line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {subcategory.description || `Professional ${subcategory.name} services`}
+                          </p>
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-brand">{`Starting ₹${subcategory.base_price || 199}`}</span>
+                            <button className="btn-sm">Book</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-8">
+                      <p className="text-lg">{`No services available in ${selectedCategory.name} category.`}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            Object.keys(dynamicServiceCategories).map(categoryKey => {
+              const category = dynamicServiceCategories[categoryKey];
+              return activeTab === categoryKey && (
+                <div key={categoryKey}>
+                  <h2 className={`text-3xl font-bold text-center mb-12 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {dynamicServiceCategories[activeTab]?.name || 'Loading...'} Categories
+                  </h2>
+                  
+                  {categoryKey === 'driver' ? (
+                    <div className="max-w-4xl mx-auto">
+                      <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} rounded-xl shadow-lg p-8 border ${isDarkMode ? 'border-gray-700' : 'border-gray-100'} mb-8`}>
+                        <h3 className="text-2xl font-bold mb-6 text-center">Driver Services Categories</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {category.categories.map((cat) => {
+                          const IconComponent = cat.icon;
+                          return (
+                            <div 
+                              key={cat.id} 
+                              className={`service-card hover:shadow-xl ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} cursor-pointer`}
+                              onClick={() => {
+                                setSelectedCategory(cat);
+                                setLoadingSubcategories(true);
+                                setShowSubcategories(true);
+                                
+                                // Fetch subcategories for the selected category
+                                CategoryService.getAllSubCategories(cat.id)
+                                  .then(data => {
+                                    setSubcategories(data || []);
+                                    setLoadingSubcategories(false);
+                                  })
+                                  .catch(err => {
+                                    console.error(`Error fetching subcategories for ${cat.name}:`, err);
+                                    setSubcategories([]);
+                                    setLoadingSubcategories(false);
+                                  });
+                              }}
+                            >
+                              <div className="flex flex-col items-center text-center p-8">
+                                <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-primary-50'} rounded-full p-4`}>
+                                  <IconComponent className="service-icon" />
+                                </div>
+                                <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
+                                <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>{cat.description}</p>
+                                <div className="w-full mt-2">
+                                  <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
+                                    View Services <ChevronRight className="inline-block h-4 w-4 ml-1" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                      {loading ? (
+                        <div className="col-span-3 flex justify-center py-16">
+                          <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand"></div>
+                        </div>
+                      ) : error ? (
+                        <div className="col-span-3 text-center py-16">
+                          <p className={`${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>{error}</p>
+                          <button 
+                            onClick={() => window.location.reload()} 
+                            className="mt-4 px-4 py-2 bg-brand text-white rounded-md"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : category.categories && category.categories.length > 0 ? (
+                        <>
+                          {category.categories.map((cat) => {
+                            const IconComponent = cat.icon;
+                            return (
+                              <div 
+                                key={cat.id}
+                                className={`service-card ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} cursor-pointer`}
+                                onClick={() => {
+                                  setSelectedCategory(cat);
+                                  setLoadingSubcategories(true);
+                                  setShowSubcategories(true);
+                                  
+                                  // Fetch subcategories for the selected category
+                                  CategoryService.getAllSubCategories(cat.id)
+                                    .then(data => {
+                                      setSubcategories(data || []);
+                                      setLoadingSubcategories(false);
+                                    })
+                                    .catch(err => {
+                                      console.error(`Error fetching subcategories for ${cat.name}:`, err);
+                                      setSubcategories([]);
+                                      setLoadingSubcategories(false);
+                                    });
+                                }}
+                              >
+                                <div className="p-6">
+                                  <div className="flex justify-between items-start mb-4">
+                                    <div className={`rounded-full p-3 ${isDarkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
+                                      <IconComponent className="service-icon" />
+                                    </div>
+                                  </div>
+                                  <h3 className="font-bold text-lg mb-2">{cat.name}</h3>
+                                  <p className={`text-sm mb-4 line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{cat.description}</p>
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-sm text-brand">View Services</span>
+                                    <ChevronRight className="h-5 w-5 text-brand" />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <div className="col-span-4 text-center py-8">
+                          <p className="text-lg">No categories available at the moment.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            }))
+          }
         </div>
       </section>
 
