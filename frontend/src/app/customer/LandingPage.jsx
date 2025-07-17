@@ -48,7 +48,7 @@ const LandingPage = () => {
         setLoading(true);
         // Get all categories (no pagination for landing page)
         const response = await CategoryService.getAllCategories(1, 100);
-        
+        console.log(" response from landing page ", response);
         if (response && response.category_data) {
           // Fetch subcategories for each category
           const categoriesWithSubcategories = await Promise.all(
