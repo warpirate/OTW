@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {LandingPageService} from '../services/landing_page.service';
+import AuthService from '../services/auth.service';
 import { 
   Search, 
   MapPin, 
@@ -59,6 +60,38 @@ const LandingPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  
+  // Features array for Why Choose Section
+  const features = [
+    {
+      title: "Verified Professionals",
+      icon: Shield,
+      description: "All service providers are thoroughly vetted and background-checked",
+      bgColor: "bg-blue-100",
+      iconColor: "text-blue-500"
+    },
+    {
+      title: "Secure Payments",
+      icon: CreditCard,
+      description: "Your transactions are protected with bank-grade security",
+      bgColor: "bg-green-100",
+      iconColor: "text-green-500"
+    },
+    {
+      title: "Customer Support",
+      icon: Phone,
+      description: "Our team is available 24/7 to assist with any issues",
+      bgColor: "bg-orange-100",
+      iconColor: "text-orange-500"
+    },
+    {
+      title: "Satisfaction Guarantee",
+      icon: Star,
+      description: "Not satisfied? We'll make it right or refund your payment",
+      bgColor: "bg-purple-100",
+      iconColor: "text-purple-500"
+    }
+  ];
   
   // Fetch categories from API
   useEffect(() => {
@@ -154,39 +187,65 @@ const LandingPage = () => {
   // Check for user authentication status
   useEffect(() => {
     const checkAuthStatus = () => {
-      const token = localStorage.getItem('authToken');
-      const userData = localStorage.getItem('userData');
-      
-      if (token && userData) {
-        setIsAuthenticated(true);
-        setUser(JSON.parse(userData));
-      } else {
-        // For demo purposes, simulate a logged-in user
-        // Remove this in production and rely on actual authentication
-        const demoUser = {
-          firstName: 'Varun',
-          lastName: 'Doe',
-          email: 'john.doe@example.com'
-        };
-        setIsAuthenticated(true);
-        setUser(demoUser);
+      try {
+        if (AuthService.isLoggedIn()) {
+          const userData = AuthService.getCurrentUser();
+          if (userData) {
+            setIsAuthenticated(true);
+            setUser(userData);
+          } else {
+            setIsAuthenticated(false);
+          }
+        } else if (isAuthenticated) {
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        setIsAuthenticated(false);
       }
     };
     
+    // Run authentication check when component mounts
     checkAuthStatus();
-  }, []);
+    
+    // Set up interval to check auth status every 5 seconds (less frequent)
+    const authCheckInterval = setInterval(checkAuthStatus, 5000);
+    
+    return () => {
+      clearInterval(authCheckInterval);
+    };
+  }, [isAuthenticated]); // Only depend on isAuthenticated to prevent unnecessary re-renders
+  
+  // Force authentication state update (for debugging)
+  const forceAuthUpdate = () => {
+    if (AuthService.isLoggedIn()) {
+      const userData = AuthService.getCurrentUser();
+      if (userData) {
+        setIsAuthenticated(true);
+        setUser(userData);
+      } else {
+        setIsAuthenticated(false);
+      }
+    } else {
+      setIsAuthenticated(false);
+    }
+  };
+  
+  // Make forceAuthUpdate available globally for debugging
+  window.forceAuthUpdate = forceAuthUpdate;
   
   // Handle logout
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
+    // Call logout function from imported AuthService
+    AuthService.logout();
+    
     setIsAuthenticated(false);
     setUser(null);
     setShowProfileDropdown(false);
-    navigate('/login');
+    
+    navigate('/');
   };
   
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showProfileDropdown && !event.target.closest('.profile-dropdown')) {
@@ -200,116 +259,8 @@ const LandingPage = () => {
     };
   }, [showProfileDropdown]);
   
-  // Fallback service categories in case API fails
-  const fallbackServiceCategories = {
-    maintenance: {
-      id: 'maintenance',
-      name: 'Maintenance',
-      categories: [
-        {
-          id: 'carpenter',
-          name: 'Carpenter',
-          icon: Hammer,
-          description: 'Furniture repair, woodwork, installations',
-          hasSubcategories: true
-        },
-        {
-          id: 'ac-services',
-          name: 'AC Services',
-          icon: Wind,
-          description: 'AC repair, installation, maintenance',
-          hasSubcategories: true
-        },
-        {
-          id: 'plumber',
-          name: 'Plumber',
-          icon: Droplets,
-          description: 'Pipe repair, bathroom fittings, leakage',
-          hasSubcategories: true
-        }
-      ]
-    },
-    maid: {
-      id: 'maid',
-      name: 'Maid',
-      categories: [
-        {
-          id: 'cleaner',
-          name: 'Cleaner',
-          icon: Sparkles,
-          description: 'House cleaning, deep cleaning services',
-          hasSubcategories: true
-        }
-      ]
-    },
-    driver: {
-      id: 'driver',
-      name: 'Driver',
-      categories: [
-        {
-          id: 'with-car',
-          name: 'With Car',
-          icon: Car,
-          description: 'Driver with car services',
-          hasSubcategories: true
-        }
-      ]
-    }
-  };
 
-  const rideOptions = [
-    {
-      id: 'sedan',
-      name: 'Sedan',
-      icon: Car,
-      description: 'Comfortable rides for 4',
-      price: '₹12/km',
-      eta: '3-5 min',
-      bgColor: 'bg-white',
-      iconColor: 'text-brand'
-    },
-    {
-      id: 'bike',
-      name: 'Bike',
-      icon: Bike,
-      description: 'Quick & affordable',
-      price: '₹8/km',
-      eta: '2-4 min',
-      bgColor: 'bg-white',
-      iconColor: 'text-brand'
-    }
-  ];
 
-  const features = [
-    {
-      icon: Shield,
-      title: 'Verified Professionals',
-      description: 'All service providers are background verified and trained',
-      bgColor: 'bg-purple-100',
-      iconColor: 'text-purple-600'
-    },
-    {
-      icon: CreditCard,
-      title: 'Secure Payments',
-      description: 'Multiple payment options with 100% secure transactions',
-      bgColor: 'bg-green-100',
-      iconColor: 'text-green-600'
-    },
-    {
-      icon: Clock,
-      title: '24/7 Support',
-      description: 'Round-the-clock customer support for all your needs',
-      bgColor: 'bg-blue-100',
-      iconColor: 'text-blue-600'
-    },
-    {
-      icon: Users,
-      title: 'Trusted by Millions',
-      description: 'Join over 1M+ satisfied customers across Canada',
-      bgColor: 'bg-orange-100',
-      iconColor: 'text-orange-600'
-    }
-  ];
 
   return (
     <div className={`min-h-screen transition-colors ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
@@ -353,6 +304,17 @@ const LandingPage = () => {
               </div>
             </div> */}
             <div className="flex items-center space-x-3">
+              {/* Worker Portal Link */}
+              {/* <button 
+                onClick={() => navigate('/worker/login')}
+                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isDarkMode 
+                    ? 'text-blue-400 hover:bg-gray-800 hover:text-blue-300' 
+                    : 'text-blue-600 hover:bg-blue-50'
+                }`}
+              >
+                👷 For Workers
+              </button> */}
               <button 
                 onClick={() => setIsDarkMode(!isDarkMode)}
                 className={`p-2 rounded-lg transition-colors ${
@@ -364,8 +326,7 @@ const LandingPage = () => {
                 {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
               
-              {isAuthenticated && user ? (
-                // Profile dropdown for authenticated users
+              {(isAuthenticated && user) ? (
                 <div className="relative profile-dropdown">
                   <button
                     onClick={() => setShowProfileDropdown(!showProfileDropdown)}
@@ -375,7 +336,9 @@ const LandingPage = () => {
                         : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >
-                    <span className="font-medium">{user.firstName}</span>
+                    <span className="font-medium">
+                      {user.firstName || user.first_name || (user.name ? user.name.split(' ')[0] : 'User')}
+                    </span>
                     <User className="h-5 w-5" />
                     <ChevronDown className={`h-4 w-4 transition-transform ${
                       showProfileDropdown ? 'rotate-180' : ''
@@ -1070,6 +1033,14 @@ const LandingPage = () => {
               <ul className="space-y-3">
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">About Us</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
+                <li>
+                  <button 
+                    onClick={() => navigate('/worker/signup')}
+                    className="text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    👷 Become a Worker
+                  </button>
+                </li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms & Conditions</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>

@@ -1,80 +1,14 @@
-import React, { useState } from 'react';
-
-// Mock admin users data
-const initialAdmins = [
-  {
-    id: 1,
-    name: 'Sneha Kumar',
-    email: 'sneha@urbango.ca',
-    phone: '9876543210',
-    role: 'Admin',
-    status: 'Active',
-    permissions: ['User Management', 'Category Management', 'Dispute Management'],
-    lastLogin: '2023-07-14 09:15',
-    createdAt: '2023-01-15'
-  },
-  {
-    id: 2,
-    name: 'Rahul Verma',
-    email: 'rahul@urbango.ca',
-    phone: '8765432109',
-    role: 'Admin',
-    status: 'Active',
-    permissions: ['User Management', 'Category Management'],
-    lastLogin: '2023-07-13 16:30',
-    createdAt: '2023-02-20'
-  },
-  {
-    id: 3,
-    name: 'Priya Singh',
-    email: 'priya@urbango.ca',
-    phone: '7654321098',
-    role: 'Admin',
-    status: 'Active',
-    permissions: ['Dispute Management', 'User Management'],
-    lastLogin: '2023-07-14 11:45',
-    createdAt: '2023-03-05'
-  },
-  {
-    id: 4,
-    name: 'Vikram Malhotra',
-    email: 'vikram@urbango.ca',
-    phone: '6543210987',
-    role: 'Admin',
-    status: 'Inactive',
-    permissions: ['Category Management'],
-    lastLogin: '2023-07-10 14:20',
-    createdAt: '2023-01-10'
-  },
-  {
-    id: 5,
-    name: 'Neha Patel',
-    email: 'neha@urbango.ca',
-    phone: '5432109876',
-    role: 'Admin',
-    status: 'Active',
-    permissions: ['User Management'],
-    lastLogin: '2023-07-14 10:30',
-    createdAt: '2023-04-12'
-  }
-];
-
-// Available permissions
-const availablePermissions = [
-  'User Management',
-  'Category Management',
-  'Dispute Management',
-  'Booking Management',
-  'Payment Management',
-  'Reporting'
-];
+import React, { useState, useEffect } from 'react';
+import AdminService from '../../services/admin.service';
+import { toast } from 'react-toastify';
 
 const AdminManagement = () => {
-  const [admins, setAdmins] = useState(initialAdmins);
+  const [admins, setAdmins] = useState([]);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
     status: 'All',
     search: ''
@@ -85,10 +19,32 @@ const AdminManagement = () => {
     name: '',
     email: '',
     phone: '',
-    role: 'Admin',
-    status: 'Active',
-    permissions: []
+    role: 'admin',
+    status: 'Active'
   });
+
+  // Load admins on component mount
+  useEffect(() => {
+    fetchAdmins();
+  }, []);
+
+  // Fetch all admins
+  const fetchAdmins = async () => {
+    try {
+      setLoading(true);
+      const response = await AdminService.getAdmins();
+      if (response.success) {
+        setAdmins(response.data);
+      } else {
+        toast.error('Failed to fetch admins');
+      }
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+      toast.error('Error fetching admins');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Filter admins based on selected filters
   const filteredAdmins = admins.filter(admin => {
@@ -115,9 +71,8 @@ const AdminManagement = () => {
       name: '',
       email: '',
       phone: '',
-      role: 'Admin',
-      status: 'Active',
-      permissions: []
+      role: 'admin',
+      status: 'Active'
     });
     setIsAddModalOpen(true);
   };
@@ -131,65 +86,64 @@ const AdminManagement = () => {
     });
   };
 
-  // Handle permission checkbox change
-  const handlePermissionChange = (permission) => {
-    if (isAddModalOpen) {
-      if (newAdmin.permissions.includes(permission)) {
-        setNewAdmin({
-          ...newAdmin,
-          permissions: newAdmin.permissions.filter(p => p !== permission)
-        });
+  // Handle adding a new admin
+  const handleAddAdmin = async () => {
+    try {
+      setLoading(true);
+      const response = await AdminService.createAdmin(newAdmin);
+      if (response.success) {
+        toast.success(response.message);
+        setIsAddModalOpen(false);
+        fetchAdmins(); // Refresh the list
       } else {
-        setNewAdmin({
-          ...newAdmin,
-          permissions: [...newAdmin.permissions, permission]
-        });
+        toast.error(response.message || 'Failed to create admin');
       }
-    } else if (isEditModalOpen) {
-      if (selectedAdmin.permissions.includes(permission)) {
-        setSelectedAdmin({
-          ...selectedAdmin,
-          permissions: selectedAdmin.permissions.filter(p => p !== permission)
-        });
-      } else {
-        setSelectedAdmin({
-          ...selectedAdmin,
-          permissions: [...selectedAdmin.permissions, permission]
-        });
-      }
+    } catch (error) {
+      console.error('Error creating admin:', error);
+      toast.error('Error creating admin');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Handle adding a new admin
-  const handleAddAdmin = () => {
-    const newAdminWithId = {
-      ...newAdmin,
-      id: Math.max(...admins.map(a => a.id)) + 1,
-      lastLogin: 'Never',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    
-    setAdmins([...admins, newAdminWithId]);
-    setIsAddModalOpen(false);
-  };
-
   // Handle editing an admin
-  const handleEditAdmin = () => {
-    const updatedAdmins = admins.map(admin => {
-      if (admin.id === selectedAdmin.id) {
-        return selectedAdmin;
+  const handleEditAdmin = async () => {
+    try {
+      setLoading(true);
+      const response = await AdminService.updateAdmin(selectedAdmin.id, selectedAdmin);
+      if (response.success) {
+        toast.success(response.message);
+        setIsEditModalOpen(false);
+        fetchAdmins(); // Refresh the list
+      } else {
+        toast.error(response.message || 'Failed to update admin');
       }
-      return admin;
-    });
-    
-    setAdmins(updatedAdmins);
-    setIsEditModalOpen(false);
+    } catch (error) {
+      console.error('Error updating admin:', error);
+      toast.error('Error updating admin');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle deleting an admin
-  const handleDeleteAdmin = () => {
-    setAdmins(admins.filter(admin => admin.id !== selectedAdmin.id));
-    setIsDeleteModalOpen(false);
+  const handleDeleteAdmin = async () => {
+    try {
+      setLoading(true);
+      const response = await AdminService.deleteAdmin(selectedAdmin.id);
+      if (response.success) {
+        toast.success(response.message);
+        setIsDeleteModalOpen(false);
+        fetchAdmins(); // Refresh the list
+      } else {
+        toast.error(response.message || 'Failed to delete admin');
+      }
+    } catch (error) {
+      console.error('Error deleting admin:', error);
+      toast.error('Error deleting admin');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle selecting an admin to edit
@@ -262,6 +216,12 @@ const AdminManagement = () => {
       
       {/* Admin List */}
       <div className="bg-white shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
+        {loading && (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+            <span className="ml-2 text-gray-600">Loading...</span>
+          </div>
+        )}
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -272,7 +232,7 @@ const AdminManagement = () => {
                 Contact
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Permissions
+                Role
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
@@ -295,7 +255,7 @@ const AdminManagement = () => {
                     </div>
                     <div className="ml-4">
                       <div className="text-sm font-medium text-gray-900">{admin.name}</div>
-                      <div className="text-sm text-gray-500">Added on {admin.createdAt}</div>
+                      <div className="text-sm text-gray-500">Added on {new Date(admin.createdAt).toLocaleDateString()}</div>
                     </div>
                   </div>
                 </td>
@@ -303,14 +263,12 @@ const AdminManagement = () => {
                   <div className="text-sm text-gray-900">{admin.email}</div>
                   <div className="text-sm text-gray-500">{admin.phone}</div>
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-wrap gap-1">
-                    {admin.permissions.map((permission, idx) => (
-                      <span key={idx} className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-700">
-                        {permission}
-                      </span>
-                    ))}
-                  </div>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    admin.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {admin.role === 'superadmin' ? 'Super Admin' : 'Admin'}
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -320,7 +278,7 @@ const AdminManagement = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {admin.lastLogin}
+                  {admin.lastLogin ? new Date(admin.lastLogin).toLocaleDateString() : 'Never'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
@@ -395,6 +353,19 @@ const AdminManagement = () => {
                         />
                       </div>
                       <div>
+                        <label htmlFor="role" className="block text-sm font-medium text-gray-700">Account Type</label>
+                        <select
+                          id="role"
+                          name="role"
+                          value={newAdmin.role}
+                          onChange={handleNewAdminChange}
+                          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
+                        >
+                          <option value="admin">Admin</option>
+                          <option value="superadmin">Super Admin</option>
+                        </select>
+                      </div>
+                      <div>
                         <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status</label>
                         <select
                           id="status"
@@ -406,26 +377,6 @@ const AdminManagement = () => {
                           <option value="Active">Active</option>
                           <option value="Inactive">Inactive</option>
                         </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
-                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2">
-                          {availablePermissions.map((permission) => (
-                            <div key={permission} className="flex items-center">
-                              <input
-                                id={`permission-${permission}`}
-                                name="permissions"
-                                type="checkbox"
-                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                                checked={newAdmin.permissions.includes(permission)}
-                                onChange={() => handlePermissionChange(permission)}
-                              />
-                              <label htmlFor={`permission-${permission}`} className="ml-2 block text-sm text-gray-900">
-                                {permission}
-                              </label>
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -502,6 +453,19 @@ const AdminManagement = () => {
                         />
                       </div>
                       <div>
+                        <label htmlFor="edit-role" className="block text-sm font-medium text-gray-700">Account Type</label>
+                        <select
+                          id="edit-role"
+                          name="role"
+                          value={selectedAdmin.role}
+                          onChange={handleEditAdminChange}
+                          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
+                        >
+                          <option value="admin">Admin</option>
+                          <option value="superadmin">Super Admin</option>
+                        </select>
+                      </div>
+                      <div>
                         <label htmlFor="edit-status" className="block text-sm font-medium text-gray-700">Status</label>
                         <select
                           id="edit-status"
@@ -513,26 +477,6 @@ const AdminManagement = () => {
                           <option value="Active">Active</option>
                           <option value="Inactive">Inactive</option>
                         </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
-                        <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2">
-                          {availablePermissions.map((permission) => (
-                            <div key={permission} className="flex items-center">
-                              <input
-                                id={`edit-permission-${permission}`}
-                                name="permissions"
-                                type="checkbox"
-                                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                                checked={selectedAdmin.permissions.includes(permission)}
-                                onChange={() => handlePermissionChange(permission)}
-                              />
-                              <label htmlFor={`edit-permission-${permission}`} className="ml-2 block text-sm text-gray-900">
-                                {permission}
-                              </label>
-                            </div>
-                          ))}
-                        </div>
                       </div>
                     </div>
                   </div>

@@ -25,6 +25,23 @@ apiClient.interceptors.request.use(
   }
 );
 
+// Add response interceptor for error handling
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Handle unauthorized access
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('user_info');
+      // Redirect to login if not already there
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Categories API
 export const CategoryService = {
   // Get all categories

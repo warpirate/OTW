@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // Customer Components
 import CustomerLayout from './app/layouts/CustomerLayout';
@@ -24,6 +26,13 @@ import SystemSettings from './app/features/superadmin/SystemSettings';
 import AuditLogs from './app/features/superadmin/AuditLogs';
 import Reports from './app/features/superadmin/Reports';
 
+// Worker Components
+import WorkerLogin from './app/auth/WorkerLogin';
+import WorkerSignup from './app/auth/WorkerSignup';
+import WorkerDashboard from './app/features/worker/WorkerDashboard';
+import WorkerJobs from './app/features/worker/WorkerJobs';
+import WorkerSchedule from './app/features/worker/WorkerSchedule';
+
 // Protected Route Components
 const AdminProtectedRoute = ({ children }) => {
   const adminToken = localStorage.getItem('adminToken');
@@ -33,6 +42,26 @@ const AdminProtectedRoute = ({ children }) => {
 const SuperAdminProtectedRoute = ({ children }) => {
   const superAdminToken = localStorage.getItem('superAdminToken');
   return superAdminToken ? children : <Navigate to="/superadmin/login" replace />;
+};
+
+const WorkerProtectedRoute = ({ children }) => {
+  const workerToken = localStorage.getItem('jwt_token');
+  const userInfo = localStorage.getItem('user_info');
+  
+  if (!workerToken || !userInfo) {
+    return <Navigate to="/worker/login" replace />;
+  }
+  
+  try {
+    const user = JSON.parse(userInfo);
+    if (user.role !== 'worker') {
+      return <Navigate to="/worker/login" replace />;
+    }
+  } catch (error) {
+    return <Navigate to="/worker/login" replace />;
+  }
+  
+  return children;
 };
 
 function App() {
@@ -99,6 +128,22 @@ function App() {
             <Route path="reports" element={<Reports />} />
           </Route>
 
+          {/* Worker Routes */}
+          <Route path="/worker/login" element={<WorkerLogin />} />
+          <Route path="/worker/signup" element={<WorkerSignup />} />
+          <Route path="/worker" element={
+            <WorkerProtectedRoute>
+              <CustomerLayout />
+            </WorkerProtectedRoute>
+          }>
+            <Route index element={<Navigate to="/worker/dashboard" replace />} />
+            <Route path="dashboard" element={<WorkerDashboard />} />
+            <Route path="jobs" element={<WorkerJobs />} />
+            <Route path="schedule" element={<WorkerSchedule />} />
+            <Route path="earnings" element={<div className="p-8 text-center">Worker Earnings Page (Coming Soon)</div>} />
+            <Route path="profile" element={<div className="p-8 text-center">Worker Profile Page (Coming Soon)</div>} />
+          </Route>
+
           {/* Default Redirect Based on Domain */}
           <Route
             path="*"
@@ -106,6 +151,18 @@ function App() {
           />
         </Routes>
       </div>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
     </Router>
   );
 }

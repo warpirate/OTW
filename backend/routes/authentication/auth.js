@@ -6,9 +6,9 @@ require('dotenv').config();
 const bcrypt = require('bcrypt');
 // need to check password and email also
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
-  if (!email || !password) {
+  if (!email || !password || !role) {
     return res.status(400).json({ message: 'Email and password are required' });
   }
 
@@ -39,7 +39,7 @@ router.post('/login', async (req, res) => {
     );
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: role.name },
+      { id: user.id, email: user.email, role: role.name, role_id: user.role_id },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRATION }
     );
@@ -50,7 +50,8 @@ router.post('/login', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: role.name
+        role: role.name,
+        role_id: user.role_id
       }
     });
   } catch (err) {
@@ -102,7 +103,7 @@ router.post('/register', async (req, res) => {
     );
 
     const token = jwt.sign(
-      { id: userId, role: roleRow.name },
+      { id: userId, role: roleRow.name, role_id: role_id },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRATION }
     );
@@ -113,7 +114,8 @@ router.post('/register', async (req, res) => {
         id: userId,
         name,
         email,
-        role: roleRow.name
+        role: roleRow.name,
+        role_id: role_id
       }
     });
   } catch (err) {
