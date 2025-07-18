@@ -68,9 +68,17 @@ const LandingPage = () => {
         // Get all categories (no pagination for landing page)
         const response = await LandingPageService.getAllCategories(1, 100);
         console.log(" response from landing page ", response);
+        console.log("Response structure:", {
+          hasResponse: !!response,
+          hasCategoryData: !!(response && response.category_data),
+          categoryDataLength: response?.category_data?.length || 0,
+          categoryData: response?.category_data
+        });
+        
         if (response && response.category_data) {
-          // Filter active categories
-          const activeCategories = response.category_data.filter(cat => cat.is_active);
+          // Filter active categories (if is_active field exists, otherwise include all)
+          const activeCategories = response.category_data.filter(cat => cat.is_active !== false);
+          console.log("Active categories:", activeCategories);
           
           // Store the full categories data for later use
           setCategories(activeCategories);
@@ -116,11 +124,16 @@ const LandingPage = () => {
             });
           });
           
+          console.log("Grouped categories:", groupedCategories);
+          console.log("Available category types:", Object.keys(groupedCategories));
+          
           setDynamicServiceCategories(groupedCategories);
           
           // Set active tab to the first available category type
           if (Object.keys(groupedCategories).length > 0) {
-            setActiveTab(Object.keys(groupedCategories)[0]);
+            const firstTab = Object.keys(groupedCategories)[0];
+            console.log("Setting active tab to:", firstTab);
+            setActiveTab(firstTab);
           }
         }
         
@@ -906,9 +919,9 @@ const LandingPage = () => {
                             Retry
                           </button>
                         </div>
-                      ) : category.categories && category.categories.length > 0 ? (
+                      ) : dynamicServiceCategories[activeTab]?.categories && dynamicServiceCategories[activeTab].categories.length > 0 ? (
                         <>
-                          {category.categories.map((cat) => {
+                          {dynamicServiceCategories[activeTab].categories.map((cat) => {
                             const IconComponent = cat.icon;
                             return (
                               <div 

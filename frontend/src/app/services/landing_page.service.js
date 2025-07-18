@@ -17,11 +17,24 @@ export const LandingPageService = {
       }
       );
       console.log('Fetched categories:', response);
+      console.log('Response data structure:', {
+        isArray: Array.isArray(response.data),
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        data: response.data
+      });
+      
+      // If response.data is an array, it means the categories are directly in the array
+      // If it's an object, it might have a category_data property
+      let processedData;
       if (Array.isArray(response.data)) {
-        response.data.category_data = response.data.category_data 
+        processedData = { category_data: response.data };
+      } else {
+        processedData = response.data;
       }
-      console.log('Processed categories:', response.data);
-      return response.data;
+      
+      console.log('Processed categories:', processedData);
+      return processedData;
     } catch (error) {
       console.error('Error fetching categories:', error);
       throw error;
