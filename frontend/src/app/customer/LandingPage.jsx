@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CategoryService } from '../services/api.service';
+import {LandingPageService} from '../services/landing_page.service';
 import { 
   Search, 
   MapPin, 
@@ -66,7 +66,7 @@ const LandingPage = () => {
       try {
         setLoading(true);
         // Get all categories (no pagination for landing page)
-        const response = await CategoryService.getAllCategories(1, 100);
+        const response = await LandingPageService.getAllCategories(1, 100);
         console.log(" response from landing page ", response);
         if (response && response.category_data) {
           // Filter active categories
@@ -313,6 +313,7 @@ const LandingPage = () => {
                 </div>
               </div>
             </div>
+            
             {/* Hourly/Daily Services tabs commented out - not needed for now */}
             {/* <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">
@@ -919,7 +920,7 @@ const LandingPage = () => {
                                   setShowSubcategories(true);
                                   
                                   // Fetch subcategories for the selected category
-                                  CategoryService.getAllSubCategories(cat.id)
+                                  LandingPageService.getAllSubCategories(cat.id)
                                     .then(data => {
                                       setSubcategories(data || []);
                                       setLoadingSubcategories(false);
