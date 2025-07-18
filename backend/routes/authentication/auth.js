@@ -36,7 +36,14 @@ router.post('/login', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRATION }
     );
 
-    res.json({ token });
+    res.json({ token,
+      user: {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+     
+  }
+     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -77,12 +84,25 @@ router.post('/register', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRATION }
     );
 
-    res.status(201).json({ token });
+    res.status(201).json({ token, user: {
+    id: result.insertId,
+    name,
+    email,
+    // role: 'customer', 
+  }
+     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// // implement logout route
+// router.post('/logout', (req, res) => {
+//   // Invalidate the token on the client side
+//   // For stateless JWT, we can't invalidate server-side, but we can clear it on the client
+//   res.json({ message: 'Logged out successfully' });
+// });
 
    
 
