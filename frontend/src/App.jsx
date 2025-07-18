@@ -35,13 +35,37 @@ import WorkerSchedule from './app/features/worker/WorkerSchedule';
 
 // Protected Route Components
 const AdminProtectedRoute = ({ children }) => {
-  const adminToken = localStorage.getItem('adminToken');
-  return adminToken ? children : <Navigate to="/admin/login" replace />;
+  const token = localStorage.getItem('jwt_token');
+  const userInfo = localStorage.getItem('user_info');
+  if (!token || !userInfo) {
+    return <Navigate to="/admin/login" replace />;
+  }
+  try {
+    const user = JSON.parse(userInfo);
+    if (user.role !== 'admin') {
+      return <Navigate to="/admin/login" replace />;
+    }
+  } catch (error) {
+    return <Navigate to="/admin/login" replace />;
+  }
+  return children;
 };
 
 const SuperAdminProtectedRoute = ({ children }) => {
-  const superAdminToken = localStorage.getItem('superAdminToken');
-  return superAdminToken ? children : <Navigate to="/superadmin/login" replace />;
+  const token = localStorage.getItem('jwt_token');
+  const userInfo = localStorage.getItem('user_info');
+  if (!token || !userInfo) {
+    return <Navigate to="/superadmin/login" replace />;
+  }
+  try {
+    const user = JSON.parse(userInfo);
+    if (user.role !== 'super admin') {
+      return <Navigate to="/superadmin/login" replace />;
+    }
+  } catch (error) {
+    return <Navigate to="/superadmin/login" replace />;
+  }
+  return children;
 };
 
 const WorkerProtectedRoute = ({ children }) => {
