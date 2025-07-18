@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
-router.post('/create-sub-category', verifyToken, async (req, res) => {
+const authorizeRole = require('../middlewares/authorize_role');
+
+router.post('/create-sub-category', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
-        
         
         console.log(req.body);
         const { name, category_id, description, base_price } = req.body;
@@ -20,7 +21,7 @@ router.post('/create-sub-category', verifyToken, async (req, res) => {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
-router.get('/sub-categories', verifyToken, async (req, res) => {
+router.get('/sub-categories', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
         const { categoryId } = req.query;
         console.log("categoryId from query:", categoryId);
@@ -34,7 +35,7 @@ router.get('/sub-categories', verifyToken, async (req, res) => {
 });
 
 
-router.get('/sub-categories/:id', verifyToken, async (req, res) => {
+router.get('/sub-categories/:id', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
         const { id } = req.params;
         const sql = 'SELECT * FROM subcategories WHERE id = ?';
@@ -49,7 +50,7 @@ router.get('/sub-categories/:id', verifyToken, async (req, res) => {
     }
 });
 
-router.put('/:category_id/subcategories/:id', verifyToken, async (req, res) => {
+router.put('/:category_id/subcategories/:id', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
         const { category_id, id } = req.params;
         console.log("Updating subcategory with ID:", id, "in category:", category_id);
@@ -66,7 +67,7 @@ router.put('/:category_id/subcategories/:id', verifyToken, async (req, res) => {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
-router.delete('/delete-sub-category/:categoryId/:subcategoryId', verifyToken, async (req, res) => {
+router.delete('/delete-sub-category/:categoryId/:subcategoryId', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
         const { categoryId, subcategoryId } = req.params;
         const sql = 'DELETE FROM subcategories WHERE id = ? AND category_id = ?';

@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
  const verifyToken = require('../middlewares/verify_token');
+const authorizeRole = require('../middlewares/authorize_role');
 
-router.post('/create-category', verifyToken, async (req, res) => {
+router.post('/create-category', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
   try {
     const { name, category_type } = req.body;
     if (!name) return res.status(400).json({ message: 'Name is required' });
@@ -19,7 +20,7 @@ router.post('/create-category', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/get-categories', verifyToken, async (req, res) => {
+router.get('/get-categories', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
   try {
 
     // Pagination implementation
@@ -55,22 +56,9 @@ router.get('/get-categories', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
-// router.get('/get-category/:id', verifyToken, async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const sql = 'SELECT id, name,  FROM service_categories WHERE id = ?';
-//     const [rows] = await pool.query(sql, [id]);
-//     if (rows.length === 0) {
-//       return res.status(404).json({ message: 'Category not found' });
-//     }
-//     res.json(rows[0]);
-//   } catch (err) {
-//     console.error('Error:', err);
-//     res.status(500).json({ message: 'Server error', error: err.message });
-//   }
-// });
+
 // edit category name
-router.put('/edit-category/:id', verifyToken, async (req, res) => {
+router.put('/edit-category/:id', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, is_active, category_type } = req.body;
@@ -92,7 +80,7 @@ router.put('/edit-category/:id', verifyToken, async (req, res) => {
   }
 });
 
-router.delete('/delete-category/:id', verifyToken, async (req, res) => {
+router.delete('/delete-category/:id', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
   try {
     const { id } = req.params;
 
