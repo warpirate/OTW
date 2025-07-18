@@ -14,6 +14,7 @@ const CustomerLogin = () => {
     password: '',
     otp: ''
   });
+  
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [darkMode, setDarkMode] = useState(isDarkMode());
   
@@ -55,10 +56,10 @@ const CustomerLogin = () => {
     try {
       if (loginMethod === 'email') {
         // Use email/password login
-        await AuthService.login(formData.email, formData.password);
+        await AuthService.login(formData.email, formData.password, 'customer');
       } else if (loginMethod === 'phone' && isOtpSent) {
         // Use phone/OTP login
-        await AuthService.loginWithOTP(formData.phone, formData.otp);
+        await AuthService.loginWithOTP(formData.phone, formData.otp, 'customer');
       }
       
       // If login successful, navigate to home or dashboard

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
  const verifyToken = require('../middlewares/verify_token');
-const authorizeRole = require('../middlewares/authorize_role');
+const authorizeRole = require('../middlewares/authorizeRole');
 
 router.post('/create-category', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
   try {

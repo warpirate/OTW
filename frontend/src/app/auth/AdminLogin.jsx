@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AuthService from '../services/auth.service';
+import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -9,7 +11,22 @@ const AdminLogin = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
+  const [darkMode, setDarkMode] = useState(isDarkMode());
+  
+    // Listen for theme changes
+    useEffect(() => {
+      // Set initial dark mode
+      setDarkMode(isDarkMode());
+      
+      // Add listener for theme changes
+      const cleanup = addThemeListener((isDark) => {
+        setDarkMode(isDark);
+      });
+      
+      // Cleanup on unmount
+      return cleanup;
+    }, []);
+  
   const handleChange = (e) => {
     setCredentials({
       ...credentials,
@@ -17,20 +34,19 @@ const AdminLogin = () => {
     });
   };
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      // In a real application, this would be an API call
-      // const response = await axios.post('/api/admin/login', credentials);
-      
+      const response = await AuthService.login(credentials.email, credentials.password, 'admin');
       // Simulating authentication
-      if (credentials.email === 'admin@urbango.ca' && credentials.password === 'admin123') {
+      if (response.token) {
         // Store token
-        localStorage.setItem('adminToken', 'simulated-admin-token');
-        localStorage.setItem('adminUser', JSON.stringify({ name: 'Admin User', role: 'admin' }));
+        localStorage.setItem('adminToken', response.token);
+        localStorage.setItem('adminUser', JSON.stringify(response.user));
         
         // Redirect to dashboard
         navigate('/admin/dashboard');

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AuthService from '../services/auth.service';
 
 const SuperAdminLogin = () => {
   const navigate = useNavigate();
@@ -23,23 +24,14 @@ const SuperAdminLogin = () => {
     setError('');
 
     try {
-      // In a real application, this would be an API call
-      // const response = await axios.post('/api/superadmin/login', credentials);
-      
-      // Simulating authentication
-      if (credentials.email === 'superadmin@urbango.ca' && credentials.password === 'superadmin123') {
-        // Store token
-        localStorage.setItem('superAdminToken', 'simulated-superadmin-token');
-        localStorage.setItem('superAdminUser', JSON.stringify({ name: 'Super Admin', role: 'superadmin' }));
-        
-        // Redirect to dashboard
-        navigate('/superadmin/dashboard');
-      } else {
-        setError('Invalid email or password');
-      }
+      // Call the AuthService login with role 'super admin'
+      await AuthService.login(credentials.email, credentials.password, 'super admin');
+
+      // Redirect to super admin dashboard
+      navigate('/superadmin/dashboard');
     } catch (err) {
-      setError('Login failed. Please try again.');
-      console.error('Login error:', err);
+      setError(err?.response?.data?.message || 'Login failed. Please try again.');
+      console.error('SuperAdmin Login error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -54,13 +46,10 @@ const SuperAdminLogin = () => {
         <h2 className="text-center text-3xl font-extrabold text-gray-900 mb-6">
           Super Admin Access
         </h2>
-        
+
         {error && (
           <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
             <div className="flex">
-              <div className="flex-shrink-0">
-                <i className="fas fa-exclamation-circle text-red-500"></i>
-              </div>
               <div className="ml-3">
                 <p className="text-sm text-red-700">{error}</p>
               </div>

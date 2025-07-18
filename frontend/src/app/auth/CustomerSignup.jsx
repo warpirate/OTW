@@ -110,7 +110,8 @@ const CustomerSignup = () => {
       const userData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        password: formData.password
+        password: formData.password,
+        role_id: 1
       };
       
       if (signupMethod === 'email') {

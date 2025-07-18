@@ -3,8 +3,7 @@ import { jwtDecode } from 'jwt-decode';
 
 // API base URLs - adjust these to match your backend API
 const AUTH_API_URL = 'http://localhost:5050/api/auth';
-const ADMIN_API_URL = 'http://localhost:5050/api/admin';
-
+ 
 // Create axios instance with default config for auth endpoints
 const authClient = axios.create({
   baseURL: AUTH_API_URL,
@@ -13,13 +12,49 @@ const authClient = axios.create({
   }
 });
 
-// Create axios instance with default config for admin endpoints
-const adminClient = axios.create({
-  baseURL: ADMIN_API_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
+//  // Global axios interceptor for all requests
+// axios.interceptors.request.use((config) => {
+//   const token = localStorage.getItem("jwt_token");
+
+//   if (token) {
+//     try {
+//       const decoded = jwtDecode(token);
+//       const now = Date.now() / 1000;
+//       if (decoded.exp < now) {
+//         console.warn("Token expired");
+//         // Clear expired token
+//         localStorage.removeItem('jwt_token');
+//         localStorage.removeItem('user_info');
+//       } else {
+//         config.headers.Authorization = `Bearer ${token}`;
+//       }
+//     } catch (error) {
+//       console.error("Error decoding token:", error);
+//       // Clear invalid token
+//       localStorage.removeItem('jwt_token');
+//       localStorage.removeItem('user_info');
+//     }
+//   }
+
+//   return config;
+// });
+
+// // Global axios response interceptor to handle unauthorized responses
+// axios.interceptors.response.use(
+//   (response) => response,
+//   (error) => {
+//     if (error.response?.status === 401 || error.response?.status === 403) {
+//       // Handle unauthorized access
+//       localStorage.removeItem('jwt_token');
+//       localStorage.removeItem('user_info');
+//       // Redirect to login if not already there
+//       if (!window.location.pathname.includes('/login')) {
+//         window.location.href = '/login';
+//       }
+//     }
+//     return Promise.reject(error);
+//   }
+// );
 
 // Add a request interceptor to include JWT token in the headers
 authClient.interceptors.request.use(
@@ -51,49 +86,7 @@ authClient.interceptors.request.use(
   }
 );
 
-// Global axios interceptor for all requests
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("jwt_token");
 
-  if (token) {
-    try {
-      const decoded = jwtDecode(token);
-      const now = Date.now() / 1000;
-      if (decoded.exp < now) {
-        console.warn("Token expired");
-        // Clear expired token
-        localStorage.removeItem('jwt_token');
-        localStorage.removeItem('user_info');
-      } else {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-    } catch (error) {
-      console.error("Error decoding token:", error);
-      // Clear invalid token
-      localStorage.removeItem('jwt_token');
-      localStorage.removeItem('user_info');
-    }
-  }
-
-  return config;
-});
-
-// Global axios response interceptor to handle unauthorized responses
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Handle unauthorized access
-      localStorage.removeItem('jwt_token');
-      localStorage.removeItem('user_info');
-      // Redirect to login if not already there
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error);
-  }
-);
 
 // Authentication Service
 const AuthService = {
@@ -249,74 +242,74 @@ const AuthService = {
 };
 
 // Admin Service functions integrated into AuthService
-const AdminService = {
-  // Get all admins
-  getAdmins: async () => {
-    try {
-      const response = await adminClient.get('/');
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching admins:', error);
-      throw error;
-    }
-  },
+// const AdminService = {
+//   // Get all admins
+//   getAdmins: async () => {
+//     try {
+//       const response = await adminClient.get('/');
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error fetching admins:', error);
+//       throw error;
+//     }
+//   },
 
-  // Create new admin
-  createAdmin: async (adminData) => {
-    try {
-      const response = await adminClient.post('/', adminData);
-      return response.data;
-    } catch (error) {
-      console.error('Error creating admin:', error);
-      throw error;
-    }
-  },
+//   // Create new admin
+//   createAdmin: async (adminData) => {
+//     try {
+//       const response = await adminClient.post('/', adminData);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error creating admin:', error);
+//       throw error;
+//     }
+//   },
 
-  // Update admin
-  updateAdmin: async (id, adminData) => {
-    try {
-      const response = await adminClient.put(`/${id}`, adminData);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating admin:', error);
-      throw error;
-    }
-  },
+//   // Update admin
+//   updateAdmin: async (id, adminData) => {
+//     try {
+//       const response = await adminClient.put(`/${id}`, adminData);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error updating admin:', error);
+//       throw error;
+//     }
+//   },
 
-  // Delete admin
-  deleteAdmin: async (id) => {
-    try {
-      const response = await adminClient.delete(`/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error deleting admin:', error);
-      throw error;
-    }
-  },
+//   // Delete admin
+//   deleteAdmin: async (id) => {
+//     try {
+//       const response = await adminClient.delete(`/${id}`);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error deleting admin:', error);
+//       throw error;
+//     }
+//   },
 
-  // Get admin by ID
-  getAdminById: async (id) => {
-    try {
-      const response = await adminClient.get(`/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching admin:', error);
-      throw error;
-    }
-  },
+//   // Get admin by ID
+//   getAdminById: async (id) => {
+//     try {
+//       const response = await adminClient.get(`/${id}`);
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error fetching admin:', error);
+//       throw error;
+//     }
+//   },
 
-  // Update admin status
-  updateAdminStatus: async (id, status) => {
-    try {
-      const response = await adminClient.patch(`/${id}/status`, { status });
-      return response.data;
-    } catch (error) {
-      console.error('Error updating admin status:', error);
-      throw error;
-    }
-  }
-};
+//   // Update admin status
+//   updateAdminStatus: async (id, status) => {
+//     try {
+//       const response = await adminClient.patch(`/${id}/status`, { status });
+//       return response.data;
+//     } catch (error) {
+//       console.error('Error updating admin status:', error);
+//       throw error;
+//     }
+//   }
+// };
 
 // Export both services
-export { AdminService };
+// export { AdminService };
 export default AuthService;

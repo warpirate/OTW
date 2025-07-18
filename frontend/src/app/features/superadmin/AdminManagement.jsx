@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import AdminService from '../../services/admin.service';
 import { toast } from 'react-toastify';
 
 const AdminManagement = () => {
