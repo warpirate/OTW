@@ -104,8 +104,21 @@ const AuthService = {
       
       const response = await authClient.post('/register', registerData);
       if (response.data.token) {
-        localStorage.setItem('jwt_token', response.data.token);
-        localStorage.setItem('user_info', JSON.stringify(response.data.user));
+        // Make sure the user object has a role property
+        const user = response.data.user;
+        if (!user.role && userData.role_id) {
+          // Map role_id to role string if needed
+          const roleMap = {
+            1: 'customer',
+            2: 'worker',
+            3: 'admin',
+            4: 'superadmin'
+          };
+          user.role = roleMap[userData.role_id] || 'customer';
+        }
+        
+        // Use the store tokens helper
+        AuthService._storeTokens(response.data.token, user);
       }
       return response.data;
     } catch (error) {
@@ -119,8 +132,15 @@ const AuthService = {
     try {
       const response = await authClient.post('/login', { email, password, role });
       if (response.data.token) {
-        localStorage.setItem('jwt_token', response.data.token);
-        localStorage.setItem('user_info', JSON.stringify(response.data.user));
+        // Store tokens using the role-based system
+        // Make sure the user object has a role property
+        const user = response.data.user;
+        if (!user.role && role) {
+          user.role = role; // Set role if not provided by backend
+        }
+        
+        // Use the store tokens helper
+        AuthService._storeTokens(response.data.token, user);
       }
       return response.data;
     } catch (error) {
@@ -166,26 +186,114 @@ const AuthService = {
     }
   },
 
-  // Logout user
-  logout: () => {
-    localStorage.removeItem('jwt_token');
-    localStorage.removeItem('user_info');
+  // Get role-specific storage keys
+  _getStorageKeys: (role = null) => {
+    // If role is provided, use role-specific keys
+    if (role) {
+      return {
+        tokenKey: `jwt_token_${role}`,
+        userKey: `user_info_${role}`
+      };
+    }
+    
+    // Otherwise use default keys (for backward compatibility)
+    return {
+      tokenKey: 'jwt_token',
+      userKey: 'user_info'
+    };
   },
+  
+  // Logout user with role-based support
+  logout: (navigate, role = null) => {
+    // If role is specified, only log out that role
+    if (role) {
+      const { tokenKey, userKey } = AuthService._getStorageKeys(role);
+      localStorage.removeItem(tokenKey);
+      localStorage.removeItem(userKey);
+      
+      // Redirect based on role
+      if (navigate) {
+        if (role === 'admin' || role === 'superadmin') {
+          navigate('/admin/login');
+        } else if (role === 'customer') {
+          navigate('/');
+        } else if (role === 'worker') {
+          navigate('/worker/login');
+        }
+      }
+    } else {
+      // Legacy logout - remove all tokens
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('user_info');
+      
+      // Also remove role-specific tokens
+      ['admin', 'superadmin', 'customer', 'worker'].forEach(r => {
+        localStorage.removeItem(`jwt_token_${r}`);
+        localStorage.removeItem(`user_info_${r}`);
+      });
+      
+      // Default redirect to admin login
+      if (navigate) {
+        navigate('/admin/login');
+      }
+    }
+    
+    // Return true to indicate successful logout
+    return true;
+  },
+  
+  // Store tokens with role-based support
+  _storeTokens: (token, user) => {
+    // Store in default location (for backward compatibility)
+    localStorage.setItem('jwt_token', token);
+    localStorage.setItem('user_info', JSON.stringify(user));
+    
+    // Also store in role-specific location
+    if (user && user.role) {
+      const { tokenKey, userKey } = AuthService._getStorageKeys(user.role);
+      localStorage.setItem(tokenKey, token);
+      localStorage.setItem(userKey, JSON.stringify(user));
+    }
+  },
+  
 
-  // Get current user
-  getCurrentUser: () => {
+  // Get current user with role-based support
+  getCurrentUser: (role = null) => {
+    if (role) {
+      // Get role-specific user
+      const { userKey } = AuthService._getStorageKeys(role);
+      const userStr = localStorage.getItem(userKey);
+      if (userStr) return JSON.parse(userStr);
+      return null;
+    }
+    
+    // Legacy behavior - get from default location
     const userStr = localStorage.getItem('user_info');
     if (userStr) return JSON.parse(userStr);
     return null;
   },
 
-  // Check if user is logged in
-  isLoggedIn: () => {
+  // Check if user is logged in with role-based support
+  isLoggedIn: (role = null) => {
+    if (role) {
+      // Check role-specific token
+      const { tokenKey } = AuthService._getStorageKeys(role);
+      return !!localStorage.getItem(tokenKey);
+    }
+    
+    // Legacy behavior - check default token
     return !!localStorage.getItem('jwt_token');
   },
 
-  // Get JWT token
-  getToken: () => {
+  // Get JWT token with role-based support
+  getToken: (role = null) => {
+    if (role) {
+      // Get role-specific token
+      const { tokenKey } = AuthService._getStorageKeys(role);
+      return localStorage.getItem(tokenKey);
+    }
+    
+    // Legacy behavior - get from default location
     return localStorage.getItem('jwt_token');
   },
 

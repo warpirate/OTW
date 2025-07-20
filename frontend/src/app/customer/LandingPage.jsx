@@ -188,20 +188,25 @@ const LandingPage = () => {
   useEffect(() => {
     const checkAuthStatus = () => {
       try {
-        if (AuthService.isLoggedIn()) {
-          const userData = AuthService.getCurrentUser();
+        // Specifically check for customer role authentication
+        if (AuthService.isLoggedIn('customer')) {
+          const userData = AuthService.getCurrentUser('customer');
           if (userData) {
             setIsAuthenticated(true);
             setUser(userData);
           } else {
             setIsAuthenticated(false);
+            setUser(null);
           }
         } else if (isAuthenticated) {
+          // If no customer authentication but state says authenticated, reset state
           setIsAuthenticated(false);
+          setUser(null);
         }
       } catch (error) {
         console.error('Auth check error:', error);
         setIsAuthenticated(false);
+        setUser(null);
       }
     };
     
@@ -218,16 +223,19 @@ const LandingPage = () => {
   
   // Force authentication state update (for debugging)
   const forceAuthUpdate = () => {
-    if (AuthService.isLoggedIn()) {
-      const userData = AuthService.getCurrentUser();
+    // Specifically check for customer role authentication
+    if (AuthService.isLoggedIn('customer')) {
+      const userData = AuthService.getCurrentUser('customer');
       if (userData) {
         setIsAuthenticated(true);
         setUser(userData);
       } else {
         setIsAuthenticated(false);
+        setUser(null);
       }
     } else {
       setIsAuthenticated(false);
+      setUser(null);
     }
   };
   
@@ -236,8 +244,8 @@ const LandingPage = () => {
   
   // Handle logout
   const handleLogout = () => {
-    // Call logout function from imported AuthService
-    AuthService.logout();
+    // Call logout function from imported AuthService with customer role
+    AuthService.logout(navigate, 'customer');
     
     setIsAuthenticated(false);
     setUser(null);

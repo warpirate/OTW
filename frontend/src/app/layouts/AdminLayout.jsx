@@ -1,7 +1,14 @@
 import React from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import AuthService from '../services/auth.service';
 
 const AdminLayout = () => {
+  const navigate = useNavigate();
+  
+  const handleLogout = () => {
+    // Use role-specific logout for admin
+    AuthService.logout(navigate, 'admin');
+  };
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -59,16 +66,20 @@ const AdminLayout = () => {
                 <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
               </div>
               <div className="flex items-center">
-                <img
+                {/* <img
                   src="https://via.placeholder.com/40"
                   alt="Admin"
                   className="w-8 h-8 rounded-full mr-2"
-                />
+                /> */}
                 <div className="text-sm">
                   <p className="font-medium text-gray-700">Admin User</p>
                 </div>
               </div>
-              <button className="btn-icon">
+              <button 
+                className="btn-icon" 
+                onClick={handleLogout} 
+                title="Logout"
+              >
                 <i className="fas fa-sign-out-alt"></i>
               </button>
             </div>
