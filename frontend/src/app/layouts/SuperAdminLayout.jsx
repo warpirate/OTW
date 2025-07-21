@@ -1,7 +1,13 @@
 import React from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import AuthService from '../services/auth.service';
 
 const SuperAdminLayout = () => {
+  const navigate = useNavigate();
+  
+  const handleLogout = () => {
+    AuthService.logout(navigate, 'super admin');
+  };
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -76,7 +82,11 @@ const SuperAdminLayout = () => {
                   <p className="font-medium text-gray-700">Super Admin</p>
                 </div>
               </div>
-              <button className="btn-icon">
+              <button 
+                className="btn-icon" 
+                onClick={handleLogout} 
+                title="Logout"
+              >
                 <i className="fas fa-sign-out-alt"></i>
               </button>
             </div>

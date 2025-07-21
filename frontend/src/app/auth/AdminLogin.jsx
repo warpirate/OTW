@@ -41,21 +41,31 @@ const AdminLogin = () => {
     setError('');
 
     try {
+      console.log('Attempting admin login...');
+      // Use AuthService to handle login with role 'admin'
       const response = await AuthService.login(credentials.email, credentials.password, 'admin');
-      // Simulating authentication
-      if (response.token) {
-        // Store token
-        localStorage.setItem('adminToken', response.token);
-        localStorage.setItem('adminUser', JSON.stringify(response.user));
-        
-        // Redirect to dashboard
-        navigate('/admin/dashboard');
-      } else {
-        setError('Invalid email or password');
+      console.log('Admin login response:', response);
+      
+      // Check if we received a token for the correct role
+      const user = AuthService.getCurrentUser('admin');
+      console.log('Admin user after login:', user);
+      
+      if (!user || user.role !== 'admin') {
+        throw new Error('You do not have admin privileges');
       }
+
+      // Add event to trigger storage listeners
+      window.dispatchEvent(new Event('storage'));
+      
+      console.log('Admin login successful, preparing to navigate...');
+      // Add a slight delay to ensure tokens are stored before navigation
+      setTimeout(() => {
+        console.log('Navigating to admin dashboard...');
+        navigate('/admin/dashboard', { replace: true });
+      }, 100);
     } catch (err) {
-      setError('Login failed. Please try again.');
-      console.error('Login error:', err);
+      setError(err?.response?.data?.message || err.message || 'Login failed. Please try again.');
+      console.error('Admin Login error:', err);
     } finally {
       setIsLoading(false);
     }

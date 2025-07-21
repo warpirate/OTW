@@ -144,10 +144,20 @@ const WorkerSignup = () => {
       };
       
       const response = await AuthService.register(userData);
-      if (response && response.user) {
-        localStorage.setItem('jwt_token', response.token);
-        localStorage.setItem('user_info', JSON.stringify(response.user));
-        navigate('/worker/profile-setup');
+      if (response && response.user && response.token) {
+        // Ensure the user has a role property set to 'worker'
+        const user = { ...response.user, role: 'worker' };
+        
+        // Use AuthService to store tokens with proper role
+        AuthService._storeTokens(response.token, user);
+        
+        // Add event to trigger storage listeners
+        window.dispatchEvent(new Event('storage'));
+        
+        // Add a slight delay to ensure tokens are stored before navigation
+        setTimeout(() => {
+          navigate('/worker/profile-setup', { replace: true });
+        }, 100);
       }
     } catch (error) {
       setError(error.response?.data?.message || 'Signup failed. Please try again.');

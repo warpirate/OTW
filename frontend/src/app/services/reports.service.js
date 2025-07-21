@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
 import { API_BASE_URL } from '../config';
+import AuthService from './auth.service';
 
 // API base URL for reports endpoints
 const REPORTS_API_URL = `${API_BASE_URL}/api/reports`;
@@ -16,27 +16,14 @@ const reportsClient = axios.create({
 // Request interceptor to add JWT token
 reportsClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('jwt_token');
+    // Use role-based token (super admin or admin typically for reports)
+    const currentRole = localStorage.getItem('current_role');
+    const token = AuthService.getToken(currentRole);
     
     if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        const now = Date.now() / 1000;
-        
-        if (decoded.exp < now) {
-          console.warn('Token expired');
-          localStorage.removeItem('jwt_token');
-          localStorage.removeUser('user_info');
-          throw new Error('Token expired');
-        } else {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-      } catch (error) {
-        console.error('Error decoding token:', error);
-        localStorage.removeItem('jwt_token');
-        localStorage.removeItem('user_info');
-        throw new Error('Invalid token');
-      }
+      config.headers['Authorization'] = `Bearer ${token}`;
+    } else {
+      throw new Error('No authentication token for reports access');
     }
     
     return config;
@@ -51,11 +38,19 @@ reportsClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      localStorage.removeItem('jwt_token');
-      localStorage.removeItem('user_info');
+      // Use AuthService for proper token cleanup (for super admin or admin)
+      const currentRole = localStorage.getItem('current_role');
+      AuthService.logout(null, currentRole);
       
-      if (!window.location.pathname.includes('/superadmin/login')) {
-        window.location.href = '/superadmin/login';
+      // Redirect to appropriate login page
+      if (!window.location.pathname.includes('/login')) {
+        if (currentRole === 'super admin') {
+          window.location.href = '/superadmin/login';
+        } else if (currentRole === 'admin') {
+          window.location.href = '/admin/login';
+        } else {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

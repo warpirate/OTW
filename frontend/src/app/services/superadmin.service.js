@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { API_BASE_URL } from '../config';
+import AuthService from './auth.service';
 
 // API base URL for admin management
 const ADMIN_API_URL = `${API_BASE_URL}/api/superadmin`;
@@ -16,29 +17,13 @@ const adminClient = axios.create({
 // Request interceptor to add JWT token and validate it
 adminClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('jwt_token');
+    // Use the role-specific token retrieval method from AuthService
+    const token = AuthService.getToken('super admin');
     
     if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        const now = Date.now() / 1000;
-        
-        if (decoded.exp < now) {
-          console.warn('Token expired');
-          localStorage.removeItem('jwt_token');
-          localStorage.removeItem('user_info');
-          throw new Error('Token expired');
-        } else {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-      } catch (error) {
-        console.error('Error decoding token:', error);
-        localStorage.removeItem('jwt_token');
-        localStorage.removeItem('user_info');
-        throw new Error('Invalid token');
-      }
+      config.headers['Authorization'] = `Bearer ${token}`;
     } else {
-      throw new Error('No authentication token found');
+      throw new Error('No authentication token for super admin role');
     }
     
     return config;
@@ -53,9 +38,8 @@ adminClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      // Handle unauthorized access
-      localStorage.removeItem('jwt_token');
-      localStorage.removeItem('user_info');
+      // Handle unauthorized access using AuthService
+      AuthService.logout(null, 'super admin');
       
       // Redirect to superadmin login if not already there
       if (!window.location.pathname.includes('/superadmin/login')) {
@@ -134,7 +118,7 @@ const AdminService = {
   updateAdmin: async (id, adminData) => {
     try {
       const response = await adminClient.put(`/${id}`, adminData);
-      return response.data;
+      return { success: true, message: 'Admin updated successfully' };
     } catch (error) {
       console.error('Error updating admin:', error);
       throw error;

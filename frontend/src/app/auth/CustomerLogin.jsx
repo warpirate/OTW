@@ -50,8 +50,13 @@ const CustomerLogin = () => {
     }
   };
 
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const handleLogin = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setError('');
     
     try {
       if (loginMethod === 'email') {
@@ -62,11 +67,19 @@ const CustomerLogin = () => {
         await AuthService.loginWithOTP(formData.phone, formData.otp, 'customer');
       }
       
+      // Verify we received a token for the correct role
+      const user = AuthService.getCurrentUser('customer');
+      if (!user || user.role !== 'customer') {
+        throw new Error('You do not have customer privileges');
+      }
+      
       // If login successful, navigate to home or dashboard
       navigate('/');
     } catch (error) {
       console.error('Login failed:', error);
-      // Handle login error (could add error state here)
+      setError(error?.response?.data?.message || error.message || 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

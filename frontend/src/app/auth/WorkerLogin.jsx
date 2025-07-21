@@ -66,31 +66,34 @@ const WorkerLogin = () => {
       let response;
       
       if (loginMethod === 'phone' && isOtpSent) {
-        // OTP login
-        response = await AuthService.loginWithOTP(formData.phone, formData.otp);
+        // OTP login with worker role
+        response = await AuthService.loginWithOTP(formData.phone, formData.otp, 'worker');
       } else {
         // Email/password login
         const identifier = loginMethod === 'email' ? formData.email : formData.phone;
         response = await AuthService.login(identifier, formData.password, 'worker');
       }
 
-      if (response && response.user) {
-        // Check if user is a worker
-        if (response.user.role !== 'worker') {
-          setError('Invalid credentials. Please check your login details.');
-          return;
-        }
-        
-        // Store user data
-        localStorage.setItem('jwt_token', response.token);
-        localStorage.setItem('user_info', JSON.stringify(response.user));
-        
-        // Navigate to worker dashboard
-        navigate('/worker/dashboard');
+      // Verify the user has worker role using the role-based authentication system
+      const user = AuthService.getCurrentUser('worker');
+      console.log('Worker user after login:', user);
+      
+      if (!user || user.role !== 'worker') {
+        throw new Error('You do not have worker privileges');
       }
+      
+      // Add event to trigger storage listeners
+      window.dispatchEvent(new Event('storage'));
+      
+      console.log('Worker login successful, preparing to navigate...');
+      // Add a slight delay to ensure tokens are stored before navigation
+      setTimeout(() => {
+        console.log('Navigating to worker dashboard...');
+        navigate('/worker/dashboard', { replace: true });
+      }, 100);
     } catch (error) {
       console.error('Login error:', error);
-      setError(error.response?.data?.message || 'Login failed. Please try again.');
+      setError(error.response?.data?.message || error.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import AuthService from './app/services/auth.service';
+// jwtDecode import removed as we're using AuthService now
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -35,56 +37,209 @@ import WorkerSchedule from './app/features/worker/WorkerSchedule';
 
 // Protected Route Components
 const AdminProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('jwt_token');
-  const userInfo = localStorage.getItem('user_info');
-  if (!token || !userInfo) {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  
+  useEffect(() => {
+    console.log('AdminProtectedRoute: Checking authentication...');
+    const checkAuth = () => {
+      // Use the role-specific authentication check
+      const isLoggedIn = AuthService.isLoggedIn('admin');
+      console.log('AdminProtectedRoute: isLoggedIn =', isLoggedIn);
+      
+      if (!isLoggedIn) return false;
+      
+      // Verify user has admin role
+      const user = AuthService.getCurrentUser('admin');
+      console.log('AdminProtectedRoute: user =', user);
+      
+      const hasRole = user && user.role === 'admin';
+      console.log('AdminProtectedRoute: hasRole =', hasRole);
+      return hasRole;
+    };
+    
+    const authStatus = checkAuth();
+    console.log('AdminProtectedRoute: Setting isAuthenticated =', authStatus);
+    setIsAuthenticated(authStatus);
+    setIsChecking(false);
+    
+    const handleStorage = () => {
+      console.log('AdminProtectedRoute: Storage event detected');
+      setIsAuthenticated(checkAuth());
+    };
+    
+    const handleNavigation = () => {
+      console.log('AdminProtectedRoute: Navigation event detected');
+      setIsAuthenticated(checkAuth());
+    };
+    
+    // Listen for localStorage changes and navigation events
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('popstate', handleNavigation);
+    
+    const interval = setInterval(() => {
+      const newStatus = checkAuth();
+      if (isAuthenticated !== newStatus) {
+        console.log('AdminProtectedRoute: Auth status changed to', newStatus);
+        setIsAuthenticated(newStatus);
+      }
+    }, 1000); // Check every second
+    
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('popstate', handleNavigation);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated]);
+  
+  if (isChecking) {
+    return <div>Checking authentication...</div>;
+  }
+  
+  if (!isAuthenticated) {
+    console.log('AdminProtectedRoute: Redirecting to login');
     return <Navigate to="/admin/login" replace />;
   }
-  try {
-    const user = JSON.parse(userInfo);
-    if (user.role !== 'admin') {
-      return <Navigate to="/admin/login" replace />;
-    }
-  } catch (error) {
-    return <Navigate to="/admin/login" replace />;
-  }
+  
+  console.log('AdminProtectedRoute: Rendering protected content');
   return children;
 };
 
 const SuperAdminProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('jwt_token');
-  const userInfo = localStorage.getItem('user_info');
-  if (!token || !userInfo) {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  
+  useEffect(() => {
+    console.log('SuperAdminProtectedRoute: Checking authentication...');
+    const checkAuth = () => {
+      // Use the role-specific authentication check
+      const isLoggedIn = AuthService.isLoggedIn('super admin');
+      console.log('SuperAdminProtectedRoute: isLoggedIn =', isLoggedIn);
+      
+      if (!isLoggedIn) return false;
+      
+      // Verify user has super admin role
+      const user = AuthService.getCurrentUser('super admin');
+      console.log('SuperAdminProtectedRoute: user =', user);
+      
+      const hasRole = user && user.role === 'super admin';
+      console.log('SuperAdminProtectedRoute: hasRole =', hasRole);
+      return hasRole;
+    };
+    
+    const authStatus = checkAuth();
+    console.log('SuperAdminProtectedRoute: Setting isAuthenticated =', authStatus);
+    setIsAuthenticated(authStatus);
+    setIsChecking(false);
+    
+    const handleStorage = () => {
+      console.log('SuperAdminProtectedRoute: Storage event detected');
+      setIsAuthenticated(checkAuth());
+    };
+    
+    const handleNavigation = () => {
+      console.log('SuperAdminProtectedRoute: Navigation event detected');
+      setIsAuthenticated(checkAuth());
+    };
+    
+    // Listen for localStorage changes and navigation events
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('popstate', handleNavigation);
+    
+    const interval = setInterval(() => {
+      const newStatus = checkAuth();
+      if (isAuthenticated !== newStatus) {
+        console.log('SuperAdminProtectedRoute: Auth status changed to', newStatus);
+        setIsAuthenticated(newStatus);
+      }
+    }, 1000); // Check every second
+    
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('popstate', handleNavigation);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated]);
+  
+  if (isChecking) {
+    return <div>Checking authentication...</div>;
+  }
+  
+  if (!isAuthenticated) {
+    console.log('SuperAdminProtectedRoute: Redirecting to login');
     return <Navigate to="/superadmin/login" replace />;
   }
-  try {
-    const user = JSON.parse(userInfo);
-    if (user.role !== 'super admin') {
-      return <Navigate to="/superadmin/login" replace />;
-    }
-  } catch (error) {
-    return <Navigate to="/superadmin/login" replace />;
-  }
+  
+  console.log('SuperAdminProtectedRoute: Rendering protected content');
   return children;
 };
 
 const WorkerProtectedRoute = ({ children }) => {
-  const workerToken = localStorage.getItem('jwt_token');
-  const userInfo = localStorage.getItem('user_info');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
   
-  if (!workerToken || !userInfo) {
+  useEffect(() => {
+    console.log('WorkerProtectedRoute: Checking authentication...');
+    const checkAuth = () => {
+      // Use the role-specific authentication check
+      const isLoggedIn = AuthService.isLoggedIn('worker');
+      console.log('WorkerProtectedRoute: isLoggedIn =', isLoggedIn);
+      
+      if (!isLoggedIn) return false;
+      
+      // Verify user has worker role
+      const user = AuthService.getCurrentUser('worker');
+      console.log('WorkerProtectedRoute: user =', user);
+      
+      const hasRole = user && user.role === 'worker';
+      console.log('WorkerProtectedRoute: hasRole =', hasRole);
+      return hasRole;
+    };
+    
+    const authStatus = checkAuth();
+    console.log('WorkerProtectedRoute: Setting isAuthenticated =', authStatus);
+    setIsAuthenticated(authStatus);
+    setIsChecking(false);
+    
+    const handleStorage = () => {
+      console.log('WorkerProtectedRoute: Storage event detected');
+      setIsAuthenticated(checkAuth());
+    };
+    
+    const handleNavigation = () => {
+      console.log('WorkerProtectedRoute: Navigation event detected');
+      setIsAuthenticated(checkAuth());
+    };
+    
+    // Listen for localStorage changes and navigation events
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('popstate', handleNavigation);
+    
+    const interval = setInterval(() => {
+      const newStatus = checkAuth();
+      if (isAuthenticated !== newStatus) {
+        console.log('WorkerProtectedRoute: Auth status changed to', newStatus);
+        setIsAuthenticated(newStatus);
+      }
+    }, 1000); // Check every second
+    
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('popstate', handleNavigation);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated]);
+  
+  if (isChecking) {
+    return <div>Checking authentication...</div>;
+  }
+  
+  if (!isAuthenticated) {
+    console.log('WorkerProtectedRoute: Redirecting to login');
     return <Navigate to="/worker/login" replace />;
   }
   
-  try {
-    const user = JSON.parse(userInfo);
-    if (user.role !== 'worker') {
-      return <Navigate to="/worker/login" replace />;
-    }
-  } catch (error) {
-    return <Navigate to="/worker/login" replace />;
-  }
-  
+  console.log('WorkerProtectedRoute: Rendering protected content');
   return children;
 };
 
