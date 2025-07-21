@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../config';
 
 // API base URL for settings endpoints
-const SETTINGS_API_URL = 'http://localhost:5050/api/settings';
+const SETTINGS_API_URL = `${API_BASE_URL}/api/settings`;
 
 // Create axios instance with default config
 const settingsClient = axios.create({

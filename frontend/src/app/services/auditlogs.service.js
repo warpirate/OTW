@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../config';
 
 // API base URL for audit logs endpoints
-const AUDIT_API_URL = 'http://localhost:5050/api/audit-logs';
+const AUDIT_API_URL = `${API_BASE_URL}/api/audit-logs`;
 
 // Create axios instance with default config
 const auditClient = axios.create({

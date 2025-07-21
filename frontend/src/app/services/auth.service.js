@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../config';
 
 // API base URLs - adjust these to match your backend API
-const AUTH_API_URL = 'http://localhost:5050/api/auth';
+const AUTH_API_URL = `${API_BASE_URL}/api/auth`;
  
 // Create axios instance with default config for auth endpoints
 const authClient = axios.create({
@@ -12,49 +13,6 @@ const authClient = axios.create({
   }
 });
 
-//  // Global axios interceptor for all requests
-// axios.interceptors.request.use((config) => {
-//   const token = localStorage.getItem("jwt_token");
-
-//   if (token) {
-//     try {
-//       const decoded = jwtDecode(token);
-//       const now = Date.now() / 1000;
-//       if (decoded.exp < now) {
-//         console.warn("Token expired");
-//         // Clear expired token
-//         localStorage.removeItem('jwt_token');
-//         localStorage.removeItem('user_info');
-//       } else {
-//         config.headers.Authorization = `Bearer ${token}`;
-//       }
-//     } catch (error) {
-//       console.error("Error decoding token:", error);
-//       // Clear invalid token
-//       localStorage.removeItem('jwt_token');
-//       localStorage.removeItem('user_info');
-//     }
-//   }
-
-//   return config;
-// });
-
-// // Global axios response interceptor to handle unauthorized responses
-// axios.interceptors.response.use(
-//   (response) => response,
-//   (error) => {
-//     if (error.response?.status === 401 || error.response?.status === 403) {
-//       // Handle unauthorized access
-//       localStorage.removeItem('jwt_token');
-//       localStorage.removeItem('user_info');
-//       // Redirect to login if not already there
-//       if (!window.location.pathname.includes('/login')) {
-//         window.location.href = '/login';
-//       }
-//     }
-//     return Promise.reject(error);
-//   }
-// );
 
 // Add a request interceptor to include JWT token in the headers
 authClient.interceptors.request.use(

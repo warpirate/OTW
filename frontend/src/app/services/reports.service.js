@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../config';
 
 // API base URL for reports endpoints
-const REPORTS_API_URL = 'http://localhost:5050/api/reports';
+const REPORTS_API_URL = `${API_BASE_URL}/api/reports`;
 
 // Create axios instance with default config
 const reportsClient = axios.create({

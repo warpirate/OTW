@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../config';
 
 // API base URL for admin management
-const ADMIN_API_URL = 'http://localhost:5050/api/admin';
+const ADMIN_API_URL = `${API_BASE_URL}/api/superadmin`;
 
 // Create axios instance with default config for admin endpoints
 const adminClient = axios.create({
@@ -67,6 +68,17 @@ adminClient.interceptors.response.use(
 
 // Admin Service - All CRUD operations for admin management
 const AdminService = {
+  // Helper to map backend admin object to frontend format
+  _mapAdmin: (row) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone_number || '',
+    role: row.role,
+    status: row.is_active ? 'Active' : 'Inactive',
+    createdAt: row.created_at,
+  }),
+
   // Get all admins with optional filtering
   getAdmins: async (filters = {}) => {
     try {
@@ -90,7 +102,8 @@ const AdminService = {
       const url = queryString ? `/?${queryString}` : '/';
       
       const response = await adminClient.get(url);
-      return response.data;
+      const admins = (response.data.admins || []).map(AdminService._mapAdmin);
+      return { success: true, data: admins, total: response.data.total };
     } catch (error) {
       console.error('Error fetching admins:', error);
       throw error;
@@ -100,8 +113,17 @@ const AdminService = {
   // Create new admin
   createAdmin: async (adminData) => {
     try {
-      const response = await adminClient.post('/', adminData);
-      return response.data;
+      // backend expects phone field as phone, status optional
+      console.log("admin data " ,adminData);
+      const payload = {
+        name: adminData.name,
+        email: adminData.email,
+        phone: adminData.phone,
+        is_active: adminData.status === 'Active',
+        role: adminData.role,
+      };
+      const response = await adminClient.post('/', payload);
+      return { success: true, message: 'Admin created successfully', id: response.data.id };
     } catch (error) {
       console.error('Error creating admin:', error);
       throw error;

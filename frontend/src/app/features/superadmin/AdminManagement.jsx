@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import AdminService from '../../services/admin.service';
+import AdminService from '../../services/superadmin.service';
+
 
 const AdminManagement = () => {
   const [admins, setAdmins] = useState([]);
@@ -265,9 +266,9 @@ const AdminManagement = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    admin.role === 'superadmin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                    admin.role === 'super admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {admin.role === 'superadmin' ? 'Super Admin' : 'Admin'}
+                    {admin.role === 'super admin' ? 'Super Admin' : 'Admin'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
@@ -362,7 +363,7 @@ const AdminManagement = () => {
                           className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
                         >
                           <option value="admin">Admin</option>
-                          <option value="superadmin">Super Admin</option>
+                          <option value="super admin">Super Admin</option>
                         </select>
                       </div>
                       <div>
@@ -462,7 +463,7 @@ const AdminManagement = () => {
                           className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
                         >
                           <option value="admin">Admin</option>
-                          <option value="superadmin">Super Admin</option>
+                          <option value="super admin">Super Admin</option>
                         </select>
                       </div>
                       <div>

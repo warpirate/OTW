@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
+import { API_BASE_URL } from '../config';
 
 // API base URL for dashboard endpoints
-const DASHBOARD_API_URL = 'http://localhost:5050/api/dashboard';
+const DASHBOARD_API_URL = `${API_BASE_URL}/api/superadmin/dashboard`;
 
 // Create axios instance with default config
 const dashboardClient = axios.create({
