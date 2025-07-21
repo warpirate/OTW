@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Phone, Eye, EyeOff, ArrowLeft, CheckCircle, Briefcase, Star, MapPin } from 'lucide-react';
+import { Mail, Phone, Eye, EyeOff, ArrowLeft, CheckCircle, Briefcase, Star, MapPin, Navigation, AlertCircle } from 'lucide-react';
 import AuthService from '../services/auth.service';
+import WorkerService from '../services/worker.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 
 const WorkerSignup = () => {
@@ -30,25 +31,20 @@ const WorkerSignup = () => {
     password: '',
     confirmPassword: '',
     otp: '',
-    // Worker specific fields
-    category: '',
+    // Provider table fields only
     experience: '',
-    skills: '',
-    hourlyRate: '',
-    address: '',
-    city: '',
-    pincode: '',
+    bio: '',
+    serviceRadius: '10',
+    latitude: null,
+    longitude: null,
     agreeToTerms: false
   });
 
-  const serviceCategories = [
-    'Home Cleaning',
-    'Plumbing',
-    'Electrical',
-    'Appliance Repair',
-    'Salon & Spa',
-    'Painting'
-  ];
+  // Location states
+  const [locationStatus, setLocationStatus] = useState('idle'); // idle, requesting, granted, denied, error
+  const [locationError, setLocationError] = useState('');
+  
+
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -82,25 +78,17 @@ const WorkerSignup = () => {
         return false;
       }
     } else if (currentStep === 2) {
-      if (!formData.category) {
-        setError('Please select a service category');
-        return false;
-      }
       if (!formData.experience) {
         setError('Please select your experience level');
         return false;
       }
-      if (!formData.skills) {
-        setError('Please describe your skills');
-        return false;
-      }
-      if (!formData.hourlyRate) {
-        setError('Please set your hourly rate');
+      if (!formData.bio) {
+        setError('Please write a brief bio');
         return false;
       }
     } else if (currentStep === 3) {
-      if (!formData.address || !formData.city || !formData.pincode) {
-        setError('Please fill in all address fields');
+      if (!formData.latitude || !formData.longitude) {
+        setError('Please provide location access or enter coordinates manually');
         return false;
       }
       if (!formData.agreeToTerms) {
@@ -131,19 +119,111 @@ const WorkerSignup = () => {
     }
   };
 
+  // Location functions
+  const requestLocation = async () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('error');
+      setLocationError('Geolocation is not supported by this browser');
+      return;
+    }
+
+    setLocationStatus('requesting');
+    setLocationError('');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        console.log('Location captured:', { lat, lng });
+        
+        setFormData(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng
+        }));
+        setLocationStatus('granted');
+        setLocationError('');
+        if (error && error.includes('location')) setError('');
+      },
+      (error) => {
+        setLocationStatus('denied');
+        setLocationError('Location access denied by user');
+        console.error('Location error:', error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
+  const handleManualLocationEntry = (e) => {
+    const { name, value } = e.target;
+    const numValue = parseFloat(value) || null;
+    
+    setFormData(prev => {
+      const updatedData = {
+        ...prev,
+        [name]: numValue
+      };
+      
+      console.log('Manual location entry:', { name, value: numValue, updatedData });
+      
+      // Check if both coordinates are filled after this update
+      if (updatedData.latitude && updatedData.longitude) {
+        setLocationStatus('granted');
+        setLocationError('');
+      }
+      
+      return updatedData;
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateStep()) return;
 
     setIsLoading(true);
+    
+    // Convert experience level to years
+    const getExperienceYears = (level) => {
+      switch (level) {
+        case 'beginner': return 1;
+        case 'intermediate': return 2;
+        case 'experienced': return 4;
+        case 'expert': return 6;
+        default: return 0;
+      }
+    };
+    
+    console.log('Form submission data:', formData);
+    
     try {
       const userData = {
-        ...formData,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
         role: 'worker',
-        signupMethod
+        signupMethod,
+        // Provider specific data (only fields in providers table)
+        providerData: {
+          experience_years: getExperienceYears(formData.experience),
+          bio: formData.bio,
+          service_radius_km: parseInt(formData.serviceRadius),
+          location_lat: formData.latitude,
+          location_lng: formData.longitude,
+          verified: false,
+          active: true,
+          rating: 0.0 // Default rating
+        }
       };
       
-      const response = await AuthService.register(userData);
+      console.log('Sending userData:', userData);
+      
+      const response = await WorkerService.registerWorker(userData);
       if (response && response.user && response.token) {
         // Ensure the user has a role property set to 'worker'
         const user = { ...response.user, role: 'worker' };
@@ -156,7 +236,7 @@ const WorkerSignup = () => {
         
         // Add a slight delay to ensure tokens are stored before navigation
         setTimeout(() => {
-          navigate('/worker/profile-setup', { replace: true });
+          navigate('/worker/dashboard', { replace: true });
         }, 100);
       }
     } catch (error) {
@@ -302,26 +382,6 @@ const WorkerSignup = () => {
           <div className="space-y-6">
             <div>
               <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                Service Category
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                required
-                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                }`}
-              >
-                <option value="">Select a category</option>
-                {serviceCategories.map((category) => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                 Experience Level
               </label>
               <select
@@ -343,37 +403,40 @@ const WorkerSignup = () => {
 
             <div>
               <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                Skills & Expertise
+                Bio
               </label>
               <textarea
-                name="skills"
-                value={formData.skills}
+                name="bio"
+                rows="4"
+                value={formData.bio}
                 onChange={handleInputChange}
                 required
-                rows="3"
                 className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                 }`}
-                placeholder="Describe your skills and expertise..."
+                placeholder="Tell customers about yourself, your experience, and what makes you special..."
               />
             </div>
 
             <div>
               <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                Hourly Rate (₹)
+                Service Radius (km)
               </label>
-              <input
-                type="number"
-                name="hourlyRate"
-                value={formData.hourlyRate}
+              <select
+                name="serviceRadius"
+                value={formData.serviceRadius}
                 onChange={handleInputChange}
                 required
-                min="100"
                 className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                 }`}
-                placeholder="Set your hourly rate"
-              />
+              >
+                <option value="5">5 km</option>
+                <option value="10">10 km</option>
+                <option value="20">20 km</option>
+                <option value="50">50 km</option>
+                <option value="100">100 km</option>
+              </select>
             </div>
           </div>
         );
@@ -381,57 +444,131 @@ const WorkerSignup = () => {
       case 3:
         return (
           <div className="space-y-6">
-            <div>
-              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                Address
-              </label>
-              <textarea
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                required
-                rows="2"
-                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                }`}
-                placeholder="Enter your full address"
-              />
+            {/* Location Section */}
+            <div className="space-y-4">
+              <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Location Access
+              </h3>
+              
+              {locationStatus === 'idle' && (
+                <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+                  darkMode ? 'border-gray-600 bg-gray-700/50' : 'border-gray-300 bg-gray-50'
+                }`}>
+                  <MapPin className={`w-12 h-12 mx-auto mb-4 ${
+                    darkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`} />
+                  <button
+                    type="button"
+                    onClick={requestLocation}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  >
+                    <Navigation className="w-4 h-4 inline mr-2" />
+                    Allow Location Access
+                  </button>
+                </div>
+              )}
+              
+              {locationStatus === 'requesting' && (
+                <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+                  darkMode ? 'border-blue-600 bg-blue-900/20' : 'border-blue-300 bg-blue-50'
+                }`}>
+                  <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                  <p className={darkMode ? 'text-blue-300' : 'text-blue-600'}>
+                    Requesting location access...
+                  </p>
+                </div>
+              )}
+              
+              {locationStatus === 'denied' && (
+                <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+                  darkMode ? 'border-red-600 bg-red-900/20' : 'border-red-300 bg-red-50'
+                }`}>
+                  <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${
+                    darkMode ? 'text-red-400' : 'text-red-500'
+                  }`} />
+                  <button
+                    type="button"
+                    onClick={requestLocation}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                  <p className={`text-sm mt-2 ${
+                    darkMode ? 'text-red-300' : 'text-red-600'
+                  }`}>
+                    Location access denied by user
+                  </p>
+                </div>
+              )}
+              
+              {locationStatus === 'granted' && (
+                <div className={`border-2 rounded-lg p-4 ${
+                  darkMode ? 'border-green-600 bg-green-900/20' : 'border-green-300 bg-green-50'
+                }`}>
+                  <div className="flex items-center mb-2">
+                    <CheckCircle className={`w-5 h-5 mr-2 ${
+                      darkMode ? 'text-green-400' : 'text-green-600'
+                    }`} />
+                    <span className={`text-sm font-medium ${
+                      darkMode ? 'text-green-300' : 'text-green-600'
+                    }`}>
+                      Location access granted
+                    </span>
+                  </div>
+                  {formData.latitude && formData.longitude && (
+                    <div className={`text-xs ${
+                      darkMode ? 'text-green-200' : 'text-green-700'
+                    }`}>
+                      Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                  City
-                </label>
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.city}
-                  onChange={handleInputChange}
-                  required
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                  placeholder="City"
-                />
+            {locationStatus !== 'granted' && (
+              <div className="text-center">
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
+                  or enter manually
+                </p>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      Latitude
+                    </label>
+                    <input
+                      type="number"
+                      name="latitude"
+                      value={formData.latitude || ''}
+                      onChange={handleManualLocationEntry}
+                      step="any"
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter latitude"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      Longitude
+                    </label>
+                    <input
+                      type="number"
+                      name="longitude"
+                      value={formData.longitude || ''}
+                      onChange={handleManualLocationEntry}
+                      step="any"
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter longitude"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                  Pincode
-                </label>
-                <input
-                  type="text"
-                  name="pincode"
-                  value={formData.pincode}
-                  onChange={handleInputChange}
-                  required
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                  placeholder="Pincode"
-                />
-              </div>
-            </div>
+            )}
+
+
 
             <div className="flex items-center">
               <input
@@ -475,22 +612,32 @@ const WorkerSignup = () => {
             
             {/* Steps indicator */}
             <div className="mb-8">
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center justify-between">
                 {[1, 2, 3].map((step) => (
-                  <div key={step} className="flex items-center">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  <div key={step} className="flex flex-col items-center flex-1">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${
                       currentStep >= step ? 'bg-white text-blue-600' : 'bg-white/30 text-white'
                     }`}>
                       {currentStep > step ? <CheckCircle className="w-5 h-5" /> : step}
                     </div>
-                    {step < 3 && <div className={`w-8 h-1 ${currentStep > step ? 'bg-white' : 'bg-white/30'}`}></div>}
+                    <span className="text-sm text-center px-2">
+                      {step === 1 && 'Personal Info'}
+                      {step === 2 && 'Professional Info'}
+                      {step === 3 && 'Location & Terms'}
+                    </span>
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between text-sm mt-2">
-                <span>Personal Info</span>
-                <span>Professional Info</span>
-                <span>Address & Terms</span>
+              
+              {/* Connection lines */}
+              <div className="flex items-center justify-between mt-4 -mb-4">
+                <div className="flex-1 flex items-center">
+                  <div className={`flex-1 h-1 ${currentStep > 1 ? 'bg-white' : 'bg-white/30'}`}></div>
+                </div>
+                <div className="w-8"></div>
+                <div className="flex-1 flex items-center">
+                  <div className={`flex-1 h-1 ${currentStep > 2 ? 'bg-white' : 'bg-white/30'}`}></div>
+                </div>
               </div>
             </div>
 

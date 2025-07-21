@@ -4,9 +4,11 @@ import { Navigate } from 'react-router-dom';
 import WorkerLogin from '../auth/WorkerLogin';
 import WorkerSignup from '../auth/WorkerSignup';
 import WorkerDashboard from '../features/worker/WorkerDashboard';
+import WorkerJobs from '../features/worker/WorkerJobs';
+import WorkerSchedule from '../features/worker/WorkerSchedule';
 
 // Layouts
-import CustomerLayout from '../layouts/CustomerLayout';
+import WorkerLayout from '../layouts/WorkerLayout';
 
 // Protected Route Component
 const WorkerProtectedRoute = ({ children }) => {
@@ -43,7 +45,7 @@ export const workerRoutes = [
     path: "/worker",
     element: (
       <WorkerProtectedRoute>
-        <CustomerLayout />
+        <WorkerLayout />
       </WorkerProtectedRoute>
     ),
     children: [
@@ -62,11 +64,11 @@ export const workerRoutes = [
       },
       {
         path: "jobs",
-        element: <div>Worker Jobs Page (Coming Soon)</div>
+        element: <WorkerJobs />
       },
       {
         path: "schedule",
-        element: <div>Worker Schedule Page (Coming Soon)</div>
+        element: <WorkerSchedule />
       },
       {
         path: "earnings",
