@@ -67,10 +67,11 @@ const WorkerDashboard = () => {
     setDarkMode(isDarkMode());
     const cleanup = addThemeListener((isDark) => setDarkMode(isDark));
     
-    // Get user data from localStorage
-    const userInfo = localStorage.getItem('user_info');
-    if (userInfo) {
-      setUser(JSON.parse(userInfo));
+    // Get user data using AuthService for worker role
+    const userInfo = AuthService.getCurrentUser('worker');
+    const userRole = userInfo?.role?.toLowerCase();
+    if (userInfo && (userRole === 'worker' || userRole === 'provider')) {
+      setUser(userInfo);
     } else {
       navigate('/worker/login');
     }
@@ -79,8 +80,7 @@ const WorkerDashboard = () => {
   }, [navigate]);
 
   const handleLogout = () => {
-    AuthService.logout();
-    navigate('/');
+    AuthService.logout(navigate, 'worker');
   };
 
   const getStatusColor = (status) => {

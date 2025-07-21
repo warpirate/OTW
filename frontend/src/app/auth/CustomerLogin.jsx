@@ -45,7 +45,6 @@ const CustomerLogin = () => {
       await AuthService.requestOTP(formData.phone);
       setIsOtpSent(true);
     } catch (error) {
-      console.error('Error sending OTP:', error);
       // Handle error (could add error state here if needed)
     }
   };
@@ -76,7 +75,6 @@ const CustomerLogin = () => {
       // If login successful, navigate to home or dashboard
       navigate('/');
     } catch (error) {
-      console.error('Login failed:', error);
       setError(error?.response?.data?.message || error.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -85,7 +83,6 @@ const CustomerLogin = () => {
 
   const handleSocialLogin = (provider) => {
     // Handle social login
-    console.log(`Login with ${provider}`);
   };
 
   return (

@@ -24,7 +24,6 @@ auditClient.interceptors.request.use(
         const now = Date.now() / 1000;
         
         if (decoded.exp < now) {
-          console.warn('Token expired');
           localStorage.removeItem('jwt_token');
           localStorage.removeItem('user_info');
           throw new Error('Token expired');
@@ -32,7 +31,6 @@ auditClient.interceptors.request.use(
           config.headers.Authorization = `Bearer ${token}`;
         }
       } catch (error) {
-        console.error('Error decoding token:', error);
         localStorage.removeItem('jwt_token');
         localStorage.removeItem('user_info');
         throw new Error('Invalid token');
@@ -94,7 +92,6 @@ const AuditLogsService = {
       const response = await auditClient.get(url);
       return response.data;
     } catch (error) {
-      console.error('Error fetching audit logs:', error);
       throw error;
     }
   },
@@ -105,7 +102,6 @@ const AuditLogsService = {
       const response = await auditClient.post('/', logData);
       return response.data;
     } catch (error) {
-      console.error('Error creating audit log:', error);
       throw error;
     }
   },
@@ -116,7 +112,6 @@ const AuditLogsService = {
       const response = await auditClient.get(`/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching audit log:', error);
       throw error;
     }
   },
@@ -138,7 +133,6 @@ const AuditLogsService = {
       
       return response.data;
     } catch (error) {
-      console.error('Error exporting audit logs:', error);
       throw error;
     }
   }

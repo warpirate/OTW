@@ -29,6 +29,7 @@ import AuditLogs from './app/features/superadmin/AuditLogs';
 import Reports from './app/features/superadmin/Reports';
 
 // Worker Components
+import WorkerLayout from './app/layouts/WorkerLayout';
 import WorkerLogin from './app/auth/WorkerLogin';
 import WorkerSignup from './app/auth/WorkerSignup';
 import WorkerDashboard from './app/features/worker/WorkerDashboard';
@@ -41,35 +42,28 @@ const AdminProtectedRoute = ({ children }) => {
   const [isChecking, setIsChecking] = useState(true);
   
   useEffect(() => {
-    console.log('AdminProtectedRoute: Checking authentication...');
     const checkAuth = () => {
       // Use the role-specific authentication check
       const isLoggedIn = AuthService.isLoggedIn('admin');
-      console.log('AdminProtectedRoute: isLoggedIn =', isLoggedIn);
       
       if (!isLoggedIn) return false;
       
       // Verify user has admin role
       const user = AuthService.getCurrentUser('admin');
-      console.log('AdminProtectedRoute: user =', user);
       
       const hasRole = user && user.role === 'admin';
-      console.log('AdminProtectedRoute: hasRole =', hasRole);
       return hasRole;
     };
     
     const authStatus = checkAuth();
-    console.log('AdminProtectedRoute: Setting isAuthenticated =', authStatus);
     setIsAuthenticated(authStatus);
     setIsChecking(false);
     
     const handleStorage = () => {
-      console.log('AdminProtectedRoute: Storage event detected');
       setIsAuthenticated(checkAuth());
     };
     
     const handleNavigation = () => {
-      console.log('AdminProtectedRoute: Navigation event detected');
       setIsAuthenticated(checkAuth());
     };
     
@@ -80,7 +74,6 @@ const AdminProtectedRoute = ({ children }) => {
     const interval = setInterval(() => {
       const newStatus = checkAuth();
       if (isAuthenticated !== newStatus) {
-        console.log('AdminProtectedRoute: Auth status changed to', newStatus);
         setIsAuthenticated(newStatus);
       }
     }, 1000); // Check every second
@@ -97,11 +90,9 @@ const AdminProtectedRoute = ({ children }) => {
   }
   
   if (!isAuthenticated) {
-    console.log('AdminProtectedRoute: Redirecting to login');
     return <Navigate to="/admin/login" replace />;
   }
   
-  console.log('AdminProtectedRoute: Rendering protected content');
   return children;
 };
 
@@ -110,35 +101,28 @@ const SuperAdminProtectedRoute = ({ children }) => {
   const [isChecking, setIsChecking] = useState(true);
   
   useEffect(() => {
-    console.log('SuperAdminProtectedRoute: Checking authentication...');
     const checkAuth = () => {
       // Use the role-specific authentication check
       const isLoggedIn = AuthService.isLoggedIn('super admin');
-      console.log('SuperAdminProtectedRoute: isLoggedIn =', isLoggedIn);
       
       if (!isLoggedIn) return false;
       
       // Verify user has super admin role
       const user = AuthService.getCurrentUser('super admin');
-      console.log('SuperAdminProtectedRoute: user =', user);
       
       const hasRole = user && user.role === 'super admin';
-      console.log('SuperAdminProtectedRoute: hasRole =', hasRole);
       return hasRole;
     };
     
     const authStatus = checkAuth();
-    console.log('SuperAdminProtectedRoute: Setting isAuthenticated =', authStatus);
     setIsAuthenticated(authStatus);
     setIsChecking(false);
     
     const handleStorage = () => {
-      console.log('SuperAdminProtectedRoute: Storage event detected');
       setIsAuthenticated(checkAuth());
     };
     
     const handleNavigation = () => {
-      console.log('SuperAdminProtectedRoute: Navigation event detected');
       setIsAuthenticated(checkAuth());
     };
     
@@ -149,7 +133,6 @@ const SuperAdminProtectedRoute = ({ children }) => {
     const interval = setInterval(() => {
       const newStatus = checkAuth();
       if (isAuthenticated !== newStatus) {
-        console.log('SuperAdminProtectedRoute: Auth status changed to', newStatus);
         setIsAuthenticated(newStatus);
       }
     }, 1000); // Check every second
@@ -166,11 +149,9 @@ const SuperAdminProtectedRoute = ({ children }) => {
   }
   
   if (!isAuthenticated) {
-    console.log('SuperAdminProtectedRoute: Redirecting to login');
     return <Navigate to="/superadmin/login" replace />;
   }
   
-  console.log('SuperAdminProtectedRoute: Rendering protected content');
   return children;
 };
 
@@ -179,35 +160,29 @@ const WorkerProtectedRoute = ({ children }) => {
   const [isChecking, setIsChecking] = useState(true);
   
   useEffect(() => {
-    console.log('WorkerProtectedRoute: Checking authentication...');
     const checkAuth = () => {
       // Use the role-specific authentication check
       const isLoggedIn = AuthService.isLoggedIn('worker');
-      console.log('WorkerProtectedRoute: isLoggedIn =', isLoggedIn);
       
       if (!isLoggedIn) return false;
       
-      // Verify user has worker role
+      // Verify user has worker role (handle case sensitivity)
       const user = AuthService.getCurrentUser('worker');
-      console.log('WorkerProtectedRoute: user =', user);
       
-      const hasRole = user && user.role === 'worker';
-      console.log('WorkerProtectedRoute: hasRole =', hasRole);
+      const userRole = user?.role?.toLowerCase();
+      const hasRole = user && (userRole === 'worker' || userRole === 'provider');
       return hasRole;
     };
     
     const authStatus = checkAuth();
-    console.log('WorkerProtectedRoute: Setting isAuthenticated =', authStatus);
     setIsAuthenticated(authStatus);
     setIsChecking(false);
     
     const handleStorage = () => {
-      console.log('WorkerProtectedRoute: Storage event detected');
       setIsAuthenticated(checkAuth());
     };
     
     const handleNavigation = () => {
-      console.log('WorkerProtectedRoute: Navigation event detected');
       setIsAuthenticated(checkAuth());
     };
     
@@ -218,7 +193,6 @@ const WorkerProtectedRoute = ({ children }) => {
     const interval = setInterval(() => {
       const newStatus = checkAuth();
       if (isAuthenticated !== newStatus) {
-        console.log('WorkerProtectedRoute: Auth status changed to', newStatus);
         setIsAuthenticated(newStatus);
       }
     }, 1000); // Check every second
@@ -235,11 +209,9 @@ const WorkerProtectedRoute = ({ children }) => {
   }
   
   if (!isAuthenticated) {
-    console.log('WorkerProtectedRoute: Redirecting to login');
     return <Navigate to="/worker/login" replace />;
   }
   
-  console.log('WorkerProtectedRoute: Rendering protected content');
   return children;
 };
 
@@ -312,7 +284,7 @@ function App() {
           <Route path="/worker/signup" element={<WorkerSignup />} />
           <Route path="/worker" element={
             <WorkerProtectedRoute>
-              <CustomerLayout />
+              <WorkerLayout />
             </WorkerProtectedRoute>
           }>
             <Route index element={<Navigate to="/worker/dashboard" replace />} />

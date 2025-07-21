@@ -50,7 +50,6 @@ const WorkerLogin = () => {
       setIsOtpSent(true);
       setError('');
     } catch (error) {
-      console.error('Error sending OTP:', error);
       setError('Failed to send OTP. Please try again.');
     } finally {
       setIsLoading(false);
@@ -76,23 +75,19 @@ const WorkerLogin = () => {
 
       // Verify the user has worker role using the role-based authentication system
       const user = AuthService.getCurrentUser('worker');
-      console.log('Worker user after login:', user);
       
-      if (!user || user.role !== 'worker') {
-        throw new Error('You do not have worker privileges');
+      // Check for both 'worker' and 'Worker' to handle case sensitivity
+      const userRole = user?.role?.toLowerCase();
+      if (!user || (userRole !== 'worker' && userRole !== 'provider')) {
+        throw new Error(`You do not have worker privileges. Current role: ${user?.role}`);
       }
       
-      // Add event to trigger storage listeners
-      window.dispatchEvent(new Event('storage'));
+      // Navigate immediately with replace to prevent back navigation to login
+      navigate('/worker/dashboard', { replace: true });
       
-      console.log('Worker login successful, preparing to navigate...');
-      // Add a slight delay to ensure tokens are stored before navigation
-      setTimeout(() => {
-        console.log('Navigating to worker dashboard...');
-        navigate('/worker/dashboard', { replace: true });
-      }, 100);
+      // Also dispatch storage event for any listeners
+      window.dispatchEvent(new Event('storage'));
     } catch (error) {
-      console.error('Login error:', error);
       setError(error.response?.data?.message || error.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);

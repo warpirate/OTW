@@ -40,7 +40,6 @@ const AdminManagement = () => {
         toast.error('Failed to fetch admins');
       }
     } catch (error) {
-      console.error('Error fetching admins:', error);
       toast.error('Error fetching admins');
     } finally {
       setLoading(false);
@@ -100,7 +99,6 @@ const AdminManagement = () => {
         toast.error(response.message || 'Failed to create admin');
       }
     } catch (error) {
-      console.error('Error creating admin:', error);
       toast.error('Error creating admin');
     } finally {
       setLoading(false);
@@ -120,7 +118,6 @@ const AdminManagement = () => {
         toast.error(response.message || 'Failed to update admin');
       }
     } catch (error) {
-      console.error('Error updating admin:', error);
       toast.error('Error updating admin');
     } finally {
       setLoading(false);
@@ -140,7 +137,6 @@ const AdminManagement = () => {
         toast.error(response.message || 'Failed to delete admin');
       }
     } catch (error) {
-      console.error('Error deleting admin:', error);
       toast.error('Error deleting admin');
     } finally {
       setLoading(false);

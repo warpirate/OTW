@@ -10,7 +10,6 @@ require('dotenv').config();
 // ------------------------
 router.post('/login', async (req, res) => {
   const { email, password, role } = req.body;
-  console.log('Login attempt with email:', email, 'and role:', role);
   if (!email || !password || !role) {
     return res.status(400).json({ message: 'Email, password, and role are required' });
   }
@@ -41,10 +40,22 @@ router.post('/login', async (req, res) => {
        LIMIT 1`,
       [user.id]
     );
-console.log('DB role for user:', dbRole);
 
-    if (!dbRole || dbRole.role_name !== role) {
-      return res.status(403).json({ message: 'Access denied for this role' });
+    // More flexible role checking - normalize role names
+    const dbRoleName = dbRole.role_name.toLowerCase();
+    const requestedRole = role.toLowerCase();
+    
+    // Handle role mapping for worker/provider synonyms
+    const roleMapping = {
+      'worker': ['worker', 'provider', 'service provider'],
+      'provider': ['worker', 'provider', 'service provider'],
+      'service provider': ['worker', 'provider', 'service provider']
+    };
+    
+    const allowedRoles = roleMapping[requestedRole] || [requestedRole];
+    
+    if (!dbRole || !allowedRoles.includes(dbRoleName)) {
+      return res.status(403).json({ message: `Access denied for role ${role}. User has role: ${dbRole.role_name}` });
     }
 
     const token = jwt.sign(

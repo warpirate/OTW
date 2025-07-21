@@ -35,7 +35,6 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 || error.response?.status === 403) {
       // Use AuthService for proper token cleanup
       AuthService.logout();
-      
       // Redirect to login if not already there
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
@@ -50,19 +49,15 @@ export const CategoryService = {
   // Get all categories
   getAllCategories: async (page = 1, limit = 10) => {
     try {
-      const response = await apiClient.get('/get-categories',
-        {
-        params: { page, limit } // Pass page and limit as query parameters
-      }
-      );
-      console.log('Fetched categories:', response);
+      const response = await apiClient.get('/get-categories', {
+        params: { page, limit }
+      });
       if (Array.isArray(response.data)) {
         response.data.category_data = response.data.category_data.map(category => ({
           ...category,
           isActive: category.is_active,
         }));
       }
-      console.log('Processed categories:', response.data);
       return response.data;
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -95,10 +90,9 @@ export const CategoryService = {
   // Update existing category
   updateCategory: async (id, category) => {
     try {
-      // Ensure is_active is set based on isActive
       const updatedCategory = {
-      ...category,
-      is_active: category.isActive !== undefined ? category.isActive : category.is_active
+        ...category,
+        is_active: category.isActive !== undefined ? category.isActive : category.is_active
       };
       const response = await apiClient.put(`/edit-category/${id}`, updatedCategory);
       return response.data;
@@ -113,14 +107,12 @@ export const CategoryService = {
     try {
       // First get all subcategories for this category
       const subcategories = await apiClient.get(`/sub-categories?categoryId=${id}`);
-      
       // If there are subcategories, delete them first
       if (subcategories.data && subcategories.data.length > 0) {
         await Promise.all(subcategories.data.map(subcategory => {
           return apiClient.delete(`/delete-sub-category/${id}/${subcategory.id}`);
         }));
       }
-      
       // Now delete the category
       const response = await apiClient.delete(`/delete-category/${id}`);
       return response.data;
@@ -136,7 +128,7 @@ export const CategoryService = {
   createSubcategory: async (categoryId, subcategory) => {
     try {
       const response = await apiClient.post(
-        `/create-sub-category?categoryId=${categoryId}`, 
+        `/create-sub-category?categoryId=${categoryId}`,
         subcategory
       );
       return response.data;
@@ -145,14 +137,12 @@ export const CategoryService = {
       throw error;
     }
   },
+
   // Get all subcategories
   getAllSubCategories: async (categoryId) => {
     try {
-      console.log("CATE ID ", categoryId);
       const response = await apiClient.get(`/sub-categories?categoryId=${categoryId}`);
-      console.log('Fetched subcategories:', response);
       return response.data;
-
     } catch (error) {
       console.error('Error fetching subcategories:', error);
       throw error;
@@ -162,10 +152,8 @@ export const CategoryService = {
   // Update subcategory
   updateSubcategory: async (categoryId, subcategoryId, subcategory) => {
     try {
-      console.log("CATE ID ", categoryId);
-      console.log("SUB ID ", subcategoryId);
       const response = await apiClient.put(
-        `/${categoryId}/subcategories/${subcategoryId}`, 
+        `/${categoryId}/subcategories/${subcategoryId}`,
         subcategory
       );
       return response.data;
@@ -181,24 +169,15 @@ export const CategoryService = {
       if (!categoryId || !subcategoryId) {
         throw new Error('Both categoryId and subcategoryId are required');
       }
-      
-      console.log(`Deleting subcategory with categoryId=${categoryId} and subcategoryId=${subcategoryId}`);
-      
       const response = await apiClient.delete(
         `/delete-sub-category/${categoryId}/${subcategoryId}`
       );
-      
-      console.log('Delete subcategory response:', response);
       return response.data;
     } catch (error) {
-      console.error(`Error deleting subcategory ${subcategoryId} from category ${categoryId}:`, error);
       throw error;
     }
   }
-  // get details of categories along with sub categories
-
 };
-
 
 export default {
   CategoryService

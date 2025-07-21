@@ -46,17 +46,9 @@ class WorkerService {
    */
   static async registerWorker(userData) {
     try {
-      console.log('WorkerService: Registering worker with data:', {
-        ...userData,
-        password: '[HIDDEN]'
-      });
-      
       const response = await apiClient.post('/worker/register', userData);
-      
-      console.log('WorkerService: Registration successful');
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Registration failed:', error.response?.data || error);
       throw error;
     }
   }
@@ -69,7 +61,6 @@ class WorkerService {
       const response = await apiClient.get('/worker/profile');
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Get profile failed:', error.response?.data || error);
       throw error;
     }
   }
@@ -79,14 +70,9 @@ class WorkerService {
    */
   static async updateProfile(updateData) {
     try {
-      console.log('WorkerService: Updating profile with:', updateData);
-      
-      const response = await API.put('/worker/profile', updateData);
-      
-      console.log('WorkerService: Profile update successful');
+      const response = await apiClient.put('/worker/profile', updateData);
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Profile update failed:', error.response?.data || error);
       throw error;
     }
   }
@@ -96,10 +82,9 @@ class WorkerService {
    */
   static async getDashboardStats() {
     try {
-      const response = await API.get('/worker/dashboard/stats');
+      const response = await apiClient.get('/worker/dashboard/stats');
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Get dashboard stats failed:', error.response?.data || error);
       throw error;
     }
   }
@@ -119,10 +104,9 @@ class WorkerService {
         ...filters
       });
       
-      const response = await API.get(`/worker/all?${params}`);
+      const response = await apiClient.get(`/worker/all?${params}`);
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Get all workers failed:', error.response?.data || error);
       throw error;
     }
   }
@@ -132,10 +116,9 @@ class WorkerService {
    */
   static async getWorkerById(workerId) {
     try {
-      const response = await API.get(`/worker/${workerId}`);
+      const response = await apiClient.get(`/worker/${workerId}`);
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Get worker by ID failed:', error.response?.data || error);
       throw error;
     }
   }
@@ -145,16 +128,11 @@ class WorkerService {
    */
   static async updateVerificationStatus(workerId, verified) {
     try {
-      console.log(`WorkerService: ${verified ? 'Verifying' : 'Unverifying'} worker ${workerId}`);
-      
-      const response = await API.patch(`/worker/${workerId}/verify`, {
+      const response = await apiClient.patch(`/worker/${workerId}/verify`, {
         verified
       });
-      
-      console.log('WorkerService: Verification status updated successfully');
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Update verification failed:', error.response?.data || error);
       throw error;
     }
   }
@@ -164,16 +142,11 @@ class WorkerService {
    */
   static async updateActivityStatus(workerId, active) {
     try {
-      console.log(`WorkerService: ${active ? 'Activating' : 'Deactivating'} worker ${workerId}`);
-      
-      const response = await API.patch(`/worker/${workerId}/activity`, {
+      const response = await apiClient.patch(`/worker/${workerId}/activity`, {
         active
       });
-      
-      console.log('WorkerService: Activity status updated successfully');
       return response.data;
     } catch (error) {
-      console.error('WorkerService: Update activity failed:', error.response?.data || error);
       throw error;
     }
   }

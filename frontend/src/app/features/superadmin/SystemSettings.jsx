@@ -70,7 +70,6 @@ const SystemSettings = () => {
   // Handle settings save
   const handleSaveSettings = () => {
     // In a real app, this would make an API call
-    console.log('Saving settings:', settings);
     setIsSuccess(true);
     setTimeout(() => {
       setIsSuccess(false);

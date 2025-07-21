@@ -37,10 +37,10 @@ class WorkerService {
       
       const userId = userResult.insertId;
       
-      // Get worker role ID (assuming role name is 'worker')
+      // Get worker role ID (check for various possible worker role names)
       const [roleResult] = await connection.query(
-        'SELECT id FROM roles WHERE name = ? LIMIT 1',
-        ['worker']
+        'SELECT id, name FROM roles WHERE LOWER(name) IN (?, ?, ?) LIMIT 1',
+        ['worker', 'provider', 'service provider']
       );
       
       if (roleResult.length === 0) {

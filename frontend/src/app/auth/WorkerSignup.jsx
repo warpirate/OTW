@@ -134,7 +134,6 @@ const WorkerSignup = () => {
       (position) => {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
-        console.log('Location captured:', { lat, lng });
         
         setFormData(prev => ({
           ...prev,
@@ -148,7 +147,6 @@ const WorkerSignup = () => {
       (error) => {
         setLocationStatus('denied');
         setLocationError('Location access denied by user');
-        console.error('Location error:', error);
       },
       {
         enableHighAccuracy: true,
@@ -168,7 +166,7 @@ const WorkerSignup = () => {
         [name]: numValue
       };
       
-      console.log('Manual location entry:', { name, value: numValue, updatedData });
+      
       
       // Check if both coordinates are filled after this update
       if (updatedData.latitude && updatedData.longitude) {
@@ -197,7 +195,7 @@ const WorkerSignup = () => {
       }
     };
     
-    console.log('Form submission data:', formData);
+    
     
     try {
       const userData = {
@@ -221,7 +219,7 @@ const WorkerSignup = () => {
         }
       };
       
-      console.log('Sending userData:', userData);
+      
       
       const response = await WorkerService.registerWorker(userData);
       if (response && response.user && response.token) {

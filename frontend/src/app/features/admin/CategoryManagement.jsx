@@ -33,7 +33,6 @@ const CategoryManagement = () => {
       setLoading(true);
       // Get categories with pagination
       const response = await CategoryService.getAllCategories(pagination.page, pagination.limit);
-        console.log("Fetched categories get all cats :", response);
       // Update pagination metadata
       setPagination(prev => ({
         ...prev,
@@ -51,7 +50,6 @@ const CategoryManagement = () => {
               subcategories: subcategories || []
             };
           } catch (error) {
-            console.error(`Error fetching subcategories for category ${category.id}:`, error);
             return {
               ...category,
               subcategories: []
@@ -63,7 +61,6 @@ const CategoryManagement = () => {
       setCategories(categoriesWithSubcategories);
       setError(null);
     } catch (err) {
-      console.error('Error fetching categories:', err);
       setError('Failed to load categories. Please try again.');
     } finally {
       setLoading(false);
@@ -121,11 +118,9 @@ const CategoryManagement = () => {
 
   // Handle view category
   const handleViewCategory = async (category) => {
-    console.log("category det: ", category);
     setLoading(true);
     try {
       const subCategoryDetails = await CategoryService.getAllSubCategories(category.id);
-      console.log("FULL CATE DET", subCategoryDetails);
       setSelectedCategory({
         ...category,
         subcategories: subCategoryDetails
@@ -134,7 +129,6 @@ const CategoryManagement = () => {
       setShowModal(true);
       setError(null);
     } catch (err) {
-      console.error('Error fetching category details for view:', err);
       setError('Failed to load category details. Please try again.');
     } finally {
       setLoading(false);
@@ -146,17 +140,14 @@ const CategoryManagement = () => {
     setLoading(true);
     try {
       const subCategoryDetails = await CategoryService.getAllSubCategories(category.id);
-      console.log("FULL CATE DET", subCategoryDetails);
       setSelectedCategory({
         ...category,
         subcategories: subCategoryDetails
       });
-      console.log("Selected Category for Edit: ", selectedCategory);
       setModalMode('edit');
       setShowModal(true);
       setError(null);
     } catch (err) {
-      console.error('Error fetching category details for edit:', err);
       setError('Failed to load category details. Please try again.');
     } finally {
       setLoading(false);
@@ -191,11 +182,6 @@ const CategoryManagement = () => {
 
       if (modalMode === 'add') {
         const newCategory = await CategoryService.createCategory(selectedCategory);
-        console.log("New Category dET", newCategory);
-
-        // Fetch the complete category data including subcategories after creation
-        // This line might be redundant if fetchCategories re-fetches all data.
-        // const completeCategory = await CategoryService.getCategoryById(newCategory.id);
         await fetchCategories(); // Re-fetch all categories to update the list
 
       } else if (modalMode === 'edit') {
@@ -206,7 +192,6 @@ const CategoryManagement = () => {
       setShowModal(false);
       setError(null);
     } catch (err) {
-      console.error('Error saving category:', err);
       setError('Failed to save category. Please try again.');
     } finally {
       setLoading(false);
@@ -272,32 +257,25 @@ const CategoryManagement = () => {
         category_id: categoryId
       };
 
-      console.log('Category ID:', categoryId);
-      console.log('Subcategory data:', subcategoryData);
-
       let result;
       if (subcategoryMode === 'add') {
         result = await CategoryService.createSubcategory(
           categoryId,
           subcategoryData
         );
-        console.log('Created subcategory result:', result);
       } else if (subcategoryMode === 'edit') {
         if (!selectedSubcategory.id) {
           throw new Error('Subcategory ID is missing');
         }
 
-        console.log('Updating subcategory ID:', selectedSubcategory.id);
         result = await CategoryService.updateSubcategory(
           categoryId,
           selectedSubcategory.id,
           subcategoryData
         );
-        console.log('Updated subcategory result:', result);
       }
 
       const updatedSubCategories = await CategoryService.getAllSubCategories(categoryId);
-      console.log('Updated subcategories list:', updatedSubCategories);
 
       // Update selectedCategory's subcategories immediately for the modal view
       setSelectedCategory(prev => {
@@ -323,7 +301,6 @@ const CategoryManagement = () => {
       setShowSubcategoryModal(false);
       setError(null);
     } catch (err) {
-      console.error('Error saving subcategory:', err);
       const errorMessage = err.response ?
         `Failed to save subcategory: ${err.response.data?.message || err.response.statusText}` :
         'Failed to save subcategory. Please try again.';
@@ -352,7 +329,6 @@ const CategoryManagement = () => {
         setShowModal(false);
       }
     } catch (err) {
-      console.error('Error deleting category:', err);
       setError('Failed to delete category. Please try again.');
     } finally {
       setLoading(false);
@@ -396,7 +372,6 @@ const CategoryManagement = () => {
       });
       setError(null);
     } catch (err) {
-      console.error('Error deleting subcategory:', err);
       setError('Failed to delete subcategory. Please try again.');
     } finally {
       setLoading(false);

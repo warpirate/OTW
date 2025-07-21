@@ -24,7 +24,6 @@ dashboardClient.interceptors.request.use(
         const now = Date.now() / 1000;
         
         if (decoded.exp < now) {
-          console.warn('Token expired');
           localStorage.removeItem('jwt_token');
           localStorage.removeItem('user_info');
           throw new Error('Token expired');
@@ -32,7 +31,6 @@ dashboardClient.interceptors.request.use(
           config.headers.Authorization = `Bearer ${token}`;
         }
       } catch (error) {
-        console.error('Error decoding token:', error);
         localStorage.removeItem('jwt_token');
         localStorage.removeItem('user_info');
         throw new Error('Invalid token');
@@ -70,7 +68,6 @@ const DashboardService = {
       const response = await dashboardClient.get('/stats');
       return response.data;
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
       throw error;
     }
   },
@@ -81,7 +78,6 @@ const DashboardService = {
       const response = await dashboardClient.get(`/recent-actions?limit=${limit}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching recent actions:', error);
       throw error;
     }
   },
@@ -92,7 +88,6 @@ const DashboardService = {
       const response = await dashboardClient.get(`/user-growth?period=${period}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching user growth data:', error);
       throw error;
     }
   },
@@ -103,7 +98,6 @@ const DashboardService = {
       const response = await dashboardClient.get(`/revenue?period=${period}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching revenue data:', error);
       throw error;
     }
   }

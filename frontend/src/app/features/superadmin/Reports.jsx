@@ -220,7 +220,6 @@ const Reports = () => {
   
   // Download a report (simulated)
   const handleDownloadReport = (report) => {
-    console.log(`Downloading report: ${report.name}`);
     // In a real app, this would initiate a file download
     alert(`Download started for ${report.name}`);
   };

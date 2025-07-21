@@ -25,32 +25,27 @@ const SuperAdminLogin = () => {
     setError('');
 
     try {
-      console.log('Attempting super admin login...');
       // Call the AuthService login with role 'super admin'
       const response = await AuthService.login(credentials.email, credentials.password, 'super admin');
-      console.log('Login response received:', response);
       
       // Check if we received a token for the correct role
       const user = AuthService.getCurrentUser('super admin');
-      console.log('Current user after login:', user);
       
       if (!user || user.role !== 'super admin') {
         throw new Error('You do not have super admin privileges');
       }
       
-      console.log('Login successful, preparing to navigate...');
+      
       
       // Dispatch storage event to notify protected routes
       window.dispatchEvent(new Event('storage'));
       
       // Add a slight delay to ensure tokens are stored before navigation
       setTimeout(() => {
-        console.log('Navigating to dashboard...');
         navigate('/superadmin/dashboard', { replace: true });
       }, 100);
     } catch (err) {
       setError(err?.response?.data?.message || err.message || 'Login failed. Please try again.');
-      console.error('SuperAdmin Login error:', err);
     } finally {
       setIsLoading(false);
     }

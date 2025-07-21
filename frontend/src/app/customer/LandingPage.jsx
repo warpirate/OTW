@@ -99,19 +99,10 @@ const LandingPage = () => {
       try {
         setLoading(true);
         // Get all categories (no pagination for landing page)
-        const response = await LandingPageService.getAllCategories(1, 100);
-        console.log(" response from landing page ", response);
-        console.log("Response structure:", {
-          hasResponse: !!response,
-          hasCategoryData: !!(response && response.category_data),
-          categoryDataLength: response?.category_data?.length || 0,
-          categoryData: response?.category_data
-        });
-        
+        const response = await LandingPageService.getAllCategories(1, 100); 
         if (response && response.category_data) {
           // Filter active categories (if is_active field exists, otherwise include all)
           const activeCategories = response.category_data.filter(cat => cat.is_active !== false);
-          console.log("Active categories:", activeCategories);
           
           // Store the full categories data for later use
           setCategories(activeCategories);
@@ -157,22 +148,19 @@ const LandingPage = () => {
             });
           });
           
-          console.log("Grouped categories:", groupedCategories);
-          console.log("Available category types:", Object.keys(groupedCategories));
+          
           
           setDynamicServiceCategories(groupedCategories);
           
           // Set active tab to the first available category type
           if (Object.keys(groupedCategories).length > 0) {
             const firstTab = Object.keys(groupedCategories)[0];
-            console.log("Setting active tab to:", firstTab);
             setActiveTab(firstTab);
           }
         }
         
         setError(null);
       } catch (err) {
-        console.error('Error fetching categories:', err);
         setError('Failed to load categories');
         // Fallback to default categories if API fails
         setDynamicServiceCategories(fallbackServiceCategories);
@@ -204,7 +192,6 @@ const LandingPage = () => {
           setUser(null);
         }
       } catch (error) {
-        console.error('Auth check error:', error);
         setIsAuthenticated(false);
         setUser(null);
       }
@@ -744,7 +731,6 @@ const LandingPage = () => {
                                 <div 
                                   onClick={() => {
                                     // Handle per hour booking logic here
-                                    console.log('Per hour booking selected with', selectedCarOption);
                                   }}
                                   className={`service-card hover:shadow-xl cursor-pointer transition-all ${
                                     isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
@@ -770,7 +756,6 @@ const LandingPage = () => {
                                 <div 
                                   onClick={() => {
                                     // Handle per day booking logic here
-                                    console.log('Per day booking selected with', selectedCarOption);
                                   }}
                                   className={`service-card hover:shadow-xl cursor-pointer transition-all ${
                                     isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
@@ -910,7 +895,6 @@ const LandingPage = () => {
                                       setLoadingSubcategories(false);
                                     })
                                     .catch(err => {
-                                      console.error(`Error fetching subcategories for ${cat.name}:`, err);
                                       setSubcategories([]);
                                       setLoadingSubcategories(false);
                                     });

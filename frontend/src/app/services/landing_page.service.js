@@ -49,13 +49,6 @@ export const LandingPageService = {
         params: { page, limit } // Pass page and limit as query parameters
       }
       );
-      console.log('Fetched categories:', response);
-      console.log('Response data structure:', {
-        isArray: Array.isArray(response.data),
-        hasData: !!response.data,
-        dataKeys: response.data ? Object.keys(response.data) : [],
-        data: response.data
-      });
       
       // If response.data is an array, it means the categories are directly in the array
       // If it's an object, it might have a category_data property
@@ -66,22 +59,17 @@ export const LandingPageService = {
         processedData = response.data;
       }
       
-      console.log('Processed categories:', processedData);
       return processedData;
     } catch (error) {
-      console.error('Error fetching categories:', error);
       throw error;
     }
   },
     getAllSubCategories: async (categoryId) => {
     try {
-      console.log("CATE ID ", categoryId);
       const response = await apiClient.get(`/sub-categories?categoryId=${categoryId}`);
-      console.log('Fetched subcategories:', response);
       return response.data;
 
     } catch (error) {
-      console.error('Error fetching subcategories:', error);
       throw error;
     }
   },

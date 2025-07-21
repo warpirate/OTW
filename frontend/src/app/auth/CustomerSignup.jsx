@@ -121,9 +121,7 @@ const CustomerSignup = () => {
         userData.otp = formData.otp;
       }
       
-      console.log(userData);
       const response = await AuthService.register(userData);
-      console.log(response);
       
       // Registration successful
       navigate('/'); // Redirect to home page after successful signup

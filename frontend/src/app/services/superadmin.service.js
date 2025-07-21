@@ -89,7 +89,6 @@ const AdminService = {
       const admins = (response.data.admins || []).map(AdminService._mapAdmin);
       return { success: true, data: admins, total: response.data.total };
     } catch (error) {
-      console.error('Error fetching admins:', error);
       throw error;
     }
   },
@@ -98,7 +97,6 @@ const AdminService = {
   createAdmin: async (adminData) => {
     try {
       // backend expects phone field as phone, status optional
-      console.log("admin data " ,adminData);
       const payload = {
         name: adminData.name,
         email: adminData.email,
@@ -109,7 +107,6 @@ const AdminService = {
       const response = await adminClient.post('/', payload);
       return { success: true, message: 'Admin created successfully', id: response.data.id };
     } catch (error) {
-      console.error('Error creating admin:', error);
       throw error;
     }
   },
@@ -120,7 +117,6 @@ const AdminService = {
       const response = await adminClient.put(`/${id}`, adminData);
       return { success: true, message: 'Admin updated successfully' };
     } catch (error) {
-      console.error('Error updating admin:', error);
       throw error;
     }
   },
@@ -131,7 +127,6 @@ const AdminService = {
       const response = await adminClient.delete(`/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Error deleting admin:', error);
       throw error;
     }
   },
@@ -142,7 +137,6 @@ const AdminService = {
       const response = await adminClient.get(`/${id}`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching admin:', error);
       throw error;
     }
   },
@@ -153,7 +147,6 @@ const AdminService = {
       const response = await adminClient.patch(`/${id}/status`, { status });
       return response.data;
     } catch (error) {
-      console.error('Error updating admin status:', error);
       throw error;
     }
   }

@@ -65,7 +65,6 @@ const ReportsService = {
       const response = await reportsClient.get('/templates');
       return response.data;
     } catch (error) {
-      console.error('Error fetching report templates:', error);
       throw error;
     }
   },
@@ -76,7 +75,6 @@ const ReportsService = {
       const response = await reportsClient.post('/generate', reportData);
       return response.data;
     } catch (error) {
-      console.error('Error generating report:', error);
       throw error;
     }
   },
@@ -111,7 +109,6 @@ const ReportsService = {
       const response = await reportsClient.get(url);
       return response.data;
     } catch (error) {
-      console.error('Error fetching generated reports:', error);
       throw error;
     }
   },
@@ -125,7 +122,6 @@ const ReportsService = {
       
       return response.data;
     } catch (error) {
-      console.error('Error downloading report:', error);
       throw error;
     }
   },
@@ -136,7 +132,6 @@ const ReportsService = {
       const response = await reportsClient.delete(`/${reportId}`);
       return response.data;
     } catch (error) {
-      console.error('Error deleting report:', error);
       throw error;
     }
   },
@@ -147,7 +142,6 @@ const ReportsService = {
       const response = await reportsClient.post('/schedule', scheduleData);
       return response.data;
     } catch (error) {
-      console.error('Error scheduling report:', error);
       throw error;
     }
   },
@@ -158,7 +152,6 @@ const ReportsService = {
       const response = await reportsClient.get('/scheduled');
       return response.data;
     } catch (error) {
-      console.error('Error fetching scheduled reports:', error);
       throw error;
     }
   }

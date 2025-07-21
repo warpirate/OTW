@@ -31,7 +31,6 @@ authClient.interceptors.request.use(
         const decoded = jwtDecode(token);
         const now = Date.now() / 1000;
         if (decoded.exp < now) {
-          console.warn("Token expired");
           // Clear expired tokens
           if (currentRole) {
             const { tokenKey, userKey } = AuthService._getStorageKeys(currentRole);
@@ -43,7 +42,6 @@ authClient.interceptors.request.use(
           config.headers['Authorization'] = `Bearer ${token}`;
         }
       } catch (error) {
-        console.error("Error decoding token:", error);
         // Clear invalid tokens
         if (currentRole) {
           const { tokenKey, userKey } = AuthService._getStorageKeys(currentRole);
@@ -96,7 +94,6 @@ const AuthService = {
       }
       return response.data;
     } catch (error) {
-      console.error('Error during registration:', error);
       throw error;
     }
   },
@@ -118,7 +115,6 @@ const AuthService = {
       }
       return response.data;
     } catch (error) {
-      console.error('Error during login:', error);
       throw error;
     }
   },
@@ -139,7 +135,6 @@ const AuthService = {
       }
       return response.data;
     } catch (error) {
-      console.error('Error during OTP login:', error);
       throw error;
     }
   },
@@ -150,7 +145,6 @@ const AuthService = {
       const response = await authClient.post('/request-otp', { phone });
       return response.data;
     } catch (error) {
-      console.error('Error requesting OTP:', error);
       throw error;
     }
   },
@@ -161,7 +155,6 @@ const AuthService = {
       const response = await authClient.post('/verify-email', { token });
       return response.data;
     } catch (error) {
-      console.error('Error verifying email:', error);
       throw error;
     }
   },
@@ -238,12 +231,12 @@ const AuthService = {
   // Store tokens with role-based support
   _storeTokens: (token, user) => {
     if (!user || !user.role) {
-      console.error('Cannot store tokens: user or role is missing');
       return;
     }
     
     // Store tokens in role-specific keys only
     const { tokenKey, userKey } = AuthService._getStorageKeys(user.role);
+    
     localStorage.setItem(tokenKey, token);
     localStorage.setItem(userKey, JSON.stringify(user));
     
@@ -257,11 +250,15 @@ const AuthService = {
     try {
       // If role is not specified, check current_role
       const userRole = role || localStorage.getItem('current_role');
+      
       const { userKey } = AuthService._getStorageKeys(userRole);
+      
       const userJson = localStorage.getItem(userKey);
-      return userJson ? JSON.parse(userJson) : null;
+      
+      const user = userJson ? JSON.parse(userJson) : null;
+      
+      return user;
     } catch (error) {
-      console.error('Error getting current user:', error);
       return null;
     }
   },
@@ -279,7 +276,6 @@ const AuthService = {
       const decoded = jwtDecode(token);
       return decoded.exp > Date.now() / 1000;
     } catch (error) {
-      console.error('Error checking login status:', error);
       return false;
     }
   },
@@ -297,7 +293,6 @@ const AuthService = {
       const decoded = jwtDecode(token);
       return decoded.exp > Date.now() / 1000 ? token : null;
     } catch (error) {
-      console.error('Error getting token:', error);
       return null;
     }
   },
@@ -308,7 +303,6 @@ const AuthService = {
       const response = await authClient.post('/forgot-password', { email });
       return response.data;
     } catch (error) {
-      console.error('Error in forgot password process:', error);
       throw error;
     }
   },
@@ -319,7 +313,6 @@ const AuthService = {
       const response = await authClient.post('/reset-password', { token, password: newPassword });
       return response.data;
     } catch (error) {
-      console.error('Error in password reset:', error);
       throw error;
     }
   },
@@ -338,7 +331,6 @@ const AuthService = {
       }
       return response.data;
     } catch (error) {
-      console.error('Error updating profile:', error);
       throw error;
     }
   },
@@ -359,7 +351,6 @@ const AuthService = {
       }
       return response.data;
     } catch (error) {
-      console.error(`Error during ${provider} authentication:`, error);
       throw error;
     }
   }
