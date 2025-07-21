@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import AdminService from '../../services/admin.service';
 
 const AdminManagement = () => {
   const [admins, setAdmins] = useState([]);
