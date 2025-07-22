@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { User, Mail, Phone, MapPin, Edit2, Save, X, Eye, EyeOff } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import AuthService from '../services/auth.service';
+import ProfileService from '../services/profile.service';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
-import axios from 'axios';
-import { API_BASE_URL } from '../config';
 
 const CustomerProfile = () => {
   const navigate = useNavigate();
@@ -28,6 +27,12 @@ const CustomerProfile = () => {
     location_lng: ''
   });
   const [editedProfile, setEditedProfile] = useState({});
+  const [completionStatus, setCompletionStatus] = useState({
+    completionPercentage: 0,
+    completedFields: 0,
+    totalFields: 0,
+    missingFields: []
+  });
 
   // Listen for theme changes
   useEffect(() => {
@@ -50,15 +55,13 @@ const CustomerProfile = () => {
           return;
         }
 
-        const token = AuthService.getToken('customer');
-        const response = await axios.get(`${API_BASE_URL}/api/customer/profile`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        setProfile(response.data);
-        setEditedProfile(response.data);
+        const profileData = await ProfileService.getProfile();
+        const formattedProfile = ProfileService.formatProfileData(profileData);
+        const completion = ProfileService.getProfileCompletionStatus(profileData);
+        
+        setProfile(formattedProfile);
+        setEditedProfile(formattedProfile);
+        setCompletionStatus(completion);
         setLoading(false);
       } catch (error) {
         console.error('Error loading profile:', error);
@@ -81,9 +84,6 @@ const CustomerProfile = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = AuthService.getToken('customer');
-      const user = AuthService.getCurrentUser('customer');
-      
       // Only send the customer table fields to the update endpoint
       const customerData = {
         address: editedProfile.address,
@@ -95,13 +95,22 @@ const CustomerProfile = () => {
         location_lng: editedProfile.location_lng
       };
 
-      await axios.put(`${API_BASE_URL}/api/customer/customers/${user.customer_id || user.id}`, customerData, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // Validate data before sending
+      const validation = ProfileService.validateProfileData(customerData);
+      if (!validation.isValid) {
+        const errorMessages = Object.values(validation.errors).join(', ');
+        toast.error(`Please fix the following errors: ${errorMessages}`);
+        setSaving(false);
+        return;
+      }
 
-      setProfile(editedProfile);
+      await ProfileService.updateProfile(customerData);
+      
+      const updatedProfile = ProfileService.formatProfileData(editedProfile);
+      const updatedCompletion = ProfileService.getProfileCompletionStatus(editedProfile);
+      
+      setProfile(updatedProfile);
+      setCompletionStatus(updatedCompletion);
       setIsEditing(false);
       toast.success('Profile updated successfully!');
     } catch (error) {
@@ -142,9 +151,44 @@ const CustomerProfile = () => {
             <h1 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               My Profile
             </h1>
-            <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <p className={`mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Manage your personal information and preferences
             </p>
+            
+            {/* Profile Completion Indicator */}
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Profile Completion
+                </span>
+                <span className={`text-sm font-bold ${
+                  completionStatus.completionPercentage === 100 
+                    ? 'text-green-600' 
+                    : completionStatus.completionPercentage >= 60 
+                      ? 'text-yellow-600' 
+                      : 'text-red-600'
+                }`}>
+                  {completionStatus.completionPercentage}%
+                </span>
+              </div>
+              <div className={`w-full rounded-full h-2 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                <div 
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    completionStatus.completionPercentage === 100 
+                      ? 'bg-green-500' 
+                      : completionStatus.completionPercentage >= 60 
+                        ? 'bg-yellow-500' 
+                        : 'bg-red-500'
+                  }`}
+                  style={{ width: `${completionStatus.completionPercentage}%` }}
+                ></div>
+              </div>
+              {completionStatus.missingFields.length > 0 && (
+                <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Missing: {completionStatus.missingFields.join(', ').replace(/_/g, ' ')}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Profile Card */}
@@ -369,7 +413,8 @@ const CustomerProfile = () => {
                 </div>
 
                 {/* Location Coordinates (Optional) */}
-                <div className="grid grid-cols-2 gap-4">
+                
+                {/* <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       Latitude
@@ -411,7 +456,7 @@ const CustomerProfile = () => {
                       </div>
                     )}
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
           </div>
