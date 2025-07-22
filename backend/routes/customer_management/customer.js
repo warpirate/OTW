@@ -95,6 +95,21 @@ router.put('/customers/:id', async (req, res) => {
   }
 });
 
+// create get profile from customers table and users table also
+router.get('/profile', async (req, res) => {
+  try {
+    const { id } = req.user;
+    const [rows] = await pool.query(
+      `SELECT c.*, u.name, u.email, u.phone_number FROM customers c
+       JOIN users u ON c.id = u.customer_id WHERE c.id = ?`,
+      [id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 
 module.exports = router;
