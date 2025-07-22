@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 
 const CustomerLayout = () => {
   return (
-    <div className="min-h-screen bg-[var(--bg-secondary)]">
+    <div className="min-h-screen bg-[var(--bg-secondary)] customer-theme">
       <Outlet />
     </div>
   );

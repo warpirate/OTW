@@ -132,7 +132,7 @@ const CategoryServices = () => {
             {subcategories.map((service) => (
               <div 
                 key={service.id}
-                className={`card ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                className="card"
               >
                 <div className="p-6">
                   <div className="flex justify-between items-start">

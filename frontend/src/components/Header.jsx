@@ -13,6 +13,12 @@ const Header = () => {
   const [user, setUser] = useState(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
+  
+  // Check if we're on a customer page (Header is only used on customer pages)
+  const isCustomerPage = () => {
+    const path = window.location.pathname;
+    return !path.startsWith('/admin') && !path.startsWith('/superadmin') && !path.startsWith('/worker');
+  };
 
   // Listen for theme changes
   useEffect(() => {
@@ -142,19 +148,22 @@ const Header = () => {
               )}
             </button>
             
-            <button 
-              onClick={() => {
-                const newDarkMode = toggleTheme();
-                setDarkMode(newDarkMode);
-              }}
-              className={`p-2 rounded-lg transition-colors ${
-                darkMode 
-                  ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
+            {/* Dark Mode Toggle - Only show on customer pages */}
+            {isCustomerPage() && (
+              <button 
+                onClick={() => {
+                  const newDarkMode = toggleTheme();
+                  setDarkMode(newDarkMode);
+                }}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode 
+                    ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+            )}
             
             {(isAuthenticated && user) ? (
               <div className="relative profile-dropdown">
@@ -240,19 +249,13 @@ const Header = () => {
               // Sign In/Sign Up buttons for non-authenticated users
               <>
                 <button 
-                  onClick={() => {
-                    localStorage.setItem('prefersDarkMode', darkMode);
-                    navigate('/login');
-                  }} 
+                  onClick={() => navigate('/login')} 
                   className={`btn-ghost ${darkMode ? 'text-white hover:bg-gray-800' : ''}`}
                 >
                   Sign In
                 </button>
                 <button 
-                  onClick={() => {
-                    localStorage.setItem('prefersDarkMode', darkMode);
-                    navigate('/signup');
-                  }} 
+                  onClick={() => navigate('/signup')} 
                   className="btn-brand"
                 >
                   Sign Up

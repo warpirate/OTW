@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== THEME COLORS & GRADIENTS ===== */
-:root {
+/* ===== THEME COLORS & GRADIENTS (CUSTOMER PAGES ONLY) ===== */
+.customer-theme {
   /* Light Theme Colors */
   --bg-primary: #ffffff;
   --bg-secondary: #f8fafc;
@@ -18,7 +18,7 @@
   --gradient-card: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
 }
 
-[data-theme="dark"] {
+.customer-theme[data-theme="dark"] {
   /* Dark Theme Colors */
   --bg-primary: #111827;
   --bg-secondary: #1f2937;
@@ -37,6 +37,15 @@
 @layer base {
   * {
     @apply border-gray-200;
+  }
+  
+  /* Prevent theme flash by hiding content until theme is initialized */
+  html:not([data-theme-initialized]) {
+    visibility: hidden;
+  }
+  
+  html[data-theme-initialized] {
+    visibility: visible;
   }
   
   body {
@@ -79,37 +88,69 @@
   }
   
   .btn-outline {
-    @apply bg-transparent border-2 border-purple-600 hover:bg-purple-50 text-purple-600 px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95;
+    @apply bg-transparent border-2 border-purple-600 text-purple-600 px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 active:scale-95;
   }
   
-  .btn-ghost {
-    @apply text-gray-600 hover:text-purple-600 hover:bg-purple-50 px-4 py-2 rounded-full font-medium transition-colors duration-200;
+  .customer-theme[data-theme="dark"] .btn-outline {
+    @apply hover:bg-purple-900/20;
+  }
+  
+  .customer-theme .btn-outline:not([data-theme="dark"] *) {
+    @apply hover:bg-purple-50;
+  }
+  
+  .customer-theme .btn-ghost {
+    @apply text-gray-600 hover:text-purple-600 px-4 py-2 rounded-full font-medium transition-colors duration-200;
+  }
+  
+  .customer-theme[data-theme="dark"] .btn-ghost {
+    @apply text-gray-300;
+  }
+  
+  .customer-theme[data-theme="dark"] .btn-ghost {
+    @apply hover:bg-purple-900/20;
+  }
+  
+  .customer-theme .btn-ghost:not([data-theme="dark"] *) {
+    @apply hover:bg-purple-50;
   }
   
   .btn-icon {
     @apply bg-purple-600 hover:bg-purple-700 p-4 rounded-xl transition-colors duration-200 text-white shadow-md hover:shadow-lg;
   }
   
-  /* Card Components */
-  .card {
-    @apply bg-white rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border border-gray-100;
+  /* Card Components - Scoped to customer pages */
+  .customer-theme .card {
+    @apply rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border;
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
   }
   
-  .card-hover {
-    @apply card hover:scale-105 hover:shadow-xl cursor-pointer;
+  .customer-theme .card-hover {
+    @apply rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 border hover:scale-105 cursor-pointer;
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
   }
   
-  .service-card {
-    @apply card p-6 hover:shadow-lg transition-all duration-300;
+  .customer-theme .service-card {
+    @apply rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 border p-6;
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
   }
   
-  /* Input Components */
-  .input-field {
-    @apply w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200 bg-white;
+  /* Input Components - Scoped to customer pages */
+  .customer-theme .input-field {
+    @apply w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
   }
   
-  .input-search {
-    @apply input-field pl-12 pr-20 py-4 text-lg rounded-2xl shadow-md;
+  .customer-theme .input-search {
+    @apply w-full pl-12 pr-20 py-4 text-lg border rounded-2xl shadow-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
   }
   
   /* Navigation Components */
@@ -242,29 +283,14 @@
     background: var(--gradient-card);
   }
   
-  /* Theme-aware backgrounds */
-  .bg-theme-primary {
+  /* Theme-aware utilities - Only work within customer-theme context */
+  .customer-theme .bg-theme-primary {
     background-color: var(--bg-primary);
   }
   
-  .bg-theme-secondary {
+  .customer-theme .bg-theme-secondary {
     background-color: var(--bg-secondary);
   }
-  
-  /* Theme-aware text colors */
-  .text-theme-primary {
-    color: var(--text-primary);
-  }
-  
-  .text-theme-secondary {
-    color: var(--text-secondary);
-  }
-  
-  /* Theme-aware borders */
-  .border-theme {
-    border-color: var(--border-color);
-  }
-  
   .text-shadow-lg {
     text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   }

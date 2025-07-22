@@ -5,6 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OTW</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Inline script to prevent theme flash - must be in head -->
+    <script>
+      (function() {
+        try {
+          // Check if current page is a customer page
+          const path = window.location.pathname;
+          const isCustomerPage = !path.startsWith('/admin') && !path.startsWith('/superadmin') && !path.startsWith('/worker');
+          
+          if (isCustomerPage) {
+            const userPrefersDark = localStorage.getItem('prefersDarkMode') === 'true';
+            document.documentElement.classList.add('customer-theme');
+            
+            if (userPrefersDark) {
+              document.documentElement.setAttribute('data-theme', 'dark');
+              document.documentElement.classList.add('dark');
+            } else {
+              document.documentElement.removeAttribute('data-theme');
+              document.documentElement.classList.remove('dark');
+            }
+          }
+          document.documentElement.setAttribute('data-theme-initialized', 'true');
+        } catch (e) {
+          // Fallback - show content even if localStorage fails
+          document.documentElement.setAttribute('data-theme-initialized', 'true');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

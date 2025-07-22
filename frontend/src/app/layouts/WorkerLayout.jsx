@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 
 const WorkerLayout = () => {
   return (
-    <div className="min-h-screen bg-[var(--bg-secondary)]">
+    <div className="min-h-screen bg-gray-50">
       <Outlet />
     </div>
   );

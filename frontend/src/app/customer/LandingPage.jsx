@@ -71,28 +71,28 @@ const LandingPage = () => {
       title: "Verified Professionals",
       icon: Shield,
       description: "All service providers are thoroughly vetted and background-checked",
-      bgColor: "bg-blue-100",
+      bgColor: darkMode ? "bg-blue-900/30" : "bg-blue-100",
       iconColor: "text-blue-500"
     },
     {
       title: "Secure Payments",
       icon: CreditCard,
       description: "Your transactions are protected with bank-grade security",
-      bgColor: "bg-green-100",
+      bgColor: darkMode ? "bg-green-900/30" : "bg-green-100",
       iconColor: "text-green-500"
     },
     {
       title: "Customer Support",
       icon: Phone,
       description: "Our team is available 24/7 to assist with any issues",
-      bgColor: "bg-orange-100",
+      bgColor: darkMode ? "bg-orange-900/30" : "bg-orange-100",
       iconColor: "text-orange-500"
     },
     {
       title: "Satisfaction Guarantee",
       icon: Star,
       description: "Not satisfied? We'll make it right or refund your payment",
-      bgColor: "bg-purple-100",
+      bgColor: darkMode ? "bg-purple-900/30" : "bg-purple-100",
       iconColor: "text-purple-500"
     }
   ];
@@ -420,12 +420,12 @@ const LandingPage = () => {
                     setShowSubcategories(false);
                     setSelectedCategory(null);
                   }}
-                  className={`flex items-center ${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
+                  className={`flex items-center ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
                 >
                   <ChevronRight className="h-5 w-5 mr-1 transform rotate-180" /> Back to Categories
                 </button>
               </div>
-              <h2 className={`text-3xl font-bold text-center mb-12 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 {selectedCategory.name} Services
               </h2>
               
@@ -437,13 +437,13 @@ const LandingPage = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {subcategories && subcategories.length > 0 ? (
                     subcategories.map(subcategory => (
-                      <div 
-                        key={subcategory.id}
-                        className={`service-card ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
-                      >
+                                        <div 
+                    key={subcategory.id}
+                    className="service-card"
+                  >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
-                            <div className={`rounded-full p-3 ${isDarkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
+                            <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
                               {selectedCategory.icon && <selectedCategory.icon className="service-icon" />}
                             </div>
                             <div className="flex items-center">
@@ -452,7 +452,7 @@ const LandingPage = () => {
                             </div>
                           </div>
                           <h3 className="font-bold text-lg mb-2">{subcategory.name}</h3>
-                          <p className={`text-sm mb-4 line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                             {subcategory.description || `Professional ${subcategory.name} services`}
                           </p>
                           <div className="flex justify-between items-center">
@@ -526,9 +526,7 @@ const LandingPage = () => {
                                     setSelectedCarOption('with-car');
                                     setDriverStep(2);
                                   }}
-                                  className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
-                                  }`}
+                                  className="service-card hover:shadow-xl cursor-pointer transition-all hover:border-brand"
                                 >
                                   <div className="flex flex-col items-center text-center p-8">
                                     <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
@@ -552,9 +550,7 @@ const LandingPage = () => {
                                     setSelectedCarOption('without-car');
                                     setDriverStep(2);
                                   }}
-                                  className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
-                                  }`}
+                                  className="service-card hover:shadow-xl cursor-pointer transition-all hover:border-brand"
                                 >
                                   <div className="flex flex-col items-center text-center p-8">
                                     <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
@@ -640,7 +636,7 @@ const LandingPage = () => {
                                     setDriverStep(1);
                                     setSelectedCarOption(null);
                                   }}
-                                  className={`${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
+                                  className={`${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
                                 >
                                   <ChevronRight className="h-4 w-4 mr-1 transform rotate-180 inline-block" /> Change Driver Type
                                 </button>
@@ -650,21 +646,21 @@ const LandingPage = () => {
                         </div>
                       ) : (
                         <div>
-                          <h2 className={`text-3xl font-bold text-center mb-12 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                             Driver Services
                           </h2>
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
                             {/* Service Overview Card */}
-                            <div className={`service-card ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+                            <div className="service-card">
                               <div className="flex flex-col items-center text-center p-8">
-                                <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
+                                <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
                                   <Car className="h-12 w-12 text-brand" />
                                 </div>
-                                <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                   Professional Drivers
                                 </h3>
-                                <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
+                                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
                                   Experienced and verified drivers for all your transportation needs
                                 </p>
                                 <div className="flex items-center space-x-2 text-sm">
@@ -675,15 +671,15 @@ const LandingPage = () => {
                             </div>
                             
                             {/* Service Features Card */}
-                            <div className={`service-card ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
+                            <div className="service-card">
                               <div className="flex flex-col items-center text-center p-8">
-                                <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
+                                <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
                                   <Shield className="h-12 w-12 text-brand" />
                                 </div>
-                                <h3 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                   Safe & Reliable
                                 </h3>
-                                <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
+                                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
                                   Background-verified drivers with comprehensive insurance coverage
                                 </p>
                                 <div className="flex items-center space-x-2 text-sm">
@@ -702,7 +698,7 @@ const LandingPage = () => {
                             >
                               Book a Driver <ChevronRight className="inline-block h-5 w-5 ml-2" />
                             </button>
-                            <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            <p className={`mt-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                               Choose your preferred driver type and booking duration
                             </p>
                           </div>
@@ -711,7 +707,7 @@ const LandingPage = () => {
                     </div>
                   ) : (
                     <div>
-                      <h2 className={`text-3xl font-bold text-center mb-12 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                         {dynamicServiceCategories[activeTab]?.name || 'Loading...'} Categories
                       </h2>
                       
@@ -722,7 +718,7 @@ const LandingPage = () => {
                         </div>
                       ) : error ? (
                         <div className="col-span-3 text-center py-16">
-                          <p className={`${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>{error}</p>
+                          <p className={`${darkMode ? 'text-red-400' : 'text-red-600'}`}>{error}</p>
                           <button 
                             onClick={() => window.location.reload()} 
                             className="mt-4 px-4 py-2 bg-brand text-white rounded-md"
@@ -737,7 +733,7 @@ const LandingPage = () => {
                             return (
                               <div 
                                 key={cat.id}
-                                className={`service-card ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} cursor-pointer`}
+                                className="service-card cursor-pointer"
                                 onClick={() => {
                                   // Navigate to the category services page instead of showing subcategories inline
                                   navigate(`/category/${cat.id}/${cat.name}`);
@@ -745,12 +741,12 @@ const LandingPage = () => {
                               >
                                 <div className="p-6">
                                   <div className="flex justify-between items-start mb-4">
-                                    <div className={`rounded-full p-3 ${isDarkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
+                                    <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
                                       <IconComponent className="service-icon" />
                                     </div>
                                   </div>
                                   <h3 className="font-bold text-lg mb-2">{cat.name}</h3>
-                                  <p className={`text-sm mb-4 line-clamp-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{cat.description}</p>
+                                  <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{cat.description}</p>
                                   <div className="flex justify-between items-center">
                                     <span className="text-sm text-brand">View Services</span>
                                     <ChevronRight className="h-5 w-5 text-brand" />
@@ -776,13 +772,13 @@ const LandingPage = () => {
       </section>
 
       {/* Why Choose Section */}
-      <section className={`py-16 transition-colors ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+      <section className={`py-16 transition-colors ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
         <div className="container-custom">
           <div className="text-center mb-16">
-            <h2 className={`heading-secondary mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            <h2 className={`heading-secondary mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               Why Choose OTW?
             </h2>
-            <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} max-w-2xl mx-auto`}>
+            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} max-w-2xl mx-auto`}>
               Experience the best in-home services with our trusted platform
             </p>
           </div>
@@ -791,12 +787,12 @@ const LandingPage = () => {
             {features.map((feature, index) => {
               const IconComponent = feature.icon;
               return (
-                <div key={index} className={`card p-6 hover:translate-y-[-8px] transition-all duration-300 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
+                <div key={index} className="card p-6 hover:translate-y-[-8px] transition-all duration-300">
                   <div className={`p-3 rounded-full w-fit mb-5 ${feature.bgColor}`}>
                     <IconComponent className={`h-6 w-6 ${feature.iconColor}`} />
                   </div>
-                  <h3 className={`heading-tertiary mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{feature.title}</h3>
-                  <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} text-sm`}>{feature.description}</p>
+                  <h3 className={`heading-tertiary mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{feature.title}</h3>
+                  <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} text-sm`}>{feature.description}</p>
                 </div>
               );
             })}
