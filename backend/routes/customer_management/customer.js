@@ -53,7 +53,7 @@ router.get('/sub-categories', async (req, res) => {
     }
 });
 
-router.put('/customers/:id', verifyToken, async (req, res) => {
+router.put('/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
   const {
     address,
@@ -100,7 +100,7 @@ router.get('/profile', verifyToken, async (req, res) => {
   try {
     const { id } = req.user;
     const [rows] = await pool.query(
-      `SELECT c.*, u.name, u.email FROM customers c
+      `SELECT c.*, u.name, u.email, u.phone_number FROM customers c
        JOIN users u ON c.id = u.id WHERE c.id = ?`,
       [id]
     );

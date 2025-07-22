@@ -62,7 +62,7 @@ const ProfileService = {
       }
 
       const customerId = user.customer_id || user.id;
-      const response = await apiClient.put(`/customers/${customerId}`, profileData);
+      const response = await apiClient.put(`/${customerId}`, profileData);
       return response.data;
     } catch (error) {
       console.error('Error updating profile:', error);
