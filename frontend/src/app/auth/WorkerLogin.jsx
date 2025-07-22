@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Eye, EyeOff, Phone, Mail, Briefcase } from 'lucide-react';
+import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 
@@ -49,8 +50,11 @@ const WorkerLogin = () => {
       await AuthService.requestOTP(formData.phone);
       setIsOtpSent(true);
       setError('');
+      toast.success("OTP sent successfully!");
     } catch (error) {
-      setError('Failed to send OTP. Please try again.');
+      const errorMessage = error.response?.data?.message || 'Failed to send OTP. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -82,13 +86,18 @@ const WorkerLogin = () => {
         throw new Error(`You do not have worker privileges. Current role: ${user?.role}`);
       }
       
+      // Show success toast
+      toast.success("Login successful!");
+      
       // Navigate immediately with replace to prevent back navigation to login
       navigate('/worker/dashboard', { replace: true });
       
       // Also dispatch storage event for any listeners
       window.dispatchEvent(new Event('storage'));
     } catch (error) {
-      setError(error.response?.data?.message || error.message || 'Login failed. Please try again.');
+      const errorMessage = error.response?.data?.message || error.message || 'Login failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

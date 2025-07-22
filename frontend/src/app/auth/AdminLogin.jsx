@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 
@@ -51,6 +52,9 @@ const AdminLogin = () => {
         throw new Error('You do not have admin privileges');
       }
 
+      // Show success toast
+      toast.success("Login successful!");
+
       // Add event to trigger storage listeners
       window.dispatchEvent(new Event('storage'));
       
@@ -59,7 +63,9 @@ const AdminLogin = () => {
         navigate('/admin/dashboard', { replace: true });
       }, 100);
     } catch (err) {
-      setError(err?.response?.data?.message || err.message || 'Login failed. Please try again.');
+      const errorMessage = err?.response?.data?.message || err.message || 'Login failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

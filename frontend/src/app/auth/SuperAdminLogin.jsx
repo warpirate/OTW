@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 
 const SuperAdminLogin = () => {
@@ -35,7 +36,8 @@ const SuperAdminLogin = () => {
         throw new Error('You do not have super admin privileges');
       }
       
-      
+      // Show success toast
+      toast.success("Login successful!");
       
       // Dispatch storage event to notify protected routes
       window.dispatchEvent(new Event('storage'));
@@ -45,7 +47,9 @@ const SuperAdminLogin = () => {
         navigate('/superadmin/dashboard', { replace: true });
       }, 100);
     } catch (err) {
-      setError(err?.response?.data?.message || err.message || 'Login failed. Please try again.');
+      const errorMessage = err?.response?.data?.message || err.message || 'Login failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

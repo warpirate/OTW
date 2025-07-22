@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import {LandingPageService} from '../services/landing_page.service';
 import AuthService from '../services/auth.service';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
 import { 
   Search, 
   MapPin, 
@@ -41,7 +44,8 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('maintenance');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(isDarkMode());
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [categories, setCategories] = useState([]);
@@ -208,6 +212,19 @@ const LandingPage = () => {
     };
   }, [isAuthenticated]); // Only depend on isAuthenticated to prevent unnecessary re-renders
   
+  // Set up theme change listener
+  useEffect(() => {
+    // Update dark mode state when theme changes
+    const removeListener = addThemeListener(() => {
+      setDarkMode(isDarkMode());
+    });
+    
+    return () => {
+      // Clean up listener on component unmount
+      removeListener();
+    };
+  }, []);
+  
   // Force authentication state update (for debugging)
   const forceAuthUpdate = () => {
     // Specifically check for customer role authentication
@@ -258,171 +275,9 @@ const LandingPage = () => {
 
 
   return (
-    <div className={`min-h-screen transition-colors ${isDarkMode ? 'bg-gray-900' : 'bg-white'}`}>
-      {/* Header */}
-      <header className={`${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} shadow-sm border-b transition-colors`}>
-        <div className="container-custom">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="flex items-center space-x-1">
-                  <span className="text-2xl font-bold text-orange-500">O</span>
-                  <span className="text-2xl font-bold text-blue-500">T</span>
-                  <span className="text-2xl font-bold text-green-500">W</span>
-                </div>
-              </div>
-            </div>
-            
-            {/* Hourly/Daily Services tabs commented out - not needed for now */}
-            {/* <div className="hidden md:block">
-              <div className="ml-10 flex items-baseline space-x-4">
-                <button 
-                  onClick={() => setActiveTab('hourly')}
-                  className={`${
-                    activeTab === 'hourly' 
-                      ? 'nav-tab-active' 
-                      : 'nav-tab-inactive'
-                  } ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
-                >
-                  Hourly Services
-                </button>
-                <button 
-                  onClick={() => setActiveTab('daily')}
-                  className={`${
-                    activeTab === 'daily' 
-                      ? 'nav-tab-active' 
-                      : 'nav-tab-inactive'
-                  } ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
-                >
-                  Daily Services
-                </button>
-              </div>
-            </div> */}
-            <div className="flex items-center space-x-3">
-              {/* Worker Portal Link */}
-              {/* <button 
-                onClick={() => navigate('/worker/login')}
-                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isDarkMode 
-                    ? 'text-blue-400 hover:bg-gray-800 hover:text-blue-300' 
-                    : 'text-blue-600 hover:bg-blue-50'
-                }`}
-              >
-                👷 For Workers
-              </button> */}
-              <button 
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                className={`p-2 rounded-lg transition-colors ${
-                  isDarkMode 
-                    ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-              </button>
-              
-              {(isAuthenticated && user) ? (
-                <div className="relative profile-dropdown">
-                  <button
-                    onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                      isDarkMode 
-                        ? 'text-white hover:bg-gray-800' 
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <span className="font-medium">
-                      {user.firstName || user.first_name || (user.name ? user.name.split(' ')[0] : 'User')}
-                    </span>
-                    <User className="h-5 w-5" />
-                    <ChevronDown className={`h-4 w-4 transition-transform ${
-                      showProfileDropdown ? 'rotate-180' : ''
-                    }`} />
-                  </button>
-                  
-                  {showProfileDropdown && (
-                    <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg border z-50 ${
-                      isDarkMode 
-                        ? 'bg-gray-800 border-gray-700' 
-                        : 'bg-white border-gray-200'
-                    }`}>
-                      <div className="py-1">
-                        <button
-                          onClick={() => {
-                            setShowProfileDropdown(false);
-                            navigate('/profile');
-                          }}
-                          className={`flex items-center space-x-2 w-full px-4 py-2 text-left transition-colors ${
-                            isDarkMode 
-                              ? 'text-gray-300 hover:bg-gray-700 hover:text-white' 
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          <User className="h-4 w-4" />
-                          <span>View Profile</span>
-                        </button>
-                        
-                        <button
-                          onClick={() => {
-                            setShowProfileDropdown(false);
-                            navigate('/cart');
-                          }}
-                          className={`flex items-center space-x-2 w-full px-4 py-2 text-left transition-colors ${
-                            isDarkMode 
-                              ? 'text-gray-300 hover:bg-gray-700 hover:text-white' 
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          <ShoppingCart className="h-4 w-4" />
-                          <span>View Cart</span>
-                        </button>
-                        
-                        <hr className={`my-1 ${
-                          isDarkMode ? 'border-gray-700' : 'border-gray-200'
-                        }`} />
-                        
-                        <button
-                          onClick={handleLogout}
-                          className={`flex items-center space-x-2 w-full px-4 py-2 text-left transition-colors ${
-                            isDarkMode 
-                              ? 'text-red-400 hover:bg-gray-700 hover:text-red-300' 
-                              : 'text-red-600 hover:bg-gray-100'
-                          }`}
-                        >
-                          <LogOut className="h-4 w-4" />
-                          <span>Logout</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                // Sign In/Sign Up buttons for non-authenticated users
-                <>
-                  <button 
-                    onClick={() => {
-                      localStorage.setItem('prefersDarkMode', isDarkMode);
-                      navigate('/login');
-                    }} 
-                    className={`btn-ghost ${isDarkMode ? 'text-white hover:bg-gray-800' : ''}`}
-                  >
-                    Sign In
-                  </button>
-                  <button 
-                    onClick={() => {
-                      localStorage.setItem('prefersDarkMode', isDarkMode);
-                      navigate('/signup');
-                    }} 
-                    className="btn-brand"
-                  >
-                    Sign Up
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
+      {/* Use the Header component */}
+      <Header />
 
       {/* Hero Section */}
       <section className="relative bg-brand-gradient-side py-20 md:py-32">
@@ -443,7 +298,7 @@ const LandingPage = () => {
             
             {/* Right side with search & quick access */}
             <div className="w-full md:w-5/12">
-              <div className={`${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-6 md:p-8 transition-colors`}>
+              <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-6 md:p-8 transition-colors`}>
                 <div className="flex items-center mb-2">
                   <div className="flex items-center space-x-1 mr-3">
                     <span className="text-3xl font-bold text-orange-500">O</span>
@@ -452,7 +307,7 @@ const LandingPage = () => {
                   </div>
                   <span className="text-yellow-400 text-2xl">👋</span>
                 </div>
-                <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-6`}>Explore our services</p>
+                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-6`}>Explore our services</p>
                 
                 {/* Search Bar */}
                 <div className="mb-6">
@@ -483,9 +338,9 @@ const LandingPage = () => {
                         <div 
                           key={category.id} 
                           onClick={() => setActiveTab(category.id)}
-                          className={`${isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}
+                          className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}
                         >
-                          <div className={`${isDarkMode ? 'bg-gray-600' : 'bg-white'} rounded-full p-2 mb-2`}>
+                          <div className={`${darkMode ? 'bg-gray-600' : 'bg-white'} rounded-full p-2 mb-2`}>
                             {category.id === 'maintenance' && <Wrench className="h-6 w-6 text-brand" />}
                             {category.id === 'maid' && <Sparkles className="h-6 w-6 text-brand" />}
                             {category.id === 'driver' && <Car className="h-6 w-6 text-brand" />}
@@ -511,17 +366,17 @@ const LandingPage = () => {
       </section>
 
       {/* Service Categories Section */}
-      <section className={`py-16 ${isDarkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors`}>
+      <section className={`py-16 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors`}>
         <div className="container-custom">
           {/* Section Title */}
           <div className="text-center mb-12">
-            <h2 className={`heading-secondary mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Our Services</h2>
-            <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} max-w-2xl mx-auto`}>Choose from our wide range of professional services</p>
+            <h2 className={`heading-secondary mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Our Services</h2>
+            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} max-w-2xl mx-auto`}>Choose from our wide range of professional services</p>
           </div>
           
           {/* Tab Navigation */}
           <div className="flex justify-center mb-12">
-            <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} p-1 rounded-xl`}>
+            <div className={`${darkMode ? 'bg-gray-800' : 'bg-gray-100'} p-1 rounded-xl`}>
               {Object.values(dynamicServiceCategories).length > 0 ? (
                 Object.values(dynamicServiceCategories).map(category => (
                   <button
@@ -537,8 +392,8 @@ const LandingPage = () => {
                     }}
                     className={`px-8 py-3 rounded-lg font-medium transition-all ${
                       activeTab === category.id
-                        ? `${isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-primary-600'} shadow-md`
-                        : `${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`
+                        ? `${darkMode ? 'bg-gray-700 text-white' : 'bg-white text-primary-600'} shadow-md`
+                        : `${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700'}`
                     }`}
                   >
                     {category.name}
@@ -584,7 +439,7 @@ const LandingPage = () => {
                     subcategories.map(subcategory => (
                       <div 
                         key={subcategory.id}
-                        className={`service-card ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
+                        className={`service-card ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}
                       >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
@@ -624,7 +479,7 @@ const LandingPage = () => {
                     <div className="max-w-4xl mx-auto">
                       {showDriverSteps ? (
                         <div className="space-y-8">
-                          <h2 className={`text-3xl font-bold text-center mb-8 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          <h2 className={`text-3xl font-bold text-center mb-8 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                             Driver Services
                           </h2>
                           
@@ -635,7 +490,7 @@ const LandingPage = () => {
                               setDriverStep(1);
                               setSelectedCarOption(null);
                             }}
-                            className={`flex items-center ${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
+                            className={`flex items-center ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
                           >
                             <ChevronRight className="h-5 w-5 mr-1 transform rotate-180" /> Back to Driver Options
                           </button>
@@ -644,15 +499,15 @@ const LandingPage = () => {
                           <div className="flex justify-center mb-8">
                             <div className="flex items-center space-x-4">
                               <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                                driverStep >= 1 ? 'bg-brand text-white' : (isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')
+                                driverStep >= 1 ? 'bg-brand text-white' : (darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')
                               }`}>
                                 1
                               </div>
                               <div className={`h-0.5 w-16 ${
-                                driverStep >= 2 ? 'bg-brand' : (isDarkMode ? 'bg-gray-700' : 'bg-gray-200')
+                                driverStep >= 2 ? 'bg-brand' : (darkMode ? 'bg-gray-700' : 'bg-gray-200')
                               }`}></div>
                               <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                                driverStep >= 2 ? 'bg-brand text-white' : (isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')
+                                driverStep >= 2 ? 'bg-brand text-white' : (darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')
                               }`}>
                                 2
                               </div>
@@ -661,7 +516,7 @@ const LandingPage = () => {
                           
                           {driverStep === 1 ? (
                             <div>
-                              <h3 className={`text-2xl font-bold text-center mb-8 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              <h3 className={`text-2xl font-bold text-center mb-8 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                 Choose Driver Type
                               </h3>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -672,17 +527,17 @@ const LandingPage = () => {
                                     setDriverStep(2);
                                   }}
                                   className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
+                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
                                   }`}
                                 >
                                   <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
+                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
                                       <Car className="h-8 w-8 text-brand" />
                                     </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                       With Car
                                     </h4>
-                                    <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
+                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
                                       Driver will provide their own vehicle
                                     </p>
                                     <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
@@ -698,17 +553,17 @@ const LandingPage = () => {
                                     setDriverStep(2);
                                   }}
                                   className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
+                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
                                   }`}
                                 >
                                   <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
+                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
                                       <UserCheck className="h-8 w-8 text-brand" />
                                     </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                       Without Car
                                     </h4>
-                                    <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
+                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
                                       Driver will use your vehicle
                                     </p>
                                     <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
@@ -720,10 +575,10 @@ const LandingPage = () => {
                             </div>
                           ) : (
                             <div>
-                              <h3 className={`text-2xl font-bold text-center mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              <h3 className={`text-2xl font-bold text-center mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                 Choose Booking Basis
                               </h3>
-                              <p className={`text-center mb-8 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                              <p className={`text-center mb-8 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                                 Selected: {selectedCarOption === 'with-car' ? 'With Car' : 'Without Car'}
                               </p>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -733,17 +588,17 @@ const LandingPage = () => {
                                     // Handle per hour booking logic here
                                   }}
                                   className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
+                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
                                   }`}
                                 >
                                   <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-orange-50'} rounded-full p-4`}>
+                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-orange-50'} rounded-full p-4`}>
                                       <Clock className="h-8 w-8 text-brand" />
                                     </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                       Per Hour Basis
                                     </h4>
-                                    <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
+                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
                                       Flexible hourly booking
                                     </p>
                                     <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
@@ -758,17 +613,17 @@ const LandingPage = () => {
                                     // Handle per day booking logic here
                                   }}
                                   className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    isDarkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
+                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
                                   }`}
                                 >
                                   <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${isDarkMode ? 'bg-gray-700' : 'bg-purple-50'} rounded-full p-4`}>
+                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-purple-50'} rounded-full p-4`}>
                                       <Calendar className="h-8 w-8 text-brand" />
                                     </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                                       Per Day Basis
                                     </h4>
-                                    <p className={`${isDarkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
+                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
                                       Full day booking
                                     </p>
                                     <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
@@ -884,20 +739,8 @@ const LandingPage = () => {
                                 key={cat.id}
                                 className={`service-card ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} cursor-pointer`}
                                 onClick={() => {
-                                  setSelectedCategory(cat);
-                                  setLoadingSubcategories(true);
-                                  setShowSubcategories(true);
-                                  
-                                  // Fetch subcategories for the selected category
-                                  LandingPageService.getAllSubCategories(cat.id)
-                                    .then(data => {
-                                      setSubcategories(data || []);
-                                      setLoadingSubcategories(false);
-                                    })
-                                    .catch(err => {
-                                      setSubcategories([]);
-                                      setLoadingSubcategories(false);
-                                    });
+                                  // Navigate to the category services page instead of showing subcategories inline
+                                  navigate(`/category/${cat.id}/${cat.name}`);
                                 }}
                               >
                                 <div className="p-6">
@@ -983,82 +826,8 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-20">
-        <div className="container-custom">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-            <div>
-              <div className="flex items-center space-x-1 mb-6">
-                <span className="text-2xl font-bold text-orange-500">O</span>
-                <span className="text-2xl font-bold text-blue-500">T</span>
-                <span className="text-2xl font-bold text-green-500">W</span>
-              </div>
-              <p className="text-gray-400 mb-8">
-                Your trusted partner for professional home services.
-              </p>
-              <div className="flex space-x-4">
-                <a href="#" className="bg-gray-800 p-3 rounded-full hover:bg-primary-500 transition-all duration-200 transform hover:scale-110">
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z" /></svg>
-                </a>
-                <a href="#" className="bg-gray-800 p-3 rounded-full hover:bg-primary-500 transition-all duration-200 transform hover:scale-110">
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z" /></svg>
-                </a>
-                <a href="#" className="bg-gray-800 p-3 rounded-full hover:bg-primary-500 transition-all duration-200 transform hover:scale-110">
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.623 3.872 10.328 9.092 11.63-.064-.902-.092-2.278.038-3.26.134-.986.9-6.302.9-6.302s-.23-.468-.23-1.148c0-1.076.624-1.88 1.402-1.88.66 0 .98.496.98 1.092 0 .665-.424 1.663-.646 2.588-.182.775.39 1.404 1.15 1.404 1.38 0 2.31-1.457 2.31-3.568 0-1.863-1.334-3.17-3.246-3.17-2.208 0-3.506 1.664-3.506 3.383 0 .67.23 1.388.516 1.78.058.07.082.13.07.2-.076.316-.246.996-.28 1.134-.044.183-.145.222-.335.134-1.25-.58-2.03-2.407-2.03-3.874 0-3.154 2.292-6.052 6.608-6.052 3.469 0 6.165 2.473 6.165 5.776 0 3.447-2.173 6.22-5.19 6.22-1.012 0-1.965-.525-2.29-1.148l-.623 2.378c-.226.87-.834 1.958-1.244 2.62 1.12.345 2.29.535 3.5.535 6.627 0 12-5.373 12-12S18.627 0 12 0z" /></svg>
-                </a>
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold mb-6 text-white">Services</h3>
-              <ul className="space-y-3">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Maintenance</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Maid Services</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Driver Services</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Plumbing</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">AC Services</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold mb-6 text-white">Company</h3>
-              <ul className="space-y-3">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">About Us</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
-                <li>
-                  <button 
-                    onClick={() => navigate('/worker/signup')}
-                    className="text-blue-400 hover:text-blue-300 transition-colors"
-                  >
-                    👷 Become a Worker
-                  </button>
-                </li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms & Conditions</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-lg font-semibold mb-6 text-white">Contact</h3>
-              <p className="text-gray-400 mb-4">
-                123 Street, Toronto, ON, Canada
-              </p>
-              <p className="text-gray-400 mb-2 flex items-center">
-                <Phone className="h-4 w-4 mr-2" /> +1 234-567-8900
-              </p>
-              <p className="text-gray-400 flex items-center">
-                <Mail className="h-4 w-4 mr-2" /> contact@otw.ca
-              </p>
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400 text-sm">
-            <p>&copy; {new Date().getFullYear()} OTW. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
+      {/* Use the Footer component */}
+      <Footer />
     </div>
   );
 };

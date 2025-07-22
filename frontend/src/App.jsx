@@ -4,12 +4,17 @@ import AuthService from './app/services/auth.service';
 // jwtDecode import removed as we're using AuthService now
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { CartProvider } from './app/contexts/CartContext';
+import { initializeTheme } from './app/utils/themeUtils';
 
 // Customer Components
 import CustomerLayout from './app/layouts/CustomerLayout';
 import LandingPage from './app/customer/LandingPage';
 import CustomerLogin from './app/auth/CustomerLogin';
 import CustomerSignup from './app/auth/CustomerSignup';
+import CategoryServices from './app/customer/CategoryServices';
+import Cart from './app/customer/Cart';
+import CheckoutSuccess from './app/customer/CheckoutSuccess';
 
 // Admin Components
 import AdminLayout from './app/layouts/AdminLayout';
@@ -221,6 +226,9 @@ function App() {
   const [isSuperAdminDomain, setIsSuperAdminDomain] = useState(false);
 
   useEffect(() => {
+    // Initialize theme on app start
+    initializeTheme();
+    
     // In a real app, check for admin.urbango.ca or superadmin.urbango.ca
     // For development, we'll check the URL path
     const hostname = window.location.hostname;
@@ -241,79 +249,84 @@ function App() {
 
   return (
     <Router>
-      <div className="App">
-        <Routes>
-          {/* Customer Routes */}
-          <Route path="/" element={<CustomerLayout />}>
-            <Route index element={<LandingPage />} />
-            <Route path="login" element={<CustomerLogin />} />
-            <Route path="signup" element={<CustomerSignup />} />
-          </Route>
+      <CartProvider>
+        <div className="App">
+          <Routes>
+            {/* Customer Routes */}
+            <Route path="/" element={<CustomerLayout />}>
+              <Route index element={<LandingPage />} />
+              <Route path="login" element={<CustomerLogin />} />
+              <Route path="signup" element={<CustomerSignup />} />
+              <Route path="category/:categoryId/:categoryName" element={<CategoryServices />} />
+              <Route path="cart" element={<Cart />} />
+              <Route path="checkout-success" element={<CheckoutSuccess />} />
+            </Route>
 
-          {/* Admin Routes */}
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin" element={
-            <AdminProtectedRoute>
-              <AdminLayout />
-            </AdminProtectedRoute>
-          }>
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="users" element={<UserManagement />} />
-            <Route path="categories" element={<CategoryManagement />} />
-            <Route path="disputes" element={<DisputeManagement />} />
-          </Route>
+            {/* Admin Routes */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin" element={
+              <AdminProtectedRoute>
+                <AdminLayout />
+              </AdminProtectedRoute>
+            }>
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="users" element={<UserManagement />} />
+              <Route path="categories" element={<CategoryManagement />} />
+              <Route path="disputes" element={<DisputeManagement />} />
+            </Route>
 
-          {/* SuperAdmin Routes */}
-          <Route path="/superadmin/login" element={<SuperAdminLogin />} />
-          <Route path="/superadmin" element={
-            <SuperAdminProtectedRoute>
-              <SuperAdminLayout />
-            </SuperAdminProtectedRoute>
-          }>
-            <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
-            <Route path="dashboard" element={<SuperAdminDashboard />} />
-            <Route path="admins" element={<AdminManagement />} />
-            <Route path="settings" element={<SystemSettings />} />
-            <Route path="audit-logs" element={<AuditLogs />} />
-            <Route path="reports" element={<Reports />} />
-          </Route>
+            {/* SuperAdmin Routes */}
+            <Route path="/superadmin/login" element={<SuperAdminLogin />} />
+            <Route path="/superadmin" element={
+              <SuperAdminProtectedRoute>
+                <SuperAdminLayout />
+              </SuperAdminProtectedRoute>
+            }>
+              <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
+              <Route path="dashboard" element={<SuperAdminDashboard />} />
+              <Route path="admins" element={<AdminManagement />} />
+              <Route path="settings" element={<SystemSettings />} />
+              <Route path="audit-logs" element={<AuditLogs />} />
+              <Route path="reports" element={<Reports />} />
+            </Route>
 
-          {/* Worker Routes */}
-          <Route path="/worker/login" element={<WorkerLogin />} />
-          <Route path="/worker/signup" element={<WorkerSignup />} />
-          <Route path="/worker" element={
-            <WorkerProtectedRoute>
-              <WorkerLayout />
-            </WorkerProtectedRoute>
-          }>
-            <Route index element={<Navigate to="/worker/dashboard" replace />} />
-            <Route path="dashboard" element={<WorkerDashboard />} />
-            <Route path="jobs" element={<WorkerJobs />} />
-            <Route path="schedule" element={<WorkerSchedule />} />
-            <Route path="earnings" element={<div className="p-8 text-center">Worker Earnings Page (Coming Soon)</div>} />
-            <Route path="profile" element={<div className="p-8 text-center">Worker Profile Page (Coming Soon)</div>} />
-          </Route>
+            {/* Worker Routes */}
+            <Route path="/worker/login" element={<WorkerLogin />} />
+            <Route path="/worker/signup" element={<WorkerSignup />} />
+            <Route path="/worker" element={
+              <WorkerProtectedRoute>
+                <WorkerLayout />
+              </WorkerProtectedRoute>
+            }>
+              <Route index element={<Navigate to="/worker/dashboard" replace />} />
+              <Route path="dashboard" element={<WorkerDashboard />} />
+              <Route path="jobs" element={<WorkerJobs />} />
+              <Route path="schedule" element={<WorkerSchedule />} />
+              <Route path="earnings" element={<div className="p-8 text-center">Worker Earnings Page (Coming Soon)</div>} />
+              <Route path="profile" element={<div className="p-8 text-center">Worker Profile Page (Coming Soon)</div>} />
+            </Route>
 
-          {/* Default Redirect Based on Domain */}
-          <Route
-            path="*"
-            element={isSuperAdminDomain ? <Navigate to="/superadmin/login" replace /> : isAdminDomain ? <Navigate to="/admin/login" replace /> : <Navigate to="/" replace />}
-          />
-        </Routes>
-      </div>
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="light"
-      />
+            {/* Default Redirect Based on Domain */}
+            <Route
+              path="*"
+              element={isSuperAdminDomain ? <Navigate to="/superadmin/login" replace /> : isAdminDomain ? <Navigate to="/admin/login" replace /> : <Navigate to="/" replace />}
+            />
+          </Routes>
+        </div>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+        />
+      </CartProvider>
     </Router>
   );
 }
