@@ -15,6 +15,7 @@ import CustomerSignup from './app/auth/CustomerSignup';
 import CategoryServices from './app/customer/CategoryServices';
 import Cart from './app/customer/Cart';
 import CheckoutSuccess from './app/customer/CheckoutSuccess';
+import CustomerProfile from './app/customer/CustomerProfile';
 
 // Admin Components
 import AdminLayout from './app/layouts/AdminLayout';
@@ -42,6 +43,65 @@ import WorkerJobs from './app/features/worker/WorkerJobs';
 import WorkerSchedule from './app/features/worker/WorkerSchedule';
 
 // Protected Route Components
+const CustomerProtectedRoute = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
+  
+  useEffect(() => {
+    const checkAuth = () => {
+      // Use the role-specific authentication check
+      const isLoggedIn = AuthService.isLoggedIn('customer');
+      
+      if (!isLoggedIn) return false;
+      
+      // Verify user has customer role
+      const user = AuthService.getCurrentUser('customer');
+      
+      const hasRole = user && user.role === 'customer';
+      return hasRole;
+    };
+    
+    const authStatus = checkAuth();
+    setIsAuthenticated(authStatus);
+    setIsChecking(false);
+    
+    const handleStorage = () => {
+      setIsAuthenticated(checkAuth());
+    };
+    
+    const handleNavigation = () => {
+      setIsAuthenticated(checkAuth());
+    };
+    
+    // Listen for localStorage changes and navigation events
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('popstate', handleNavigation);
+    
+    const interval = setInterval(() => {
+      const newStatus = checkAuth();
+      if (isAuthenticated !== newStatus) {
+        setIsAuthenticated(newStatus);
+      }
+    }, 1000); // Check every second
+    
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('popstate', handleNavigation);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated]);
+  
+  if (isChecking) {
+    return <div>Checking authentication...</div>;
+  }
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return children;
+};
+
 const AdminProtectedRoute = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
@@ -260,6 +320,11 @@ function App() {
               <Route path="category/:categoryId/:categoryName" element={<CategoryServices />} />
               <Route path="cart" element={<Cart />} />
               <Route path="checkout-success" element={<CheckoutSuccess />} />
+              <Route path="profile" element={
+                <CustomerProtectedRoute>
+                  <CustomerProfile />
+                </CustomerProtectedRoute>
+              } />
             </Route>
 
             {/* Admin Routes */}

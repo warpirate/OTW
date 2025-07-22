@@ -23,14 +23,17 @@ export const initializeTheme = () => {
   
   // Add customer-theme class to enable CSS variables
   document.documentElement.classList.add('customer-theme');
+  document.body.classList.add('customer-theme');
   
   // Apply the theme immediately
   if (userPrefersDark) {
     document.documentElement.setAttribute('data-theme', 'dark');
     document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
   } else {
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark');
   }
   
   // Mark theme as initialized to show content (prevents CSS-based hiding)
@@ -43,9 +46,11 @@ export const initializeTheme = () => {
       if (isDark) {
         document.documentElement.setAttribute('data-theme', 'dark');
         document.documentElement.classList.add('dark');
+        document.body.classList.add('dark');
       } else {
         document.documentElement.removeAttribute('data-theme');
         document.documentElement.classList.remove('dark');
+        document.body.classList.remove('dark');
       }
       
       // Dispatch custom event for components to listen to
@@ -80,9 +85,11 @@ export const toggleTheme = () => {
   if (newDarkMode) {
     document.documentElement.setAttribute('data-theme', 'dark');
     document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
   } else {
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark');
   }
   
   // Dispatch custom event for same-tab components to listen to
@@ -135,9 +142,11 @@ export const syncTheme = () => {
   if (userPrefersDark) {
     document.documentElement.setAttribute('data-theme', 'dark');
     document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
   } else {
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark');
   }
   return userPrefersDark;
 };
