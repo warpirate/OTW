@@ -43,11 +43,20 @@ const Header = () => {
     // Update initially
     updateCartCount();
     
-    // Set up interval to check cart count
+    // Set up interval to check cart count (using a more reasonable interval)
     const cartCheckInterval = setInterval(updateCartCount, 1000);
+    
+    // Listen for login event to update cart count immediately
+    const handleLogin = () => {
+      updateCartCount();
+    };
+    
+    // Add login event listener
+    window.addEventListener('customer_login', handleLogin);
     
     return () => {
       clearInterval(cartCheckInterval);
+      window.removeEventListener('customer_login', handleLogin);
     };
   }, [getItemCount]);
 
@@ -105,6 +114,9 @@ const Header = () => {
   const handleLogout = () => {
     // Call logout function from imported AuthService with customer role
     AuthService.logout(navigate, 'customer');
+    
+    // Clear cart state
+    setCartItemCount(0);
     
     setIsAuthenticated(false);
     setUser(null);

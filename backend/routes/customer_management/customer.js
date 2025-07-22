@@ -53,5 +53,48 @@ router.get('/sub-categories', async (req, res) => {
     }
 });
 
+router.put('/customers/:id', async (req, res) => {
+  const { id } = req.params;
+  const {
+    address,
+    pin_code,
+    city,
+    state,
+    country,
+    location_lat,
+    location_lng
+  } = req.body;
+
+  try {
+    const fields = [];
+    const values = [];
+
+    if (address) { fields.push('address = ?'); values.push(address); }
+    if (pin_code) { fields.push('pin_code = ?'); values.push(pin_code); }
+    if (city) { fields.push('city = ?'); values.push(city); }
+    if (state) { fields.push('state = ?'); values.push(state); }
+    if (country) { fields.push('country = ?'); values.push(country); }
+    if (location_lat) { fields.push('location_lat = ?'); values.push(location_lat); }
+    if (location_lng) { fields.push('location_lng = ?'); values.push(location_lng); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ message: 'No fields provided to update' });
+    }
+
+    values.push(id); // Add ID for WHERE clause
+
+    await pool.query(
+      `UPDATE customers SET ${fields.join(', ')} WHERE id = ?`,
+      values
+    );
+
+    res.json({ message: 'Customer profile updated successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
 
 module.exports = router;

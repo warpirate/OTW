@@ -40,9 +40,9 @@ export const CartProvider = ({ children }) => {
     loadCart();
   }, []);
 
-  // Sync cart when user logs in
+  // Sync cart when user logs in or clear cart on logout
   useEffect(() => {
-    const handleStorageChange = async () => {
+    const handleStorageChange = async (event) => {
       // Check if user just logged in
       if (AuthService.isLoggedIn('customer')) {
         try {
@@ -53,14 +53,66 @@ export const CartProvider = ({ children }) => {
         } catch (err) {
           console.error('Error syncing cart after login:', err);
         }
+      } else if (event && event.key === 'jwt_token_customer' && event.newValue === null) {
+        // User logged out (customer token was removed)
+        setCart({ items: [], total: 0 });
       }
     };
 
     // Listen for storage events (login/logout)
     window.addEventListener('storage', handleStorageChange);
     
+    // Check auth status on mount
+    const checkAuthStatus = () => {
+      if (!AuthService.isLoggedIn('customer')) {
+        // If not logged in, ensure cart is empty
+        setCart({ items: [], total: 0 });
+      }
+    };
+    checkAuthStatus();
+    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  // Listen for logout events
+  useEffect(() => {
+    const handleLogout = () => {
+      // Clear cart when user logs out
+      setCart({ items: [], total: 0 });
+    };
+    
+    // Create a custom event listener for logout
+    window.addEventListener('customer_logout', handleLogout);
+    
+    return () => {
+      window.removeEventListener('customer_logout', handleLogout);
+    };
+  }, []);
+  
+  // Listen for login events
+  useEffect(() => {
+    const handleLogin = async () => {
+      try {
+        setLoading(true);
+        // Sync cart immediately after login
+        await CartService.syncCartAfterLogin();
+        // Reload cart after sync
+        const cartData = await CartService.getCart();
+        setCart(cartData);
+      } catch (err) {
+        console.error('Error syncing cart after login event:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    // Create a custom event listener for login
+    window.addEventListener('customer_login', handleLogin);
+    
+    return () => {
+      window.removeEventListener('customer_login', handleLogin);
     };
   }, []);
 

@@ -91,16 +91,19 @@ router.post('/login', async (req, res) => {
 // Register Route
 // ------------------------
 router.post('/register', async (req, res) => {
-  const { firstName, lastName, email, password, role_id } = req.body;
+  const {
+    firstName,
+    lastName,
+    email,
+    password,
+    phone_number
+  } = req.body;
+
   const name = `${firstName} ${lastName}`;
+  const role_id = 1; // Only customer
 
-  if (!firstName || !lastName || !email || !password || !role_id) {
-    return res.status(400).json({ message: 'All fields are required' });
-  }
-
-  const allowedRoles = [1, 2, 3]; // Allowed roles: adjust as needed (1 = customer, 2 = admin, etc.)
-  if (!allowedRoles.includes(role_id)) {
-    return res.status(403).json({ message: 'Invalid role selection' });
+  if (!firstName || !lastName || !email || !password ) {
+    return res.status(400).json({ message: 'First name, last name, email, password, and phone number are required' });
   }
 
   try {
@@ -115,32 +118,33 @@ router.post('/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert into users table
-    const [result] = await pool.query(
-      'INSERT INTO users (name, email, password, is_active, created_at) VALUES (?, ?, ?, ?, NOW())',
-      [name, email, hashedPassword, 1]
+    // Insert into users
+    const [userResult] = await pool.query(
+      'INSERT INTO users (name, email, password, phone_number, is_active, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      [name, email, hashedPassword, phone_number, 1]
     );
 
-    const userId = result.insertId;
+    const userId = userResult.insertId;
 
-    // Assign role to user
+    // Assign role
     await pool.query(
       'INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)',
       [userId, role_id]
     );
 
-    // Get role name
-    const [[roleRow]] = await pool.query(
-      'SELECT name FROM roles WHERE id = ?',
-      [role_id]
+    // Insert empty row into customers
+    await pool.query(
+      'INSERT INTO customers (id) VALUES (?)',
+      [userId]
     );
 
+    // Create JWT
     const token = jwt.sign(
       {
         id: userId,
         email,
-        role: roleRow.name,
-        role_id: role_id
+        role: 'customer',
+        role_id
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRATION }
@@ -152,8 +156,9 @@ router.post('/register', async (req, res) => {
         id: userId,
         name,
         email,
-        role: roleRow.name,
-        role_id: role_id
+        phone_number,
+        role: 'customer',
+        role_id
       }
     });
 
@@ -162,6 +167,7 @@ router.post('/register', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 
 
 module.exports = router;

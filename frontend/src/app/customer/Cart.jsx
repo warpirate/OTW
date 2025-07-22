@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Calendar, Clock, MapPin } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
@@ -6,8 +6,10 @@ import { isDarkMode } from '../utils/themeUtils';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
+import AuthService from '../services/auth.service';
 
 const Cart = () => {
+
   const navigate = useNavigate();
   const { cart, loading, error, updateItemQuantity, removeItem, clearCart, checkout } = useCart();
   const [darkMode, setDarkMode] = useState(isDarkMode());
@@ -29,7 +31,43 @@ const Cart = () => {
     notes: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
-
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    const checkAuthStatus = () => {
+      try {
+        // Specifically check for customer role authentication
+        if (AuthService.isLoggedIn('customer')) {
+          const userData = AuthService.getCurrentUser('customer');
+          if (userData) {
+            setIsAuthenticated(true);
+            setUser(userData);
+          } else {
+            setIsAuthenticated(false);
+            setUser(null);
+          }
+        } else if (isAuthenticated) {
+          // If no customer authentication but state says authenticated, reset state
+          setIsAuthenticated(false);
+          setUser(null);
+        }
+      } catch (error) {
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+    };
+    
+    // Run authentication check when component mounts
+    checkAuthStatus();
+    
+    // Set up interval to check auth status every 5 seconds (less frequent)
+    const authCheckInterval = setInterval(checkAuthStatus, 5000);
+    
+    return () => {
+      clearInterval(authCheckInterval);
+    };
+  }, [isAuthenticated]); // Only depend on isAuthenticated to prevent unnecessary re-renders
+  
   // Handle checkout data change
   const handleInputChange = (e) => {
     const { name, value } = e.target;

@@ -194,6 +194,15 @@ const AuthService = {
         localStorage.removeItem('current_role');
       }
       
+      // Dispatch custom event for this role logout
+      const logoutEvent = new Event(`${currentRole}_logout`);
+      window.dispatchEvent(logoutEvent);
+      
+      // Clear local cart storage if customer is logging out
+      if (currentRole === 'customer') {
+        localStorage.removeItem('otw_cart');
+      }
+      
       // Redirect based on role
       if (navigate) {
         if (currentRole === 'admin') {
@@ -214,8 +223,14 @@ const AuthService = {
         const { tokenKey, userKey } = AuthService._getStorageKeys(r);
         localStorage.removeItem(tokenKey);
         localStorage.removeItem(userKey);
+        
+        // Dispatch custom event for each role logout
+        const logoutEvent = new Event(`${r}_logout`);
+        window.dispatchEvent(logoutEvent);
       });
       
+      // Clear local cart storage
+      localStorage.removeItem('otw_cart');
       localStorage.removeItem('current_role');
       
       // Default redirect to login
@@ -242,6 +257,10 @@ const AuthService = {
     
     // Store the current active role
     localStorage.setItem('current_role', user.role);
+    
+    // Dispatch custom event for login
+    const loginEvent = new Event(`${user.role}_login`);
+    window.dispatchEvent(loginEvent);
   },
   
 
