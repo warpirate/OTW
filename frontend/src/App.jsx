@@ -18,6 +18,7 @@ import CheckoutSuccess from './app/customer/CheckoutSuccess';
 import Booking from './app/customer/Booking';
 import BookingSuccess from './app/customer/BookingSuccess';
 import CustomerProfile from './app/customer/CustomerProfile';
+import SearchResults from './app/customer/SearchResults';
 
 // Admin Components
 import AdminLayout from './app/layouts/AdminLayout';
@@ -320,6 +321,7 @@ function App() {
               <Route path="login" element={<CustomerLogin />} />
               <Route path="signup" element={<CustomerSignup />} />
               <Route path="category/:categoryId/:categoryName" element={<CategoryServices />} />
+              <Route path="search" element={<SearchResults />} />
               <Route path="cart" element={<Cart />} />
               <Route path="booking" element={
                 <CustomerProtectedRoute>

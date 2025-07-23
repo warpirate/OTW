@@ -132,35 +132,35 @@ const CategoryServices = () => {
             {subcategories.map((service) => (
               <div 
                 key={service.id}
-                className="card"
+                className={`card ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'}`}
               >
                 <div className="p-6">
                   <div className="flex justify-between items-start">
                     <div className="flex items-start space-x-4">
-                      <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700' : 'bg-purple-50'}`}>
+                      <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-purple-50 border border-gray-200'}`}>
                         <IconComponent className="h-6 w-6 text-purple-600" />
                       </div>
                       <div>
                         <h3 className={`font-bold text-lg mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                           {service.name}
                         </h3>
-                        <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <p className={`text-sm mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                           {service.description || `Professional ${service.name} services`}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center">
                       <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                      <span className="ml-1 text-sm font-medium">{(4 + Math.random()).toFixed(1)}</span>
+                      <span className={`ml-1 text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{(4 + Math.random()).toFixed(1)}</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center mt-4">
-                    <span className="font-semibold text-purple-600">{`Starting ₹${service.base_price || Math.floor(Math.random() * 5000) + 1000}`}</span>
+                    <span className={`font-semibold ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>{`Starting ₹${service.base_price || Math.floor(Math.random() * 5000) + 1000}`}</span>
                     <div className="flex space-x-2">
                       <button 
                         onClick={() => handleAddToCart(service)}
                         disabled={addingToCart[service.id]}
-                        className={`flex items-center space-x-1 px-3 py-2 rounded-lg bg-purple-100 text-purple-600 hover:bg-purple-200 transition-colors`}
+                        className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${darkMode ? 'bg-purple-900/30 text-purple-300 hover:bg-purple-900/50 border border-purple-700' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
                       >
                         <ShoppingCart className="h-4 w-4" />
                         <span>{addingToCart[service.id] ? 'Adding...' : 'Add to Cart'}</span>

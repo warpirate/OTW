@@ -405,14 +405,14 @@ const LandingPage = () => {
                         <div 
                           key={category.id} 
                           onClick={() => setActiveTab(category.id)}
-                          className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}
+                          className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600 border border-gray-600' : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}
                         >
-                          <div className={`${darkMode ? 'bg-gray-600' : 'bg-white'} rounded-full p-2 mb-2`}>
+                          <div className={`${darkMode ? 'bg-gray-600 border border-gray-500' : 'bg-white border border-gray-100'} rounded-full p-2 mb-2`}>
                             {category.id === 'maintenance' && <Wrench className="h-6 w-6 text-brand" />}
                             {category.id === 'maid' && <Sparkles className="h-6 w-6 text-brand" />}
                             {category.id === 'driver' && <Car className="h-6 w-6 text-brand" />}
                           </div>
-                          <span className="text-sm font-medium">{category.name}</span>
+                          <span className={`text-sm font-medium ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>{category.name}</span>
                         </div>
                       ))
                     : loading ? (
@@ -506,25 +506,25 @@ const LandingPage = () => {
                     subcategories.map(subcategory => (
                                         <div 
                     key={subcategory.id}
-                    className="service-card"
+                    className={`service-card ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'}`}
                   >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
-                            <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
+                            <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-brand-50 border border-gray-200'}`}>
                               {selectedCategory.icon && <selectedCategory.icon className="service-icon" />}
                             </div>
                             <div className="flex items-center">
                               <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                              <span className="ml-1 text-sm font-medium">{(4 + Math.random()).toFixed(1)}</span>
+                              <span className={`ml-1 text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{(4 + Math.random()).toFixed(1)}</span>
                             </div>
                           </div>
-                          <h3 className="font-bold text-lg mb-2">{subcategory.name}</h3>
-                          <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{subcategory.name}</h3>
+                          <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                             {subcategory.description || `Professional ${subcategory.name} services`}
                           </p>
                           <div className="flex justify-between items-center">
-                            <span className="font-semibold text-brand">{`Starting ₹${subcategory.base_price || 199}`}</span>
-                            <button className="btn-sm">Book</button>
+                            <span className={`font-semibold ${darkMode ? 'text-brand-light' : 'text-brand'}`}>{`Starting ₹${subcategory.base_price || 199}`}</span>
+                            <button className={`btn-sm ${darkMode ? 'bg-brand-dark hover:bg-brand-darker' : ''}`}>Book</button>
                           </div>
                         </div>
                       </div>
@@ -565,16 +565,26 @@ const LandingPage = () => {
                           {/* Step indicator */}
                           <div className="flex justify-center mb-8">
                             <div className="flex items-center space-x-4">
-                              <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                                driverStep >= 1 ? 'bg-brand text-white' : (darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')
+                              <div className={`flex items-center justify-center w-10 h-10 rounded-full border ${
+                                driverStep >= 1 
+                                  ? 'bg-brand text-white border-brand-light' 
+                                  : (darkMode 
+                                    ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' 
+                                    : 'bg-gray-200 text-gray-500 border-gray-300 hover:bg-gray-100')
                               }`}>
                                 1
                               </div>
                               <div className={`h-0.5 w-16 ${
-                                driverStep >= 2 ? 'bg-brand' : (darkMode ? 'bg-gray-700' : 'bg-gray-200')
+                                driverStep >= 2 
+                                  ? 'bg-brand' 
+                                  : (darkMode ? 'bg-gray-600' : 'bg-gray-200')
                               }`}></div>
-                              <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                                driverStep >= 2 ? 'bg-brand text-white' : (darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')
+                              <div className={`flex items-center justify-center w-10 h-10 rounded-full border ${
+                                driverStep >= 2 
+                                  ? 'bg-brand text-white border-brand-light' 
+                                  : (darkMode 
+                                    ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' 
+                                    : 'bg-gray-200 text-gray-500 border-gray-300 hover:bg-gray-100')
                               }`}>
                                 2
                               </div>
@@ -800,7 +810,7 @@ const LandingPage = () => {
                             return (
                               <div 
                                 key={cat.id}
-                                className="service-card cursor-pointer"
+                                className={`service-card cursor-pointer ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
                                 onClick={() => {
                                   // Navigate to the category services page instead of showing subcategories inline
                                   navigate(`/category/${cat.id}/${cat.name}`);
@@ -808,12 +818,12 @@ const LandingPage = () => {
                               >
                                 <div className="p-6">
                                   <div className="flex justify-between items-start mb-4">
-                                    <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700' : 'bg-brand-50'}`}>
+                                    <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-brand-50 border border-gray-200'}`}>
                                       <IconComponent className="service-icon" />
                                     </div>
                                   </div>
-                                  <h3 className="font-bold text-lg mb-2">{cat.name}</h3>
-                                  <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{cat.description}</p>
+                                  <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
+                                  <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>
                                   <div className="flex justify-between items-center">
                                     <span className="text-sm text-brand">View Services</span>
                                     <ChevronRight className="h-5 w-5 text-brand" />

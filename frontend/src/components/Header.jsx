@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Moon, Sun, User, ChevronDown, ShoppingCart, LogOut } from 'lucide-react';
+import { Moon, Sun, User, ChevronDown, ShoppingCart, LogOut, Search, Wrench, Sparkles } from 'lucide-react';
 import AuthService from '../app/services/auth.service';
+import { LandingPageService } from '../app/services/landing_page.service';
 import { isDarkMode, addThemeListener, toggleTheme } from '../app/utils/themeUtils';
 import { useCart } from '../app/contexts/CartContext';
 
@@ -13,6 +14,10 @@ const Header = () => {
   const [user, setUser] = useState(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
+
+  // Search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState({ categories: [], subcategories: [] });
   
   // Check if we're on a customer page (Header is only used on customer pages)
   const isCustomerPage = () => {
@@ -59,6 +64,51 @@ const Header = () => {
       window.removeEventListener('customer_login', handleLogin);
     };
   }, [getItemCount]);
+
+  // Realtime search effect with debounce
+  useEffect(() => {
+    const handler = setTimeout(async () => {
+      if (searchQuery.trim().length === 0) {
+        setSearchResults({ categories: [], subcategories: [] });
+        return;
+      }
+
+      try {
+        const results = await LandingPageService.searchServices(searchQuery.trim());
+        setSearchResults(results || { categories: [], subcategories: [] });
+      } catch (err) {
+        console.error('Header search error:', err);
+        setSearchResults({ categories: [], subcategories: [] });
+      }
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  const handleSuggestionClick = (item, type) => {
+    setSearchQuery('');
+    setSearchResults({ categories: [], subcategories: [] });
+
+    if (type === 'category') {
+      navigate(`/category/${item.id}/${item.name}`);
+    } else if (type === 'subcategory') {
+      navigate(`/category/${item.category_id}/${item.category_name}`);
+    }
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      setSearchResults({ categories: [], subcategories: [] });
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearchSubmit(e);
+    }
+  };
 
   // Check for user authentication status
   useEffect(() => {
@@ -139,6 +189,53 @@ const Header = () => {
                 <span className="text-2xl font-bold text-blue-500">T</span>
                 <span className="text-2xl font-bold text-green-500">W</span>
               </div>
+            </div>
+
+            {/* Search Bar (visible on wider screens) */}
+            <div className="hidden md:block ml-6 relative w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <form onSubmit={handleSearchSubmit} className="w-full">
+                <input
+                  type="text"
+                  placeholder="Search services..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={handleSearchKeyPress}
+                  className={`pl-10 pr-4 py-2 rounded-lg text-sm w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
+                />
+              </form>
+
+              {(searchResults.categories.length > 0 || searchResults.subcategories.length > 0) && searchQuery.trim().length > 0 && (
+                <div className={`absolute left-0 right-0 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto z-50 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+                  {/* Categories */}
+                  {searchResults.categories.map((cat) => (
+                    <div
+                      key={`header-cat-${cat.id}`}
+                      onClick={() => handleSuggestionClick(cat, 'category')}
+                      className={`px-4 py-2 cursor-pointer flex items-center ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'}`}
+                    >
+                      <Wrench className="h-4 w-4 text-brand mr-2" />
+                      <span>{cat.name}</span>
+                      <span className="ml-auto text-xs text-gray-500">Category</span>
+                    </div>
+                  ))}
+                  {/* Subcategories */}
+                  {searchResults.subcategories.map((sub) => (
+                    <div
+                      key={`header-sub-${sub.id}`}
+                      onClick={() => handleSuggestionClick(sub, 'subcategory')}
+                      className={`px-4 py-2 cursor-pointer flex items-center ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'}`}
+                    >
+                      <Sparkles className="h-4 w-4 text-brand mr-2" />
+                      <div className="flex flex-col">
+                        <span>{sub.name}</span>
+                        <span className="text-xs text-gray-500">{sub.category_name}</span>
+                      </div>
+                      <span className="ml-auto text-xs text-gray-500">Subcategory</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           
