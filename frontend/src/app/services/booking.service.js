@@ -1,0 +1,250 @@
+import axios from 'axios';
+import { API_BASE_URL } from '../config';
+import AuthService from './auth.service';
+
+const apiClient = axios.create({
+  baseURL: `${API_BASE_URL}/api/customer`,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Add a request interceptor to include JWT token in the headers
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = AuthService.getToken('customer');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for error handling
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      AuthService.logout(null, 'customer');
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+const BookingService = {
+  // Address Management
+  addresses: {
+    // Get all addresses for the customer
+    getAll: async () => {
+      try {
+        const response = await apiClient.get('/addresses');
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching addresses:', error);
+        throw error;
+      }
+    },
+
+    // Add new address
+    create: async (addressData) => {
+      try {
+        const response = await apiClient.post('/addresses', addressData);
+        return response.data;
+      } catch (error) {
+        console.error('Error creating address:', error);
+        throw error;
+      }
+    },
+
+    // Update address
+    update: async (addressId, addressData) => {
+      try {
+        const response = await apiClient.put(`/addresses/${addressId}`, addressData);
+        return response.data;
+      } catch (error) {
+        console.error('Error updating address:', error);
+        throw error;
+      }
+    },
+
+    // Delete address
+    delete: async (addressId) => {
+      try {
+        const response = await apiClient.delete(`/addresses/${addressId}`);
+        return response.data;
+      } catch (error) {
+        console.error('Error deleting address:', error);
+        throw error;
+      }
+    },
+
+    // Set address as default
+    setDefault: async (addressId) => {
+      try {
+        const response = await apiClient.put(`/addresses/${addressId}/default`);
+        return response.data;
+      } catch (error) {
+        console.error('Error setting default address:', error);
+        throw error;
+      }
+    }
+  },
+
+  // Time Slot Management
+  timeSlots: {
+    // Get available time slots for a date
+    getAvailable: async (date, subcategoryId = null) => {
+      try {
+        const params = { date };
+        if (subcategoryId) {
+          params.subcategory_id = subcategoryId;
+        }
+        
+        const response = await apiClient.get('/bookings/available-slots', { params });
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching time slots:', error);
+        throw error;
+      }
+    }
+  },
+
+  // Booking Management
+  bookings: {
+    // Create a new booking
+    create: async (bookingData) => {
+      try {
+        const response = await apiClient.post('/bookings/create', bookingData);
+        return response.data;
+      } catch (error) {
+        console.error('Error creating booking:', error);
+        throw error;
+      }
+    },
+
+    // Get booking history
+    getHistory: async (page = 1, limit = 10, status = null) => {
+      try {
+        const params = { page, limit };
+        if (status) {
+          params.status = status;
+        }
+        
+        const response = await apiClient.get('/bookings/history', { params });
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching booking history:', error);
+        throw error;
+      }
+    },
+
+    // Get specific booking details
+    getById: async (bookingId) => {
+      try {
+        const response = await apiClient.get(`/bookings/${bookingId}`);
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching booking details:', error);
+        throw error;
+      }
+    },
+
+    // Cancel a booking
+    cancel: async (bookingId, reason = '') => {
+      try {
+        const response = await apiClient.put(`/bookings/${bookingId}/cancel`, {
+          cancellation_reason: reason
+        });
+        return response.data;
+      } catch (error) {
+        console.error('Error cancelling booking:', error);
+        throw error;
+      }
+    }
+  },
+
+  // Utility methods
+  utils: {
+    // Format date for API calls (YYYY-MM-DD)
+    formatDate: (date) => {
+      if (typeof date === 'string') {
+        return date.split('T')[0];
+      }
+      return date.toISOString().split('T')[0];
+    },
+
+    // Format time for display
+    formatTime: (time) => {
+      return new Date(`2000-01-01T${time}:00`).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    },
+
+    // Validate address data
+    validateAddress: (addressData) => {
+      const required = ['address', 'pin_code', 'city', 'state', 'country'];
+      const errors = {};
+
+      required.forEach(field => {
+        if (!addressData[field] || addressData[field].trim() === '') {
+          errors[field] = `${field.replace('_', ' ')} is required`;
+        }
+      });
+
+      // Validate pin code format (assuming Indian pin codes)
+      if (addressData.pin_code && !/^\d{6}$/.test(addressData.pin_code)) {
+        errors.pin_code = 'Pin code must be 6 digits';
+      }
+
+      return {
+        isValid: Object.keys(errors).length === 0,
+        errors
+      };
+    },
+
+    // Get next available dates (excluding past dates and optionally Sundays)
+    getAvailableDates: (daysCount = 14, excludeSundays = false) => {
+      const dates = [];
+      const today = new Date();
+      
+      for (let i = 0; i < daysCount; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        
+        // Skip Sundays if specified
+        if (excludeSundays && date.getDay() === 0) {
+          continue;
+        }
+        
+        dates.push({
+          date: BookingService.utils.formatDate(date),
+          displayDate: date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          }),
+          shortDate: date.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+          }),
+          isToday: i === 0,
+          isTomorrow: i === 1
+        });
+      }
+      
+      return dates;
+    }
+  }
+};
+
+export default BookingService; 

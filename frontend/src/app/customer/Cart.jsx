@@ -95,38 +95,31 @@ const Cart = () => {
     }
   };
 
-  // Handle checkout process
+  // Handle checkout process - redirect to booking flow
   const handleCheckout = async (e) => {
     e.preventDefault();
     
     try {
       setIsProcessing(true);
       
-      // Validate checkout data based on current step
-      if (checkoutStep === 'details') {
-        if (!checkoutData.firstName || !checkoutData.lastName || !checkoutData.email || !checkoutData.phone) {
-          toast.error('Please fill in all required fields');
-          return;
-        }
-        setCheckoutStep('payment');
-      } else if (checkoutStep === 'payment') {
-        if (checkoutData.paymentMethod === 'card') {
-          if (!checkoutData.cardNumber || !checkoutData.cardExpiry || !checkoutData.cardCvv) {
-            toast.error('Please fill in all payment details');
-            return;
-          }
-        }
-        setCheckoutStep('confirmation');
-      } else if (checkoutStep === 'confirmation') {
-        // Process the checkout
-        await checkout(checkoutData);
-        navigate('/checkout-success');
-      } else {
-        // Move from cart to details
-        setCheckoutStep('details');
+      // Check if user is authenticated
+      if (!isAuthenticated) {
+        toast.error('Please login to continue with booking');
+        navigate('/login');
+        return;
       }
+      
+      // Check if cart has items
+      if (!cart.items || cart.items.length === 0) {
+        toast.error('Your cart is empty');
+        return;
+      }
+      
+      // Redirect to booking flow
+      navigate('/booking');
+      
     } catch (err) {
-      toast.error('Checkout failed. Please try again.');
+      toast.error('Failed to proceed to booking. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -352,7 +345,7 @@ const Cart = () => {
                   className="w-full btn-brand py-3"
                   disabled={isProcessing || cart.items.length === 0}
                 >
-                  {isProcessing ? 'Processing...' : 'Proceed to Checkout'}
+                  {isProcessing ? 'Processing...' : 'Book Now'}
                 </button>
               </div>
             </div>

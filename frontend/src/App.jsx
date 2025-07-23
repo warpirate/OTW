@@ -15,6 +15,8 @@ import CustomerSignup from './app/auth/CustomerSignup';
 import CategoryServices from './app/customer/CategoryServices';
 import Cart from './app/customer/Cart';
 import CheckoutSuccess from './app/customer/CheckoutSuccess';
+import Booking from './app/customer/Booking';
+import BookingSuccess from './app/customer/BookingSuccess';
 import CustomerProfile from './app/customer/CustomerProfile';
 
 // Admin Components
@@ -319,6 +321,16 @@ function App() {
               <Route path="signup" element={<CustomerSignup />} />
               <Route path="category/:categoryId/:categoryName" element={<CategoryServices />} />
               <Route path="cart" element={<Cart />} />
+              <Route path="booking" element={
+                <CustomerProtectedRoute>
+                  <Booking />
+                </CustomerProtectedRoute>
+              } />
+              <Route path="booking-success" element={
+                <CustomerProtectedRoute>
+                  <BookingSuccess />
+                </CustomerProtectedRoute>
+              } />
               <Route path="checkout-success" element={<CheckoutSuccess />} />
               <Route path="profile" element={
                 <CustomerProtectedRoute>
