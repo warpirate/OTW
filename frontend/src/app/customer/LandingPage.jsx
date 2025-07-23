@@ -54,6 +54,41 @@ const LandingPage = () => {
   const [subcategories, setSubcategories] = useState([]);
   const [showSubcategories, setShowSubcategories] = useState(false);
   const [loadingSubcategories, setLoadingSubcategories] = useState(false);
+
+  // Realtime search results
+  const [searchResults, setSearchResults] = useState({ categories: [], subcategories: [] });
+
+  // Debounce search query changes and fetch results
+  useEffect(() => {
+    const handler = setTimeout(async () => {
+      if (searchQuery.trim().length === 0) {
+        setSearchResults({ categories: [], subcategories: [] });
+        return;
+      }
+
+      try {
+        const results = await LandingPageService.searchServices(searchQuery.trim());
+        setSearchResults(results || { categories: [], subcategories: [] });
+      } catch (err) {
+        console.error('Search error:', err);
+        setSearchResults({ categories: [], subcategories: [] });
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Handle suggestion click
+  const handleSuggestionClick = (item, type) => {
+    setSearchQuery('');
+    setSearchResults({ categories: [], subcategories: [] });
+
+    if (type === 'category') {
+      navigate(`/category/${item.id}/${item.name}`);
+    } else if (type === 'subcategory') {
+      navigate(`/category/${item.category_id}/${item.category_name}`);
+    }
+  };
   
   // Driver selection states
   const [driverStep, setDriverStep] = useState(1); // 1 for car selection, 2 for booking basis
@@ -320,6 +355,38 @@ const LandingPage = () => {
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="input-search"
                     />
+                    {/* Suggestions Dropdown */}
+                    {(searchResults.categories.length > 0 || searchResults.subcategories.length > 0) && searchQuery.trim().length > 0 && (
+                      <div className={`absolute z-10 left-0 right-0 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                        {/* Categories */}
+                        {searchResults.categories.map((cat) => (
+                          <div
+                            key={`cat-${cat.id}`}
+                            onClick={() => handleSuggestionClick(cat, 'category')}
+                            className={`px-4 py-2 cursor-pointer hover:${darkMode ? 'bg-gray-700' : 'bg-gray-100'} flex items-center`}
+                          >
+                            <Wrench className="h-4 w-4 text-brand mr-2" />
+                            <span>{cat.name}</span>
+                            <span className="ml-auto text-xs text-gray-500">Category</span>
+                          </div>
+                        ))}
+                        {/* Subcategories */}
+                        {searchResults.subcategories.map((sub) => (
+                          <div
+                            key={`sub-${sub.id}`}
+                            onClick={() => handleSuggestionClick(sub, 'subcategory')}
+                            className={`px-4 py-2 cursor-pointer hover:${darkMode ? 'bg-gray-700' : 'bg-gray-100'} flex items-center`}
+                          >
+                            <Sparkles className="h-4 w-4 text-brand mr-2" />
+                            <div className="flex flex-col">
+                              <span>{sub.name}</span>
+                              <span className="text-xs text-gray-500">{sub.category_name}</span>
+                            </div>
+                            <span className="ml-auto text-xs text-gray-500">Subcategory</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 

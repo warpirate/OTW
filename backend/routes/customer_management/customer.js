@@ -112,5 +112,43 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
+// NEW ROUTE: Search categories and subcategories
+router.get('/search-services', async (req, res) => {
+  try {
+    const { q, limit = 10 } = req.query;
+
+    // If no query term provided, return empty results
+    if (!q || q.trim().length === 0) {
+      return res.json({ categories: [], subcategories: [] });
+    }
+
+    const searchTerm = `%${q}%`;
+    const resultLimit = parseInt(limit, 10) || 10;
+
+    // Search active categories by name
+    const [categories] = await pool.query(
+      `SELECT id, name, category_type FROM service_categories 
+       WHERE is_active = 1 AND name LIKE ? 
+       LIMIT ?`,
+      [searchTerm, resultLimit]
+    );
+
+    // Search subcategories by name and join parent category for easier navigation
+    const [subcategories] = await pool.query(
+      `SELECT s.id, s.name, s.category_id, c.name AS category_name
+       FROM subcategories s 
+       JOIN service_categories c ON c.id = s.category_id
+       WHERE s.name LIKE ? 
+       LIMIT ?`,
+      [searchTerm, resultLimit]
+    );
+
+    res.json({ categories, subcategories });
+  } catch (err) {
+    console.error('Error searching services:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 
 module.exports = router;

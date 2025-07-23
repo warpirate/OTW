@@ -73,4 +73,20 @@ export const LandingPageService = {
       throw error;
     }
   },
+  /**
+   * Search categories and subcategories by query string
+   * @param {string} query - Search keyword
+   * @param {number} limit - Optional max number of results per type (default 10)
+   */
+  searchServices: async (query, limit = 10) => {
+    if (!query || query.trim().length === 0) return { categories: [], subcategories: [] };
+    try {
+      const response = await apiClient.get('/search-services', {
+        params: { q: query, limit }
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
 }
