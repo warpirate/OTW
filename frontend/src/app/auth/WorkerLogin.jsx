@@ -147,13 +147,7 @@ const WorkerLogin = () => {
         <div className="max-w-md mx-auto w-full">
           {/* Header */}
           <div className="mb-8">
-            <button
-              onClick={handleGoBack}
-              className={`mb-6 flex items-center space-x-2 ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-800'} transition-colors`}
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Home</span>
-            </button>
+
             
             <div className="text-center">
               <h2 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-2`}>

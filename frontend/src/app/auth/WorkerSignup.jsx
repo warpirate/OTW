@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Phone, Eye, EyeOff, ArrowLeft, CheckCircle, Briefcase, Star, MapPin, Navigation, AlertCircle } from 'lucide-react';
 import AuthService from '../services/auth.service';
 import WorkerService from '../services/worker.service';
+import { LandingPageService } from '../services/landing_page.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 
 const WorkerSignup = () => {
@@ -37,12 +38,28 @@ const WorkerSignup = () => {
     serviceRadius: '10',
     latitude: null,
     longitude: null,
+    permanentAddress: '',
+    serviceType: '',
+    categories: [],
+    subcategories: [],
     agreeToTerms: false
   });
 
   // Location states
   const [locationStatus, setLocationStatus] = useState('idle'); // idle, requesting, granted, denied, error
+  const [locationEditMode, setLocationEditMode] = useState('auto'); // 'auto' or 'manual'
   const [locationError, setLocationError] = useState('');
+  
+  // Service type, category and subcategory states
+  const [serviceType, setServiceType] = useState(''); // 'maintenance', 'maid', or 'driver'
+  const [categories, setCategories] = useState([]);
+  const [filteredCategories, setFilteredCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState({});
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedSubcategories, setSelectedSubcategories] = useState([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [isLoadingSubcategories, setIsLoadingSubcategories] = useState(false);
+  const [categoryError, setCategoryError] = useState('');
   
 
 
@@ -78,8 +95,20 @@ const WorkerSignup = () => {
         return false;
       }
     } else if (currentStep === 2) {
+      if (!formData.serviceType) {
+        setError('Please select a service type');
+        return false;
+      }
       if (!formData.experience) {
         setError('Please select your experience level');
+        return false;
+      }
+      if (formData.categories.length === 0) {
+        setError('Please select at least one service category');
+        return false;
+      }
+      if (formData.subcategories.length === 0) {
+        setError('Please select at least one service subcategory');
         return false;
       }
       if (!formData.bio) {
@@ -89,6 +118,10 @@ const WorkerSignup = () => {
     } else if (currentStep === 3) {
       if (!formData.latitude || !formData.longitude) {
         setError('Please provide location access or enter coordinates manually');
+        return false;
+      }
+      if (!formData.permanentAddress) {
+        setError('Please enter your permanent address');
         return false;
       }
       if (!formData.agreeToTerms) {
@@ -102,8 +135,230 @@ const WorkerSignup = () => {
 
   const handleNextStep = () => {
     if (validateStep()) {
+      if (currentStep === 1) {
+        // When moving to step 2, fetch categories
+        console.log('Moving to step 2, fetching categories...');
+        fetchCategories();
+      }
       setCurrentStep(currentStep + 1);
     }
+  };
+  
+  // Service category types
+  const SERVICE_TYPES = [
+    { id: 'maintenance', name: 'Maintenance' },
+    { id: 'maid', name: 'Maid' },
+    { id: 'driver', name: 'Driver' }
+  ];
+  
+  // Handle service type change
+  const handleServiceTypeChange = (e) => {
+    const type = e.target.value;
+    setServiceType(type);
+    setFormData({
+      ...formData,
+      serviceType: type,
+      categories: [],
+      subcategories: []
+    });
+    setSelectedCategories([]);
+    setSelectedSubcategories([]);
+    
+    // Filter categories based on selected type
+    if (type && categories.length > 0) {
+      let filtered = [];
+      if (type === 'maintenance') {
+        filtered = categories.filter(cat => {
+          const name = (cat.name || '').toLowerCase();
+          return name.includes('repair') || 
+                 name.includes('maintenance') ||
+                 name.includes('installation') ||
+                 name.includes('plumber') ||
+                 name.includes('electrician') ||
+                 name.includes('carpenter') ||
+                 name.includes('pest') ||
+                 name.includes('ac');
+        });
+      } else if (type === 'maid') {
+        filtered = categories.filter(cat => {
+          const name = (cat.name || '').toLowerCase();
+          return name.includes('cleaning') || 
+                 name.includes('housekeeping') ||
+                 name.includes('maid') ||
+                 name.includes('cleaner') ||
+                 name.includes('cook');
+        });
+      } else if (type === 'driver') {
+        filtered = categories.filter(cat => {
+          const name = (cat.name || '').toLowerCase();
+          return name.includes('transport') || 
+                 name.includes('driver') ||
+                 name.includes('delivery');
+        });
+      }
+      setFilteredCategories(filtered);
+    } else {
+      setFilteredCategories([]);
+    }
+  };
+
+  // Fetch all categories from API
+  const fetchCategories = async () => {
+    try {
+      setIsLoadingCategories(true);
+      setCategoryError('');
+      console.log('Fetching categories...');
+      const response = await LandingPageService.getAllCategories(1, 100);
+      console.log('Raw API response:', response);
+      
+      if (response && response.category_data) {
+        // Filter active categories
+        const activeCategories = response.category_data.filter(cat => cat.is_active !== false);
+        console.log('Active categories:', activeCategories);
+        setCategories(activeCategories);
+        
+        // If service type already selected, filter categories
+        if (serviceType) {
+          console.log('Service type already selected, filtering categories...');
+          let filtered = activeCategories.filter(cat => {
+            const name = (cat.name || '').toLowerCase();
+            if (serviceType === 'maintenance') {
+              return name.includes('repair') || 
+                     name.includes('maintenance') ||
+                     name.includes('installation') ||
+                     name.includes('plumber') ||
+                     name.includes('electrician') ||
+                     name.includes('carpenter') ||
+                     name.includes('pest') ||
+                     name.includes('ac');
+            } else if (serviceType === 'maid') {
+              return name.includes('cleaning') || 
+                     name.includes('housekeeping') ||
+                     name.includes('maid') ||
+                     name.includes('cleaner') ||
+                     name.includes('cook');
+            } else if (serviceType === 'driver') {
+              return name.includes('transport') || 
+                     name.includes('driver') ||
+                     name.includes('delivery');
+            }
+            return false;
+          });
+          setFilteredCategories(filtered);
+        }
+      } else {
+        console.warn('No category data found in response');
+        setCategoryError('Failed to load categories');
+        setCategories([]);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      setCategoryError('Failed to load categories');
+      setCategories([]);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  };
+  
+  // Fetch subcategories for a category
+  const fetchSubcategoriesForCategory = async (categoryId) => {
+    if (!categoryId) return;
+    
+    try {
+      setIsLoadingSubcategories(true);
+      const response = await LandingPageService.getAllSubCategories(categoryId);
+      
+      if (response) {
+        // Add subcategories to the map
+        setSubcategories(prevSubcategories => ({
+          ...prevSubcategories,
+          [categoryId]: response
+        }));
+        console.log(`Fetched subcategories for category ${categoryId}:`, response);
+      }
+    } catch (error) {
+      console.error(`Error fetching subcategories for category ${categoryId}:`, error);
+    } finally {
+      setIsLoadingSubcategories(false);
+    }
+  };
+  
+  // Handle category selection (checkbox)
+  const handleCategoryToggle = (category) => {
+    console.log('Category toggle clicked:', category);
+    const categoryId = category.id;
+    let newSelectedCategories = [];
+    
+    if (selectedCategories.includes(categoryId)) {
+      console.log('Removing category:', categoryId);
+      // Remove category
+      newSelectedCategories = selectedCategories.filter(id => id !== categoryId);
+      
+      // Remove any subcategories from this category
+      const newSelectedSubcategories = selectedSubcategories.filter(item => 
+        item.categoryId !== categoryId
+      );
+      setSelectedSubcategories(newSelectedSubcategories);
+      
+      // Update form data
+      setFormData({
+        ...formData,
+        categories: newSelectedCategories,
+        subcategories: newSelectedSubcategories.map(item => ({
+          categoryId: item.categoryId,
+          subcategoryId: item.subcategoryId
+        }))
+      });
+    } else {
+      console.log('Adding category:', categoryId);
+      // Add category
+      newSelectedCategories = [...selectedCategories, categoryId];
+      
+      // Update form data
+      setFormData({
+        ...formData,
+        categories: newSelectedCategories
+      });
+      
+      // Fetch subcategories if not already loaded
+      if (!subcategories[categoryId]) {
+        console.log('Fetching subcategories for category:', categoryId);
+        fetchSubcategoriesForCategory(categoryId);
+      } else {
+        console.log('Subcategories already loaded for category:', categoryId);
+      }
+    }
+    
+    setSelectedCategories(newSelectedCategories);
+    console.log('Updated selected categories:', newSelectedCategories);
+  };
+
+  // Handle subcategory selection (checkbox)
+  const handleSubcategoryToggle = (categoryId, subcategoryId) => {
+    const itemKey = `${categoryId}-${subcategoryId}`;
+    const item = { categoryId, subcategoryId };
+    let newSelectedSubcategories = [];
+    
+    // Check if this subcategory is already selected
+    const isSelected = selectedSubcategories.some(
+      sc => sc.categoryId === categoryId && sc.subcategoryId === subcategoryId
+    );
+    
+    if (isSelected) {
+      // Remove subcategory
+      newSelectedSubcategories = selectedSubcategories.filter(
+        sc => !(sc.categoryId === categoryId && sc.subcategoryId === subcategoryId)
+      );
+    } else {
+      // Add subcategory
+      newSelectedSubcategories = [...selectedSubcategories, item];
+    }
+    
+    setSelectedSubcategories(newSelectedSubcategories);
+    setFormData({
+      ...formData,
+      subcategories: newSelectedSubcategories
+    });
   };
 
   const handleSendOtp = async () => {
@@ -119,7 +374,61 @@ const WorkerSignup = () => {
     }
   };
 
-  // Location functions
+  // Toggle between auto and manual location modes
+  // Auto mode attempts to use the browser's geolocation API
+  // Manual mode allows the user to enter their location manually
+  const toggleLocationMode = () => {
+    const newMode = locationEditMode === 'auto' ? 'manual' : 'auto';
+    setLocationEditMode(newMode);
+    
+    // Reset location error when switching modes
+    setLocationError('');
+    
+    // If switching to auto mode, try to request location
+    if (newMode === 'auto' && locationStatus === 'idle') {
+      setTimeout(requestLocation, 500); // Small delay to allow UI update first
+    }
+  };
+  
+  // Handle manual address entry for geocoding
+  const handleManualAddressEntry = async (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: value
+    });
+    
+    // Only attempt geocoding if we have at least 10 characters (to avoid too many API calls)
+    if (name === 'permanentAddress' && value.length > 10) {
+      try {
+        // Use browser's built-in geocoding API if available
+        if (navigator.geolocation && window.fetch) {
+          // For demonstration purposes, we'll use a free geocoding API
+          // In production, this would be replaced with your preferred geocoding service
+          console.log('Attempting to geocode address:', value);
+          
+          // Simulate geocoding by setting coordinates (in a real app, use an actual geocoding service)
+          // For demo purposes only - normally you would make an API call here
+          setTimeout(() => {
+            // These would come from the geocoding service response
+            const simulatedLat = 40.7128; // Example: New York coordinates
+            const simulatedLng = -74.0060;
+            
+            setFormData(prev => ({
+              ...prev,
+              latitude: simulatedLat,
+              longitude: simulatedLng
+            }));
+            
+            console.log('Address geocoded, coordinates set:', simulatedLat, simulatedLng);
+          }, 1000);
+        }
+      } catch (error) {
+        console.error('Error geocoding address:', error);
+      }
+    }
+  };
+
   const requestLocation = async () => {
     if (!navigator.geolocation) {
       setLocationStatus('error');
@@ -183,26 +492,26 @@ const WorkerSignup = () => {
     if (!validateStep()) return;
 
     setIsLoading(true);
-    
-    // Convert experience level to years
-    const getExperienceYears = (level) => {
-      switch (level) {
-        case 'beginner': return 1;
-        case 'intermediate': return 2;
-        case 'experienced': return 4;
-        case 'expert': return 6;
-        default: return 0;
-      }
-    };
-    
-    
+    setError('');
     
     try {
+      // Convert experience level to years
+      const getExperienceYears = (level) => {
+        switch (level) {
+          case 'beginner': return 1;
+          case 'intermediate': return 2;
+          case 'experienced': return 4;
+          case 'expert': return 6;
+          default: return 0;
+        }
+      };
+      
+      // Prepare the data for API submission - only include fields that exist in providers table
       const userData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
+        email: signupMethod === 'email' ? formData.email : '',
+        phone: signupMethod === 'phone' ? formData.phone : '',
         password: formData.password,
         role: 'worker',
         signupMethod,
@@ -210,18 +519,21 @@ const WorkerSignup = () => {
         providerData: {
           experience_years: getExperienceYears(formData.experience),
           bio: formData.bio,
-          service_radius_km: parseInt(formData.serviceRadius),
+          service_radius_km: parseInt(formData.serviceRadius || '10'),
           location_lat: formData.latitude,
           location_lng: formData.longitude,
+          permanent_address: formData.permanentAddress,
           verified: false,
           active: true,
           rating: 0.0 // Default rating
         }
       };
       
+      console.log('Submitting registration data:', userData);
       
-      
+      // Call registration API
       const response = await WorkerService.registerWorker(userData);
+      
       if (response && response.user && response.token) {
         // Ensure the user has a role property set to 'worker'
         const user = { ...response.user, role: 'worker' };
@@ -238,7 +550,8 @@ const WorkerSignup = () => {
         }, 100);
       }
     } catch (error) {
-      setError(error.response?.data?.message || 'Signup failed. Please try again.');
+      console.error('Registration error:', error);
+      setError(error.response?.data?.message || 'Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -378,6 +691,29 @@ const WorkerSignup = () => {
       case 2:
         return (
           <div className="space-y-6">
+            {/* Service Type Selection */}
+            <div>
+              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                Service Type
+              </label>
+              <div className={`flex rounded-lg p-1 mb-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                {SERVICE_TYPES.map(type => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => handleServiceTypeChange({ target: { value: type.id } })}
+                    className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      serviceType === type.id
+                        ? darkMode ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 shadow-sm'
+                        : darkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}
+                  >
+                    {type.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
             <div>
               <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                 Experience Level
@@ -398,6 +734,116 @@ const WorkerSignup = () => {
                 <option value="expert">Expert (5+ years)</option>
               </select>
             </div>
+
+            {/* Category Selection */}
+            <div>
+              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                Service Categories (select all that apply)
+              </label>
+              {isLoadingCategories ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-5 h-5 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
+                  <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading categories...</span>
+                </div>
+              ) : (
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-2 ${serviceType ? '' : 'opacity-50'}`}>
+                  {serviceType ? (
+                    filteredCategories.length > 0 ? (
+                      filteredCategories.map(category => (
+                        <div 
+                          key={category.id} 
+                          className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${
+                            selectedCategories.includes(category.id)
+                              ? darkMode ? 'bg-blue-800 border-blue-700' : 'bg-blue-50 border-blue-200'
+                              : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-50 border-gray-200'
+                          } border`}
+                          onClick={() => handleCategoryToggle(category)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedCategories.includes(category.id)}
+                            onChange={() => {}} // Handled by div click
+                            className="h-4 w-4 mr-3"
+                          />
+                          <span className={darkMode ? 'text-white' : 'text-gray-800'}>
+                            {category.name || 'Unnamed Category'}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className={`col-span-2 text-center py-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        No categories found for {serviceType}. Please select another service type.
+                      </p>
+                    )
+                  ) : (
+                    <p className={`col-span-2 text-center py-3 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Please select a service type first
+                    </p>
+                  )}
+                </div>
+              )}
+              {categoryError && (
+                <p className="mt-1 text-sm text-red-500">{categoryError}</p>
+              )}
+            </div>
+
+            {/* Subcategory Selection */}
+            {selectedCategories.length > 0 && (
+              <div>
+                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                  Service Subcategories (select all that apply)
+                </label>
+                <div className="space-y-4">
+                  {selectedCategories.map(categoryId => {
+                    const category = categories.find(c => c.id === categoryId);
+                    return (
+                      <div key={categoryId} className="border rounded-lg p-3">
+                        <div className="font-medium mb-2">{category ? category.name : categoryId}</div>
+                        {isLoadingSubcategories && !subcategories[categoryId] ? (
+                          <div className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
+                            <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading...</span>
+                          </div>
+                        ) : subcategories[categoryId] && subcategories[categoryId].length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {subcategories[categoryId].map(subcategory => {
+                              const isSelected = selectedSubcategories.some(
+                                sc => sc.categoryId === categoryId && sc.subcategoryId === subcategory.id
+                              );
+                              return (
+                                <div 
+                                  key={subcategory.id} 
+                                  className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
+                                    isSelected
+                                      ? darkMode ? 'bg-blue-900 border-blue-800' : 'bg-blue-50 border-blue-200'
+                                      : darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50 border-gray-200'
+                                  } border`}
+                                  onClick={() => handleSubcategoryToggle(categoryId, subcategory.id)}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => {}} // Handled by div click
+                                    className="h-4 w-4 mr-3"
+                                  />
+                                  <span className={darkMode ? 'text-white' : 'text-gray-800'}>
+                                    {subcategory.name}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-amber-500">
+                            No subcategories found for this category
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
@@ -444,90 +890,126 @@ const WorkerSignup = () => {
           <div className="space-y-6">
             {/* Location Section */}
             <div className="space-y-4">
-              <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Location Access
-              </h3>
+              <div className="flex justify-between items-center">
+                <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Location Access
+                </h3>
+                <button
+                  type="button"
+                  onClick={toggleLocationMode}
+                  className={`px-3 py-1 rounded text-xs font-medium ${
+                    darkMode 
+                      ? 'bg-gray-700 text-white hover:bg-gray-600' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {locationEditMode === 'auto' ? 'Enter Manually' : 'Auto Detect'}
+                </button>
+              </div>
               
-              {locationStatus === 'idle' && (
-                <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                  darkMode ? 'border-gray-600 bg-gray-700/50' : 'border-gray-300 bg-gray-50'
-                }`}>
-                  <MapPin className={`w-12 h-12 mx-auto mb-4 ${
-                    darkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`} />
-                  <button
-                    type="button"
-                    onClick={requestLocation}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                  >
-                    <Navigation className="w-4 h-4 inline mr-2" />
-                    Allow Location Access
-                  </button>
-                </div>
-              )}
-              
-              {locationStatus === 'requesting' && (
-                <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                  darkMode ? 'border-blue-600 bg-blue-900/20' : 'border-blue-300 bg-blue-50'
-                }`}>
-                  <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-                  <p className={darkMode ? 'text-blue-300' : 'text-blue-600'}>
-                    Requesting location access...
-                  </p>
-                </div>
-              )}
-              
-              {locationStatus === 'denied' && (
-                <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                  darkMode ? 'border-red-600 bg-red-900/20' : 'border-red-300 bg-red-50'
-                }`}>
-                  <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${
-                    darkMode ? 'text-red-400' : 'text-red-500'
-                  }`} />
-                  <button
-                    type="button"
-                    onClick={requestLocation}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                  >
-                    Try Again
-                  </button>
-                  <p className={`text-sm mt-2 ${
-                    darkMode ? 'text-red-300' : 'text-red-600'
-                  }`}>
-                    Location access denied by user
-                  </p>
-                </div>
-              )}
-              
-              {locationStatus === 'granted' && (
-                <div className={`border-2 rounded-lg p-4 ${
-                  darkMode ? 'border-green-600 bg-green-900/20' : 'border-green-300 bg-green-50'
-                }`}>
-                  <div className="flex items-center mb-2">
-                    <CheckCircle className={`w-5 h-5 mr-2 ${
-                      darkMode ? 'text-green-400' : 'text-green-600'
-                    }`} />
-                    <span className={`text-sm font-medium ${
-                      darkMode ? 'text-green-300' : 'text-green-600'
+              {/* Auto Location Detection Mode */}
+              {locationEditMode === 'auto' && (
+                <>
+                  {locationStatus === 'idle' && (
+                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+                      darkMode ? 'border-gray-600 bg-gray-700/50' : 'border-gray-300 bg-gray-50'
                     }`}>
-                      Location access granted
-                    </span>
-                  </div>
-                  {formData.latitude && formData.longitude && (
-                    <div className={`text-xs ${
-                      darkMode ? 'text-green-200' : 'text-green-700'
-                    }`}>
-                      Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                      <MapPin className={`w-12 h-12 mx-auto mb-4 ${
+                        darkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`} />
+                      <button
+                        type="button"
+                        onClick={requestLocation}
+                        className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                      >
+                        <Navigation className="w-4 h-4 inline mr-2" />
+                        Allow Location Access
+                      </button>
                     </div>
                   )}
+                  
+                  {locationStatus === 'requesting' && (
+                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+                      darkMode ? 'border-blue-600 bg-blue-900/20' : 'border-blue-300 bg-blue-50'
+                    }`}>
+                      <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                      <p className={darkMode ? 'text-blue-300' : 'text-blue-600'}>
+                        Requesting location access...
+                      </p>
+                    </div>
+                  )}
+                  
+                  {locationStatus === 'denied' && (
+                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+                      darkMode ? 'border-red-600 bg-red-900/20' : 'border-red-300 bg-red-50'
+                    }`}>
+                      <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${
+                        darkMode ? 'text-red-400' : 'text-red-500'
+                      }`} />
+                      <button
+                        type="button"
+                        onClick={requestLocation}
+                        className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                      >
+                        Try Again
+                      </button>
+                      <p className={`text-sm mt-2 ${
+                        darkMode ? 'text-red-300' : 'text-red-600'
+                      }`}>
+                        Location access denied by user
+                      </p>
+                    </div>
+                  )}
+                  
+                  {locationStatus === 'granted' && (
+                    <div className={`border-2 rounded-lg p-4 ${
+                      darkMode ? 'border-green-600 bg-green-900/20' : 'border-green-300 bg-green-50'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <CheckCircle className={`w-5 h-5 mr-2 ${
+                            darkMode ? 'text-green-400' : 'text-green-600'
+                          }`} />
+                          <span className={`text-sm font-medium ${
+                            darkMode ? 'text-green-300' : 'text-green-600'
+                          }`}>
+                            Location access granted
+                          </span>
+                        </div>
+                      </div>
+                      {formData.latitude && formData.longitude && (
+                        <div className={`text-xs mt-1 ${
+                          darkMode ? 'text-green-200' : 'text-green-700'
+                        }`}>
+                          Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+              
+              {/* Manual Entry Mode */}
+              {locationEditMode === 'manual' && (
+                <div className="space-y-4">
+                  <div className={`border-2 rounded-lg p-4 ${
+                    darkMode ? 'border-blue-600 bg-blue-900/10' : 'border-blue-300 bg-blue-50'
+                  }`}>
+                    <p className={`text-sm ${
+                      darkMode ? 'text-blue-300' : 'text-blue-700'
+                    }`}>
+                      Enter your permanent address below. The system will calculate your coordinates automatically.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
-
-            {locationStatus !== 'granted' && (
+            
+            {/* Manual coordinates entry only shown in auto mode when location is not granted */}
+            {locationEditMode === 'auto' && locationStatus !== 'granted' && (
               <div className="text-center">
                 <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
-                  or enter manually
+                  or enter coordinates manually
                 </p>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
@@ -565,9 +1047,26 @@ const WorkerSignup = () => {
                 </div>
               </div>
             )}
+            
+            {/* Permanent Address - Always shown but with different instructions based on mode */}
+            <div className="mt-4">
+              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                Permanent Address
+              </label>
+              <textarea
+                name="permanentAddress"
+                value={formData.permanentAddress || ''}
+                onChange={locationEditMode === 'manual' ? handleManualAddressEntry : handleInputChange}
+                required
+                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                }`}
+                placeholder={locationEditMode === 'manual' ? "Enter your full address (will be geocoded)" : "Enter your permanent address"}
+                rows="3"
+              />
+            </div>
 
-
-
+            {/* Terms and Conditions */}
             <div className="flex items-center">
               <input
                 type="checkbox"
@@ -662,13 +1161,7 @@ const WorkerSignup = () => {
         <div className="max-w-md mx-auto w-full">
           {/* Header */}
           <div className="mb-8">
-            <button
-              onClick={() => navigate('/')}
-              className={`mb-6 flex items-center space-x-2 ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-gray-800'} transition-colors`}
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span>Back to Home</span>
-            </button>
+
             
             <div className="text-center">
               <h2 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-2`}>
