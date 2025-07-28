@@ -42,6 +42,15 @@ const WorkerSignup = () => {
     serviceType: '',
     categories: [],
     subcategories: [],
+    // Emergency Contact Fields (as requested in requirements)
+    emergencyContactName: '',
+    emergencyContactRelationship: '',
+    emergencyContactPhone: '',
+    // Banking Details Fields (as requested in requirements)
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    accountHolderName: '',
     agreeToTerms: false
   });
 
@@ -78,11 +87,12 @@ const WorkerSignup = () => {
         setError('Please enter your full name');
         return false;
       }
-      if (signupMethod === 'email' && !formData.email) {
-        setError('Please enter your email');
+      // Both email and phone should be mandatory (as per requirements)
+      if (!formData.email) {
+        setError('Please enter your email address');
         return false;
       }
-      if (signupMethod === 'phone' && !formData.phone) {
+      if (!formData.phone) {
         setError('Please enter your phone number');
         return false;
       }
@@ -92,6 +102,19 @@ const WorkerSignup = () => {
       }
       if (formData.password !== formData.confirmPassword) {
         setError('Passwords do not match');
+        return false;
+      }
+      // Emergency Contact validation (as per requirements)
+      if (!formData.emergencyContactName) {
+        setError('Please enter emergency contact name');
+        return false;
+      }
+      if (!formData.emergencyContactRelationship) {
+        setError('Please enter emergency contact relationship');
+        return false;
+      }
+      if (!formData.emergencyContactPhone) {
+        setError('Please enter emergency contact phone number');
         return false;
       }
     } else if (currentStep === 2) {
@@ -122,6 +145,28 @@ const WorkerSignup = () => {
       }
       if (!formData.permanentAddress) {
         setError('Please enter your permanent address');
+        return false;
+      }
+      // Banking Details validation (as per requirements)
+      if (!formData.bankName) {
+        setError('Please enter bank name');
+        return false;
+      }
+      if (!formData.accountNumber) {
+        setError('Please enter account number');
+        return false;
+      }
+      if (!formData.ifscCode) {
+        setError('Please enter IFSC code');
+        return false;
+      }
+      if (!formData.accountHolderName) {
+        setError('Please enter account holder name');
+        return false;
+      }
+      // Basic IFSC code validation
+      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode)) {
+        setError('Please enter a valid IFSC code (e.g., SBIN0123456)');
         return false;
       }
       if (!formData.agreeToTerms) {
@@ -506,15 +551,24 @@ const WorkerSignup = () => {
         }
       };
       
-      // Prepare the data for API submission - only include fields that exist in providers table
+      // Prepare the data for API submission - including new required fields
       const userData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        email: signupMethod === 'email' ? formData.email : '',
-        phone: signupMethod === 'phone' ? formData.phone : '',
+        email: formData.email, // Both email and phone are mandatory now
+        phone: formData.phone, // Both email and phone are mandatory now
         password: formData.password,
         role: 'worker',
-        signupMethod,
+        signupMethod: 'both', // Since both email and phone are provided
+        // Emergency Contact Data (as per requirements)
+        emergencyContactName: formData.emergencyContactName,
+        emergencyContactRelationship: formData.emergencyContactRelationship,
+        emergencyContactPhone: formData.emergencyContactPhone,
+        // Banking Details Data (as per requirements)
+        bankName: formData.bankName,
+        accountNumber: formData.accountNumber,
+        ifscCode: formData.ifscCode.toUpperCase(),
+        accountHolderName: formData.accountHolderName,
         // Provider specific data (only fields in providers table)
         providerData: {
           experience_years: getExperienceYears(formData.experience),
@@ -597,41 +651,40 @@ const WorkerSignup = () => {
               </div>
             </div>
 
-            {signupMethod === 'email' ? (
-              <div>
-                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                  placeholder="Enter your email"
-                />
-              </div>
-            ) : (
-              <div>
-                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  required
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                  placeholder="Enter your phone number"
-                />
-              </div>
-            )}
+            {/* Both email and phone are mandatory as per requirements */}
+            <div>
+              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                Email Address *
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                required
+                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                }`}
+                placeholder="Enter your email address"
+              />
+            </div>
+
+            <div>
+              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                Phone Number *
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                required
+                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                }`}
+                placeholder="Enter your phone number"
+              />
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -682,6 +735,72 @@ const WorkerSignup = () => {
                   >
                     {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Emergency Contact Section (as per requirements) */}
+            <div className={`border-t pt-6 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+              <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Emergency Contact Information
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                    Next of Kin Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="emergencyContactName"
+                    value={formData.emergencyContactName}
+                    onChange={handleInputChange}
+                    required
+                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                    placeholder="Enter emergency contact name"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      Relationship *
+                    </label>
+                    <select
+                      name="emergencyContactRelationship"
+                      value={formData.emergencyContactRelationship}
+                      onChange={handleInputChange}
+                      required
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                    >
+                      <option value="">Select relationship</option>
+                      <option value="parent">Parent</option>
+                      <option value="spouse">Spouse</option>
+                      <option value="sibling">Sibling</option>
+                      <option value="child">Child</option>
+                      <option value="friend">Friend</option>
+                      <option value="relative">Relative</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      Contact Number *
+                    </label>
+                    <input
+                      type="tel"
+                      name="emergencyContactPhone"
+                      value={formData.emergencyContactPhone}
+                      onChange={handleInputChange}
+                      required
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter contact number"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1047,7 +1166,7 @@ const WorkerSignup = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Permanent Address - Always shown but with different instructions based on mode */}
             <div className="mt-4">
               <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
@@ -1064,6 +1183,87 @@ const WorkerSignup = () => {
                 placeholder={locationEditMode === 'manual' ? "Enter your full address (will be geocoded)" : "Enter your permanent address"}
                 rows="3"
               />
+            </div>
+
+            {/* Banking Details Section (as per requirements) */}
+            <div className={`border-t pt-6 mt-6 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+              <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Banking Details
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                    Bank Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="bankName"
+                    value={formData.bankName}
+                    onChange={handleInputChange}
+                    required
+                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                    placeholder="Enter bank name (e.g., State Bank of India)"
+                  />
+                </div>
+                <div>
+                  <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                    Account Holder Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="accountHolderName"
+                    value={formData.accountHolderName}
+                    onChange={handleInputChange}
+                    required
+                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                    placeholder="Enter account holder name"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      Account Number *
+                    </label>
+                    <input
+                      type="text"
+                      name="accountNumber"
+                      value={formData.accountNumber}
+                      onChange={handleInputChange}
+                      required
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter account number"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      IFSC Code *
+                    </label>
+                    <input
+                      type="text"
+                      name="ifscCode"
+                      value={formData.ifscCode}
+                      onChange={handleInputChange}
+                      required
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter IFSC code (e.g., SBIN0123456)"
+                      style={{ textTransform: 'uppercase' }}
+                    />
+                  </div>
+                </div>
+                <div className={`p-3 rounded-lg ${darkMode ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
+                  <p className={`text-sm ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                    💡 <strong>Note:</strong> This information is required for payment processing. Your banking details are securely encrypted and stored.
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Terms and Conditions */}
@@ -1173,37 +1373,7 @@ const WorkerSignup = () => {
             </div>
           </div>
 
-          {/* Signup Method Toggle - Only on step 1 */}
-          {currentStep === 1 && (
-            <div className="mb-6">
-              <div className={`flex rounded-lg p-1 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                <button
-                  type="button"
-                  onClick={() => setSignupMethod('email')}
-                  className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    signupMethod === 'email'
-                      ? darkMode ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 shadow-sm'
-                      : darkMode ? 'text-gray-300' : 'text-gray-500'
-                  }`}
-                >
-                  <Mail className="w-4 h-4 mr-2" />
-                  Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSignupMethod('phone')}
-                  className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                    signupMethod === 'phone'
-                      ? darkMode ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 shadow-sm'
-                      : darkMode ? 'text-gray-300' : 'text-gray-500'
-                  }`}
-                >
-                  <Phone className="w-4 h-4 mr-2" />
-                  Phone
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Note: Both email and phone are now mandatory (as per requirements) */}
 
           {/* Error Message */}
           {error && (

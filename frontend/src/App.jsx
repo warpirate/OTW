@@ -44,6 +44,8 @@ import WorkerSignup from './app/auth/WorkerSignup';
 import WorkerDashboard from './app/features/worker/WorkerDashboard';
 import WorkerJobs from './app/features/worker/WorkerJobs';
 import WorkerSchedule from './app/features/worker/WorkerSchedule';
+import WorkerProfile from './app/features/worker/WorkerProfile';
+import WorkerSettings from './app/features/worker/WorkerSettings';
 
 // Protected Route Components
 const CustomerProtectedRoute = ({ children }) => {
@@ -383,7 +385,8 @@ function App() {
               <Route path="jobs" element={<WorkerJobs />} />
               <Route path="schedule" element={<WorkerSchedule />} />
               <Route path="earnings" element={<div className="p-8 text-center">Worker Earnings Page (Coming Soon)</div>} />
-              <Route path="profile" element={<div className="p-8 text-center">Worker Profile Page (Coming Soon)</div>} />
+              <Route path="profile" element={<WorkerProfile />} />
+              <Route path="settings" element={<WorkerSettings />} />
             </Route>
 
             {/* Default Redirect Based on Domain */}

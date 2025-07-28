@@ -6,6 +6,8 @@ import WorkerSignup from '../auth/WorkerSignup';
 import WorkerDashboard from '../features/worker/WorkerDashboard';
 import WorkerJobs from '../features/worker/WorkerJobs';
 import WorkerSchedule from '../features/worker/WorkerSchedule';
+import WorkerProfile from '../features/worker/WorkerProfile';
+import WorkerSettings from '../features/worker/WorkerSettings';
 
 // Layouts
 import WorkerLayout from '../layouts/WorkerLayout';
@@ -60,7 +62,7 @@ export const workerRoutes = [
       // Additional worker routes can be added here
       {
         path: "profile",
-        element: <div>Worker Profile Page (Coming Soon)</div>
+        element: <WorkerProfile />
       },
       {
         path: "jobs",
@@ -76,7 +78,7 @@ export const workerRoutes = [
       },
       {
         path: "settings",
-        element: <div>Worker Settings Page (Coming Soon)</div>
+        element: <WorkerSettings />
       }
     ]
   }

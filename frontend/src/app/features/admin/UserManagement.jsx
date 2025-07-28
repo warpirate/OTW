@@ -1,13 +1,67 @@
 import React, { useState } from 'react';
 
-// Mock user data
+// Mock user data (updated with new required fields)
 const initialUsers = [
-  { id: 1, name: 'Priya Sharma', email: 'priya@example.com', phone: '9876543210', type: 'Worker', service: 'Home Cleaning', joinDate: '2023-04-15', status: 'Pending', documents: ['ID Proof', 'Address Proof'] },
+  { 
+    id: 1, 
+    name: 'Priya Sharma', 
+    email: 'priya@example.com', 
+    phone: '9876543210', 
+    type: 'Worker', 
+    service: 'Home Cleaning', 
+    joinDate: '2023-04-15', 
+    status: 'Pending', 
+    documents: ['ID Proof', 'Address Proof'],
+    // New required fields for workers
+    emergencyContactName: 'Raj Sharma',
+    emergencyContactRelationship: 'spouse',
+    emergencyContactPhone: '9876543211',
+    bankName: 'State Bank of India',
+    accountNumber: '123456789012',
+    ifscCode: 'SBIN0123456',
+    accountHolderName: 'Priya Sharma'
+  },
   { id: 2, name: 'Rahul Patel', email: 'rahul@example.com', phone: '8765432109', type: 'Driver', vehicle: 'Sedan', joinDate: '2023-05-22', status: 'Approved', documents: ['License', 'Vehicle RC', 'Insurance'] },
   { id: 3, name: 'Amit Singh', email: 'amit@example.com', phone: '7654321098', type: 'Customer', joinDate: '2023-03-10', status: 'Active', bookings: 7 },
-  { id: 4, name: 'Sneha Kumar', email: 'sneha@example.com', phone: '6543210987', type: 'Worker', service: 'Plumbing', joinDate: '2023-06-05', status: 'Approved', documents: ['ID Proof', 'Skill Certificate'] },
+  { 
+    id: 4, 
+    name: 'Sneha Kumar', 
+    email: 'sneha@example.com', 
+    phone: '6543210987', 
+    type: 'Worker', 
+    service: 'Plumbing', 
+    joinDate: '2023-06-05', 
+    status: 'Approved', 
+    documents: ['ID Proof', 'Skill Certificate'],
+    // New required fields for workers
+    emergencyContactName: 'Ravi Kumar',
+    emergencyContactRelationship: 'sibling',
+    emergencyContactPhone: '6543210988',
+    bankName: 'HDFC Bank',
+    accountNumber: '987654321098',
+    ifscCode: 'HDFC0001234',
+    accountHolderName: 'Sneha Kumar'
+  },
   { id: 5, name: 'Vikas Gupta', email: 'vikas@example.com', phone: '5432109876', type: 'Driver', vehicle: 'Bike', joinDate: '2023-06-18', status: 'Pending', documents: ['License', 'Vehicle RC'] },
-  { id: 6, name: 'Neha Verma', email: 'neha@example.com', phone: '4321098765', type: 'Worker', service: 'Salon', joinDate: '2023-05-30', status: 'Approved', documents: ['ID Proof', 'Certification'] },
+  { 
+    id: 6, 
+    name: 'Neha Verma', 
+    email: 'neha@example.com', 
+    phone: '4321098765', 
+    type: 'Worker', 
+    service: 'Salon', 
+    joinDate: '2023-05-30', 
+    status: 'Approved', 
+    documents: ['ID Proof', 'Certification'],
+    // New required fields for workers
+    emergencyContactName: 'Amit Verma',
+    emergencyContactRelationship: 'parent',
+    emergencyContactPhone: '4321098766',
+    bankName: 'ICICI Bank',
+    accountNumber: '456789012345',
+    ifscCode: 'ICIC0001234',
+    accountHolderName: 'Neha Verma'
+  },
   { id: 7, name: 'Rajesh Kumar', email: 'rajesh@example.com', phone: '3210987654', type: 'Driver', vehicle: 'SUV', joinDate: '2023-06-02', status: 'Rejected', documents: ['License'] },
   { id: 8, name: 'Preeti Joshi', email: 'preeti@example.com', phone: '2109876543', type: 'Customer', joinDate: '2023-04-25', status: 'Active', bookings: 3 },
 ];
@@ -275,6 +329,57 @@ const UserManagement = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Emergency Contact Section for Workers */}
+                {selectedUser.type === 'Worker' && selectedUser.emergencyContactName && (
+                  <div className="mt-6 border-t pt-4">
+                    <h4 className="text-lg font-medium text-gray-900 mb-3">Emergency Contact</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Name</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedUser.emergencyContactName}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Relationship</p>
+                        <p className="mt-1 text-sm text-gray-900 capitalize">{selectedUser.emergencyContactRelationship}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Phone</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedUser.emergencyContactPhone}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Banking Details Section for Workers */}
+                {selectedUser.type === 'Worker' && selectedUser.bankName && (
+                  <div className="mt-6 border-t pt-4">
+                    <h4 className="text-lg font-medium text-gray-900 mb-3">Banking Details</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Bank Name</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedUser.bankName}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Account Holder</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedUser.accountHolderName}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Account Number</p>
+                        <p className="mt-1 text-sm text-gray-900">****{selectedUser.accountNumber.slice(-4)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">IFSC Code</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedUser.ifscCode}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                      <p className="text-xs text-yellow-700">
+                        🔒 Account number is masked for security. Full details available in secure admin panel.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 
                 {selectedUser.documents && selectedUser.documents.length > 0 && (
                   <div className="mt-6">
