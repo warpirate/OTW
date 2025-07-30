@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Phone, Eye, EyeOff, ArrowLeft, CheckCircle, Briefcase, Star, MapPin, Navigation, AlertCircle } from 'lucide-react';
+import { Mail, Phone, Eye, EyeOff, ArrowLeft, CheckCircle, Briefcase, Star } from 'lucide-react';
 import AuthService from '../services/auth.service';
 import WorkerService from '../services/worker.service';
 import { LandingPageService } from '../services/landing_page.service';
@@ -23,7 +23,7 @@ const WorkerSignup = () => {
     const cleanup = addThemeListener((isDark) => setDarkMode(isDark));
     return cleanup;
   }, []);
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -36,8 +36,6 @@ const WorkerSignup = () => {
     experience: '',
     bio: '',
     serviceRadius: '10',
-    latitude: null,
-    longitude: null,
     permanentAddress: {
       street: '',
       city: '',
@@ -61,11 +59,6 @@ const WorkerSignup = () => {
     // agreeToTerms: false
   });
 
-  // Location states
-  const [locationStatus, setLocationStatus] = useState('idle'); // idle, requesting, granted, denied, error
-  const [locationEditMode, setLocationEditMode] = useState('auto'); // 'auto' or 'manual'
-  const [locationError, setLocationError] = useState('');
-  
   // Service type, category and subcategory states
   const [serviceType, setServiceType] = useState(''); // 'maintenance', 'maid', or 'driver'
   const [categories, setCategories] = useState([]);
@@ -97,27 +90,6 @@ const WorkerSignup = () => {
         ...formData,
         [name]: type === 'checkbox' ? checked : value
       });
-    }
-    
-    // Only attempt geocoding if we have at least 10 characters (to avoid too many API calls)
-    if (name === 'permanentAddress.street' && value.length > 10) {
-      try {
-        // Use browser's built-in geocoding API if available
-        if (navigator.geolocation && window.fetch) {
-          const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(value)}&key=${GOOGLE_MAPS_API_KEY}`);
-          const data = await response.json();
-          if (data.results && data.results.length > 0) {
-            const location = data.results[0].geometry.location;
-            setFormData(prev => ({
-              ...prev,
-              latitude: location.lat,
-              longitude: location.lng
-            }));
-          }
-        }
-      } catch (err) {
-        console.error('Geocoding error:', err);
-      }
     }
     
     if (error) setError('');
@@ -181,10 +153,7 @@ const WorkerSignup = () => {
         return false;
       }
     } else if (currentStep === 3) {
-      if (!formData.latitude || !formData.longitude) {
-        setError('Please provide location access or enter coordinates manually');
-        return false;
-      }
+       
       if (!formData.permanentAddress.street || !formData.permanentAddress.city || !formData.permanentAddress.state || !formData.permanentAddress.zip) {
         setError('Please enter your permanent address');
         return false;
@@ -439,130 +408,43 @@ const WorkerSignup = () => {
     }
   };
 
-  // Toggle between auto and manual location modes
-  // Auto mode attempts to use the browser's geolocation API
-  // Manual mode allows the user to enter their location manually
-  const toggleLocationMode = () => {
-    const newMode = locationEditMode === 'auto' ? 'manual' : 'auto';
-    setLocationEditMode(newMode);
-    
-    // Reset location error when switching modes
-    setLocationError('');
-    
-    // If switching to auto mode, try to request location
-    if (newMode === 'auto' && locationStatus === 'idle') {
-      setTimeout(requestLocation, 500); // Small delay to allow UI update first
-    }
-  };
-  
-  // Handle manual address entry for geocoding
-  const handleManualAddressEntry = async (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      permanentAddress: {
-        ...formData.permanentAddress,
-        [name]: value
-      }
-    });
-    
-    // Only attempt geocoding if we have at least 10 characters (to avoid too many API calls)
-    if (name === 'street' && value.length > 10) {
-      try {
-        // Use browser's built-in geocoding API if available
-        if (navigator.geolocation && window.fetch) {
-          // For demonstration purposes, we'll use a free geocoding API
-          // In production, this would be replaced with your preferred geocoding service
-          console.log('Attempting to geocode address:', value);
-          
-          // Simulate geocoding by setting coordinates (in a real app, use an actual geocoding service)
-          // For demo purposes only - normally you would make an API call here
-          setTimeout(() => {
-            // These would come from the geocoding service response
-            const simulatedLat = 40.7128; // Example: New York coordinates
-            const simulatedLng = -74.0060;
-            
-            setFormData(prev => ({
-              ...prev,
-              latitude: simulatedLat,
-              longitude: simulatedLng
-            }));
-            
-            console.log('Address geocoded, coordinates set:', simulatedLat, simulatedLng);
-          }, 1000);
-        }
-      } catch (error) {
-        console.error('Error geocoding address:', error);
-      }
-    }
-  };
-
-  const requestLocation = async () => {
-    if (!navigator.geolocation) {
-      setLocationStatus('error');
-      setLocationError('Geolocation is not supported by this browser');
-      return;
-    }
-
-    setLocationStatus('requesting');
-    setLocationError('');
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        
-        setFormData(prev => ({
-          ...prev,
-          latitude: lat,
-          longitude: lng
-        }));
-        setLocationStatus('granted');
-        setLocationError('');
-        if (error && error.includes('location')) setError('');
-      },
-      (error) => {
-        setLocationStatus('denied');
-        setLocationError('Location access denied by user');
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
-      }
-    );
-  };
-
-  const handleManualLocationEntry = (e) => {
-    const { name, value } = e.target;
-    const numValue = parseFloat(value) || null;
-    
-    setFormData(prev => {
-      const updatedData = {
-        ...prev,
-        [name]: numValue
-      };
-      
-      
-      
-      // Check if both coordinates are filled after this update
-      if (updatedData.latitude && updatedData.longitude) {
-        setLocationStatus('granted');
-        setLocationError('');
-      }
-      
-      return updatedData;
-    });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateStep()) return;
-
+    
     setIsLoading(true);
     setError('');
     
     try {
+      // First get coordinates from address using progressive matching
+      const { street, city, state } = formData.permanentAddress;
+      
+      // Try different address combinations in order of specificity
+      const addressCombinations = [
+        `${street}, ${city}, ${state}, India`,
+        `${city}, ${state}, India`,
+        `${state}, India`
+      ];
+      
+      let latitude = null;
+      let longitude = null;
+      
+      for (const address of addressCombinations) {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json`;
+        const geocodeResponse = await fetch(url);
+        const data = await geocodeResponse.json();
+        
+        if (data && data.length > 0) {
+          latitude = parseFloat(data[0].lat);
+          longitude = parseFloat(data[0].lon);
+          break;
+        }
+      }
+      
+      if (!latitude || !longitude) {
+        throw new Error('Could not determine location from address');
+      }
+      
       // Convert experience level to years
       const getExperienceYears = (level) => {
         switch (level) {
@@ -574,55 +456,48 @@ const WorkerSignup = () => {
         }
       };
       
-      // Prepare the data for API submission - including new required fields
+      // Prepare the data for API submission
       const userData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email, // Both email and phone are mandatory now
-        phone: formData.phone, // Both email and phone are mandatory now
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
         password: formData.password,
-        role: 'worker',
-        signupMethod: 'both', // Since both email and phone are provided
-        // Emergency Contact Data (as per requirements)
-        emergencyContactName: formData.emergencyContactName,
-        emergencyContactRelationship: formData.emergencyContactRelationship,
-        emergencyContactPhone: formData.emergencyContactPhone,
-        // Provider specific data (only fields in providers table)
-        subcategoryIds: formData.subcategories.map(sc => sc.subcategoryId ?? sc.id ?? sc),
-        providerData: {
+        provider_data: {
+          phone: formData.phone,
+          emergency_contact_name: formData.emergencyContactName,
+          emergency_contact_relationship: formData.emergencyContactRelationship,
+          emergency_contact_phone: formData.emergencyContactPhone,
           experience_years: getExperienceYears(formData.experience),
           bio: formData.bio,
           service_radius_km: parseInt(formData.serviceRadius || '10'),
-          location_lat: formData.latitude,
-          location_lng: formData.longitude,
+          location_lat: latitude,
+          location_lng: longitude,
           permanent_address: {
             street: formData.permanentAddress.street,
             city: formData.permanentAddress.city,
             state: formData.permanentAddress.state,
             zip: formData.permanentAddress.zip
           },
+          service_type: formData.serviceType,
+          categories: formData.categories,
+          subcategories: formData.subcategories,
           alternate_email: formData.alternateEmail,
-          alternate_phone_number: formData.alternatePhone,
-          emergency_contact_name: formData.emergencyContactName,
-          emergency_contact_relationship: formData.emergencyContactRelationship,
-          emergency_contact_phone: formData.emergencyContactPhone,
-          verified: false,
-          active: true,
-          rating: 0.0 // Default rating
-        }
+          alternate_phone_number: formData.alternatePhone
+        },
+        subcategory_ids: formData.subcategories.map(sc => sc.id || sc)
       };
       
       console.log('Submitting registration data:', userData);
       
       // Call registration API
-      const response = await WorkerService.registerWorker(userData);
+      const apiResponse = await WorkerService.registerWorker(userData);
       
-      if (response && response.user && response.token) {
+      if (apiResponse && apiResponse.user && apiResponse.token) {
         // Ensure the user has a role property set to 'worker'
-        const user = { ...response.user, role: 'worker' };
+        const user = { ...apiResponse.user, role: 'worker' };
         
         // Use AuthService to store tokens with proper role
-        AuthService._storeTokens(response.token, user);
+        AuthService._storeTokens(apiResponse.token, user);
         
         // Add event to trigger storage listeners
         window.dispatchEvent(new Event('storage'));
@@ -1111,122 +986,6 @@ const WorkerSignup = () => {
               </div>
             </div>
 
-            {/* Location Section */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Location Access
-                </h3>
-                <button
-                  type="button"
-                  onClick={toggleLocationMode}
-                  className={`px-3 py-1 rounded text-xs font-medium ${
-                    darkMode 
-                      ? 'bg-gray-700 text-white hover:bg-gray-600' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {locationEditMode === 'auto' ? 'Enter Manually' : 'Auto Detect'}
-                </button>
-              </div>
-              
-              {/* Auto Location Detection Mode */}
-              {locationEditMode === 'auto' && (
-                <>
-                  {locationStatus === 'idle' && (
-                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                      darkMode ? 'border-gray-600 bg-gray-700/50' : 'border-gray-300 bg-gray-50'
-                    }`}>
-                      <MapPin className={`w-12 h-12 mx-auto mb-4 ${
-                        darkMode ? 'text-gray-400' : 'text-gray-500'
-                      }`} />
-                      <button
-                        type="button"
-                        onClick={requestLocation}
-                        className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                      >
-                        <Navigation className="w-4 h-4 inline mr-2" />
-                        Allow Location Access
-                      </button>
-                    </div>
-                  )}
-                  
-                  {locationStatus === 'requesting' && (
-                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                      darkMode ? 'border-blue-600 bg-blue-900/20' : 'border-blue-300 bg-blue-50'
-                    }`}>
-                      <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-                      <p className={darkMode ? 'text-blue-300' : 'text-blue-600'}>
-                        Requesting location access...
-                      </p>
-                    </div>
-                  )}
-                  
-                  {locationStatus === 'denied' && (
-                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                      darkMode ? 'border-red-600 bg-red-900/20' : 'border-red-300 bg-red-50'
-                    }`}>
-                      <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${
-                        darkMode ? 'text-red-400' : 'text-red-500'
-                      }`} />
-                      <button
-                        type="button"
-                        onClick={requestLocation}
-                        className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                      >
-                        Try Again
-                      </button>
-                      <p className={`text-sm mt-2 ${
-                        darkMode ? 'text-red-300' : 'text-red-600'
-                      }`}>
-                        Location access denied by user
-                      </p>
-                    </div>
-                  )}
-                  
-                  {locationStatus === 'granted' && (
-                    <div className={`border-2 rounded-lg p-4 ${
-                      darkMode ? 'border-green-600 bg-green-900/20' : 'border-green-300 bg-green-50'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <CheckCircle className={`w-5 h-5 mr-2 ${
-                            darkMode ? 'text-green-400' : 'text-green-600'
-                          }`} />
-                          <span className={`text-sm font-medium ${
-                            darkMode ? 'text-green-300' : 'text-green-600'
-                          }`}>
-                            Location access granted
-                          </span>
-                        </div>
-                      </div>
-                      {formData.latitude && formData.longitude && (
-                        <div className={`text-xs mt-1 ${
-                          darkMode ? 'text-green-200' : 'text-green-700'
-                        }`}>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-              
-              {/* Manual Entry Mode */}
-              {locationEditMode === 'manual' && (
-                <div className="space-y-4">
-                  <div className={`border-2 rounded-lg p-4 ${
-                    darkMode ? 'border-blue-600 bg-blue-900/10' : 'border-blue-300 bg-blue-50'
-                  }`}>
-                    <p className={`text-sm ${
-                      darkMode ? 'text-blue-300' : 'text-blue-700'
-                    }`}>
-                      Enter your permanent address below. The system will calculate your coordinates automatically.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Alternate Email and Phone */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -1341,10 +1100,6 @@ const WorkerSignup = () => {
               <div className="flex items-center space-x-3">
                 <Star className="w-6 h-6" />
                 <span>Build your reputation with ratings</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <MapPin className="w-6 h-6" />
-                <span>Work in your local area</span>
               </div>
             </div>
           </div>

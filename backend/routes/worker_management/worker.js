@@ -17,9 +17,9 @@ class WorkerService {
     try {
       await connection.beginTransaction();
 
-      const { firstName, lastName, email, phone, password, providerData, subcategoryIds = [] } = userData;
-      const name = `${firstName} ${lastName}`;
-      console.log('Worker registration attempt:', { email, firstName, lastName, hasProviderData: !!providerData });
+      const { first_name, last_name, email, phone, password, provider_data, subcategory_ids = [] } = userData;
+      const name = `${first_name} ${last_name}`;
+      console.log('Worker registration attempt:', { email, first_name, last_name, hasProviderData: !!provider_data });
       // Check if email already exists
       const [existingUsers] = await connection.query(
         'SELECT id FROM users WHERE email = ? LIMIT 1',
@@ -71,19 +71,19 @@ class WorkerService {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, ?)`,
         [
           userId,
-          providerData.experience_years,
-          providerData.bio,
-          providerData.service_radius_km,
-          providerData.location_lat,
-          providerData.location_lng,
-          providerData.verified || false,
-          providerData.active || true,
-          providerData.rating || 0,
-          providerData.alternate_email,
-          providerData.alternate_phone_number,
-          providerData.emergency_contact_name,
-          providerData.emergency_contact_relationship,
-          providerData.emergency_contact_phone
+          provider_data.experience_years,
+          provider_data.bio,
+          provider_data.service_radius_km,
+          provider_data.location_lat,
+          provider_data.location_lng,
+          provider_data.verified || false,
+          provider_data.active || true,
+          provider_data.rating || 0,
+          provider_data.alternate_email,
+          provider_data.alternate_phone_number,
+          provider_data.emergency_contact_name,
+          provider_data.emergency_contact_relationship,
+          provider_data.emergency_contact_phone
         ]
       );
       
@@ -97,16 +97,16 @@ class WorkerService {
         ) VALUES (?, 'permanent', ?, ?, ?, ?, NOW(), NOW())`,
         [
           providerId,
-          providerData.permanent_address.street,
-          providerData.permanent_address.city,
-          providerData.permanent_address.state,
-          providerData.permanent_address.zip
+          provider_data.permanent_address.street,
+          provider_data.permanent_address.city,
+          provider_data.permanent_address.state,
+          provider_data.permanent_address.zip
         ]
       );
 
       // Map any provided subcategoryIds (either array of numbers or objects) and filter invalid entries
-      const cleanSubcategoryIds = Array.isArray(subcategoryIds)
-        ? subcategoryIds.map(sc => {
+      const cleanSubcategoryIds = Array.isArray(subcategory_ids)
+        ? subcategory_ids.map(sc => {
             if (typeof sc === 'number') return sc;
             if (typeof sc === 'string') return parseInt(sc, 10);
             if (sc && typeof sc === 'object') return sc.subcategoryId || sc.id;
@@ -353,20 +353,20 @@ const authorizeRole = require('../middlewares/authorizeRole');
  * Worker Registration Route
  */
 router.post('/worker/register', async (req, res) => {
-  const { firstName, lastName, email, phone, password, role, providerData, subcategoryIds = [] } = req.body;
+  const { first_name, last_name, email, phone, password, provider_data, subcategory_ids = [] } = req.body;
 
   // Validate required fields
-  if (!firstName || !lastName || !email || !password || !providerData) {
+  if (!first_name || !last_name || !email || !password || !provider_data) {
     return res.status(400).json({
       message: 'Missing required fields',
-      required: ['firstName', 'lastName', 'email', 'password', 'providerData', 'subcategoryIds']
+      required: ['first_name', 'last_name', 'email', 'password', 'provider_data', 'subcategory_ids']
     });
   }
 
   // Validate provider data
   const requiredProviderFields = ['experience_years', 'bio', 'service_radius_km', 'location_lat', 'location_lng'];
   const missingProviderFields = requiredProviderFields.filter(field =>
-    providerData[field] === undefined || providerData[field] === null
+    provider_data[field] === undefined || provider_data[field] === null
   );
 
   if (missingProviderFields.length > 0) {
@@ -377,23 +377,23 @@ router.post('/worker/register', async (req, res) => {
   }
 
   // Validate subcategory IDs
-  if (!Array.isArray(subcategoryIds) || subcategoryIds.length === 0) {
+  if (!Array.isArray(subcategory_ids) || subcategory_ids.length === 0) {
     return res.status(400).json({
       message: 'At least one service subcategory is required',
-      missingFields: ['subcategoryIds']
+      missingFields: ['subcategory_ids']
     });
   }
 
   try {
     const result = await WorkerService.registerWorker({
-      firstName,
-      lastName,
+      first_name,
+      last_name,
       email,
       phone,
       password,
-      providerData,
-      subcategoryIds
-    });
+      provider_data,
+      subcategory_ids
+    });   
 
     res.status(201).json({
       message: 'Worker registered successfully',
