@@ -325,7 +325,7 @@ const LandingPage = () => {
                 We are on the way to make your life easier with our services.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                <button className="btn-accent py-3 px-8 rounded-xl">
+                <button className="btn-accent py-3 px-8 rounded-xl" onClick={() => navigate('/booking')}>
                   Book a Service
                 </button>
               </div>
@@ -886,11 +886,11 @@ const LandingPage = () => {
               Download the OTW app and experience hassle-free services at your doorstep.
             </p>
             <div className="flex flex-col md:flex-row justify-center gap-6">
-              <button className="btn-accent py-4 px-8 rounded-xl flex items-center justify-center gap-3 text-lg">
+              <button className="btn-accent py-4 px-8 rounded-xl flex items-center justify-center gap-3 text-lg" onClick={() => window.open('https://mockappstore.com/otw-app', '_blank')}>
                 <Smartphone className="h-6 w-6" />
                 Download App
               </button>
-              <button className="btn-outline text-white border-white hover:bg-white/10 py-4 px-8 rounded-xl flex items-center justify-center gap-3 text-lg">
+              <button className="btn-outline text-white border-white hover:bg-white/10 py-4 px-8 rounded-xl flex items-center justify-center gap-3 text-lg" onClick={() => window.open('tel:+1234567890')}>
                 <Phone className="h-6 w-6" />
                 Book via Call
               </button>

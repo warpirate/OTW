@@ -34,19 +34,17 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold mb-6 text-white">Services</h3>
             <ul className="space-y-3">
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Maintenance</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Maid Services</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Driver Services</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Plumbing</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">AC Services</a></li>
+              <li><a onClick={() => navigate('/category/1/Maintenance')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Maintenance</a></li>
+              <li><a onClick={() => navigate('/category/2/Maid%20Services')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Maid Services</a></li>
+              <li><a onClick={() => navigate('/category/3/Driver%20Services')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Driver Services</a></li>
             </ul>
           </div>
           
           <div>
             <h3 className="text-lg font-semibold mb-6 text-white">Company</h3>
             <ul className="space-y-3">
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">About Us</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
+              <li><a onClick={() => navigate('/about-us')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">About Us</a></li>
+              <li><a onClick={() => navigate('/careers')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Careers</a></li>
               <li>
                 <button 
                   onClick={() => navigate('/worker/signup')}
@@ -55,10 +53,10 @@ const Footer = () => {
                   👷 Become a Worker
                 </button>
               </li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms & Conditions</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
-              <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
+              <li><a onClick={() => navigate('/terms')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Terms & Conditions</a></li>
+              <li><a onClick={() => navigate('/privacy')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Privacy Policy</a></li>
+              <li><a onClick={() => navigate('/blog')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Blog</a></li>
+              <li><a onClick={() => navigate('/contact')} className="text-gray-400 hover:text-white transition-colors cursor-pointer">Contact</a></li>
             </ul>
           </div>
           

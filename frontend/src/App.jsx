@@ -19,6 +19,12 @@ import Booking from './app/customer/Booking';
 import BookingSuccess from './app/customer/BookingSuccess';
 import CustomerProfile from './app/customer/CustomerProfile';
 import SearchResults from './app/customer/SearchResults';
+import AboutUs from './app/customer/AboutUs';
+import Careers from './app/customer/Careers';
+import Blog from './app/customer/Blog';
+import Contact from './app/customer/Contact';
+import Terms from './app/customer/Terms';
+import Privacy from './app/customer/Privacy';
 
 // Admin Components
 import AdminLayout from './app/layouts/AdminLayout';
@@ -317,6 +323,13 @@ function App() {
       <CartProvider>
         <div className="App">
           <Routes>
+            {/* Standalone Info Pages */}
+            <Route path="/about-us" element={<AboutUs />} />
+            <Route path="/careers" element={<Careers />} />
+            <Route path="/blog" element={<Blog />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/privacy" element={<Privacy />} />
             {/* Customer Routes */}
             <Route path="/" element={<CustomerLayout />}>
               <Route index element={<LandingPage />} />

@@ -372,164 +372,88 @@ const UserManagement = () => {
 
       {/* Provider Detail Modal */}
       {showModal && selectedProvider && (
-        <div className="fixed inset-0 overflow-y-auto z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black opacity-50"></div>
           <div className="relative bg-white rounded-lg max-w-2xl w-full mx-auto shadow-xl">
             <div className="p-6">
+              {/* Header */}
               <div className="flex justify-between items-center border-b pb-3">
-                <h3 className="text-lg font-medium text-gray-900">Provider Details</h3>
-                <button 
-                  className="text-gray-400 hover:text-gray-500"
-                  onClick={() => setShowModal(false)}
-                >
+                <h1 className="text-lg font-medium text-brand">{selectedProvider.name}</h1>
+                <button className="text-gray-400 hover:text-brand" onClick={() => setShowModal(false)}>
                   <i className="fas fa-times"></i>
                 </button>
               </div>
-              
-              <div className="py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Name</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Email</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Phone</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Experience</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.experience_years} years</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Join Date</p>
-                    <p className="mt-1 text-sm text-gray-900">{new Date(selectedProvider.created_at).toLocaleDateString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Status</p>
-                    <p className={`mt-1 text-sm font-semibold 
-                      ${selectedProvider.verified && selectedProvider.active ? 'text-green-600' : 
-                        !selectedProvider.verified && selectedProvider.active ? 'text-yellow-600' : 
-                        'text-red-600'}`}>
-                      {getStatusBadge(selectedProvider).text}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Rating</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.rating.toFixed(1)} ⭐</p>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Service Radius</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.service_radius_km} km</p>
-                  </div>
-                  
-                  {selectedProvider.bio && (
-                    <div className="col-span-2">
-                      <p className="text-sm font-medium text-gray-500">Bio</p>
-                      <p className="mt-1 text-sm text-gray-900">{selectedProvider.bio}</p>
-                    </div>
-                  )}
+
+              {/* Basic Info */}
+              <div className="py-4 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Email</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.email}</p>
                 </div>
-
-                {/* Location Information */}
-                {selectedProvider.location && (
-                  <div className="mt-6 border-t pt-4">
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Location</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Latitude</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.location.lat}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Longitude</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.location.lng}</p>
-                      </div>
-                      {selectedProvider.permanent_address && (
-                        <div className="col-span-2">
-                          <p className="text-sm font-medium text-gray-500">Address</p>
-                          <p className="mt-1 text-sm text-gray-900">{selectedProvider.permanent_address}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Emergency Contact Section */}
-                {selectedProvider.emergency_contact && selectedProvider.emergency_contact.name && (
-                  <div className="mt-6 border-t pt-4">
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Emergency Contact</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Name</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.emergency_contact.name}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Relationship</p>
-                        <p className="mt-1 text-sm text-gray-900 capitalize">{selectedProvider.emergency_contact.relationship}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Phone</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.emergency_contact.phone}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Services Offered */}
-                {selectedProvider.services && selectedProvider.services.length > 0 && (
-                  <div className="mt-6 border-t pt-4">
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Services Offered</h4>
-                    <div className="grid grid-cols-1 gap-2">
-                      {selectedProvider.services.map((service, index) => (
-                        <div key={index} className="flex items-center p-2 bg-gray-50 rounded">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{service.category_name}</p>
-                            <p className="text-xs text-gray-500">{service.subcategory_name}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Additional Contact Info */}
-                {(selectedProvider.alternate_email || selectedProvider.alternate_phone_number) && (
-                  <div className="mt-6 border-t pt-4">
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Additional Contact</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      {selectedProvider.alternate_email && (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Alternate Email</p>
-                          <p className="mt-1 text-sm text-gray-900">{selectedProvider.alternate_email}</p>
-                        </div>
-                      )}
-                      {selectedProvider.alternate_phone_number && (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Alternate Phone</p>
-                          <p className="mt-1 text-sm text-gray-900">{selectedProvider.alternate_phone_number}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Last Active */}
-                {selectedProvider.last_active_at && (
-                  <div className="mt-6 border-t pt-4">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Last Active</p>
-                      <p className="mt-1 text-sm text-gray-900">{new Date(selectedProvider.last_active_at).toLocaleString()}</p>
-                    </div>
-                  </div>
-                )}
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Phone</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.phone}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Experience</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.experience_years} years</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Join Date</p>
+                  <p className="mt-1 text-sm text-gray-900">{new Date(selectedProvider.created_at).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <p className={`mt-1 text-sm font-semibold ${selectedProvider.verified && selectedProvider.active ? 'text-green-600' : !selectedProvider.verified && selectedProvider.active ? 'text-yellow-600' : 'text-red-600'}`}>{getStatusBadge(selectedProvider).text}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Rating</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.rating?.toFixed(1) || 'N/A'} ⭐</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Service Radius</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.service_radius_km} km</p>
+                </div>
               </div>
-              
-              <div className="border-t pt-4 flex justify-between">
+
+              {/* Bio */}
+              {selectedProvider.bio && (
+                <div className="py-2 border-t">
+                  <p className="text-sm font-medium text-gray-500">Bio</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.bio}</p>
+                </div>
+              )}
+
+              {/* Location */}
+              {selectedProvider.permanent_address && (
+                <div className="py-2 border-t">
+                  <p className="text-sm font-medium text-gray-500">Permanent Address</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.permanent_address}</p>
+                </div>
+              )}
+
+              {/* Emergency Contact */}
+              {selectedProvider.emergency_contact && (
+                <div className="py-2 border-t">
+                  <p className="text-sm font-medium text-gray-500">Emergency Contact</p>
+                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.emergency_contact.name} ({selectedProvider.emergency_contact.relationship}) - {selectedProvider.emergency_contact.phone}</p>
+                </div>
+              )}
+
+              {/* Services Offered */}
+              {selectedProvider.services && selectedProvider.services.length > 0 && (
+                <div className="py-2 border-t">
+                  <p className="text-sm font-medium text-gray-500">Services Offered</p>
+                  <ul className="mt-1 text-sm text-gray-900 list-disc pl-5">
+                    {selectedProvider.services.map((service, idx) => (
+                      <li key={idx}>{service.category_name} - {service.subcategory_name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="border-t pt-4 flex flex-col sm:flex-row sm:justify-between gap-3 mt-4">
                 <button 
                   className="px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                   onClick={() => handleDeleteProvider(selectedProvider.id)}
@@ -537,8 +461,7 @@ const UserManagement = () => {
                 >
                   {actionLoading ? 'Processing...' : 'Delete Provider'}
                 </button>
-                
-                <div className="flex space-x-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:ml-auto">
                   {!selectedProvider.verified && (
                     <>
                       <button 
