@@ -39,11 +39,10 @@ const WorkerProfile = () => {
     experience_years: 0,
     bio: '',
     service_radius_km: 0,
-    permanent_address: '',
-    permanent_street: '',
-    permanent_city: '',
-    permanent_state: '',
-    permanent_zip: '',
+    street_address: '',
+    city: '',
+    state: '',
+    zip_code: '',
     alternate_email: '',
     alternate_phone_number: '',
     emergency_contact_name: '',
@@ -54,7 +53,8 @@ const WorkerProfile = () => {
     rating: 0.0,
     provider_id: null,
     created_at: null,
-    updated_at: null
+    updated_at: null,
+    subcategories: []
   });
   
   const [editedProfile, setEditedProfile] = useState({});
@@ -122,7 +122,7 @@ const WorkerProfile = () => {
   const getProfileCompletionStatus = (profileData) => {
     const allFields = [
       'name', 'phone_number', 'bio', 'experience_years', 'service_radius_km', 
-      'permanent_street', 'permanent_city', 'permanent_state', 'permanent_zip',
+      'street_address', 'city', 'state', 'zip_code',
       'alternate_email', 'alternate_phone_number', 'emergency_contact_name', 
       'emergency_contact_relationship', 'emergency_contact_phone'
     ];
@@ -167,17 +167,17 @@ const WorkerProfile = () => {
     }
     
     // Validate permanent address fields
-    if (!profileData.permanent_street || profileData.permanent_street.trim() === '') {
-      errors.permanent_street = 'Street address is required';
+    if (!profileData.street_address || profileData.street_address.trim() === '') {
+      errors.street_address = 'Street address is required';
     }
-    if (!profileData.permanent_city || profileData.permanent_city.trim() === '') {
-      errors.permanent_city = 'City is required';
+    if (!profileData.city || profileData.city.trim() === '') {
+      errors.city = 'City is required';
     }
-    if (!profileData.permanent_state || profileData.permanent_state.trim() === '') {
-      errors.permanent_state = 'State is required';
+    if (!profileData.state || profileData.state.trim() === '') {
+      errors.state = 'State is required';
     }
-    if (!profileData.permanent_zip || profileData.permanent_zip.trim() === '') {
-      errors.permanent_zip = 'ZIP code is required';
+    if (!profileData.zip_code || profileData.zip_code.trim() === '') {
+      errors.zip_code = 'ZIP code is required';
     }
     
     return {
@@ -206,11 +206,10 @@ const WorkerProfile = () => {
         experience_years: editedProfile.experience_years,
         bio: editedProfile.bio,
         service_radius_km: editedProfile.service_radius_km,
-        permanent_street: editedProfile.permanent_street,
-        permanent_city: editedProfile.permanent_city,
-        permanent_state: editedProfile.permanent_state,
-        permanent_zip: editedProfile.permanent_zip,
-        permanent_address: `${editedProfile.permanent_street}, ${editedProfile.permanent_city}, ${editedProfile.permanent_state} ${editedProfile.permanent_zip}`,
+        street_address: editedProfile.street_address,
+        city: editedProfile.city,
+        state: editedProfile.state,
+        zip_code: editedProfile.zip_code,
         alternate_email: editedProfile.alternate_email,
         alternate_phone_number: editedProfile.alternate_phone_number,
         emergency_contact_name: editedProfile.emergency_contact_name,
@@ -397,11 +396,11 @@ const WorkerProfile = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                      profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip
+                      profile.street_address && profile.city && profile.state && profile.zip_code
                         ? 'bg-green-500' 
                         : 'bg-gray-300'
                     }`}>
-                      {profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip ? (
+                      {profile.street_address && profile.city && profile.state && profile.zip_code ? (
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
@@ -414,11 +413,11 @@ const WorkerProfile = () => {
                     </span>
                   </div>
                   <span className={`text-xs ${
-                    profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip
+                    profile.street_address && profile.city && profile.state && profile.zip_code
                       ? 'text-green-600' 
                       : 'text-gray-500'
                   }`}>
-                    {profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip ? 'Complete' : 'Incomplete'}
+                    {profile.street_address && profile.city && profile.state && profile.zip_code ? 'Complete' : 'Incomplete'}
                   </span>
                 </div>
 
@@ -674,8 +673,8 @@ const WorkerProfile = () => {
                     {isEditing ? (
                       <input
                         type="text"
-                        name="permanent_street"
-                        value={editedProfile.permanent_street || ''}
+                        name="street_address"
+                        value={editedProfile.street_address || ''}
                         onChange={handleInputChange}
                         className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                           darkMode 
@@ -688,7 +687,7 @@ const WorkerProfile = () => {
                       <div className={`w-full px-3 py-2 border rounded-lg ${
                         darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                       }`}>
-                        {profile.permanent_street || 'Not provided'}
+                        {profile.street_address || 'Not provided'}
                       </div>
                     )}
                   </div>
@@ -701,8 +700,8 @@ const WorkerProfile = () => {
                       {isEditing ? (
                         <input
                           type="text"
-                          name="permanent_city"
-                          value={editedProfile.permanent_city || ''}
+                          name="city"
+                          value={editedProfile.city || ''}
                           onChange={handleInputChange}
                           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                             darkMode 
@@ -715,7 +714,7 @@ const WorkerProfile = () => {
                         <div className={`w-full px-3 py-2 border rounded-lg ${
                           darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                         }`}>
-                          {profile.permanent_city || 'Not provided'}
+                          {profile.city || 'Not provided'}
                         </div>
                       )}
                     </div>
@@ -726,8 +725,8 @@ const WorkerProfile = () => {
                       {isEditing ? (
                         <input
                           type="text"
-                          name="permanent_state"
-                          value={editedProfile.permanent_state || ''}
+                          name="state"
+                          value={editedProfile.state || ''}
                           onChange={handleInputChange}
                           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                             darkMode 
@@ -740,7 +739,7 @@ const WorkerProfile = () => {
                         <div className={`w-full px-3 py-2 border rounded-lg ${
                           darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                         }`}>
-                          {profile.permanent_state || 'Not provided'}
+                          {profile.state || 'Not provided'}
                         </div>
                       )}
                     </div>
@@ -751,8 +750,8 @@ const WorkerProfile = () => {
                       {isEditing ? (
                         <input
                           type="text"
-                          name="permanent_zip"
-                          value={editedProfile.permanent_zip || ''}
+                          name="zip_code"
+                          value={editedProfile.zip_code || ''}
                           onChange={handleInputChange}
                           className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                             darkMode 
@@ -765,7 +764,7 @@ const WorkerProfile = () => {
                         <div className={`w-full px-3 py-2 border rounded-lg ${
                           darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                         }`}>
-                          {profile.permanent_zip || 'Not provided'}
+                          {profile.zip_code || 'Not provided'}
                         </div>
                       )}
                     </div>
@@ -1010,6 +1009,21 @@ const WorkerProfile = () => {
                   </div>
                 )}
               </div>
+
+              {profile.subcategories?.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-medium mb-2">Services Offered</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {profile.subcategories.map(sub => (
+                      <div key={sub.id} className="p-3 bg-gray-50 rounded-lg">
+                        <h4 className="font-medium">{sub.name}</h4>
+                        {sub.description && <p className="text-sm text-gray-600">{sub.description}</p>}
+                        {sub.base_price && <p className="text-sm text-gray-800 mt-1">Base price: ₹{sub.base_price}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

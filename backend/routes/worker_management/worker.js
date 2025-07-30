@@ -65,11 +65,10 @@ class WorkerService {
         `INSERT INTO providers (
           user_id, experience_years, bio, service_radius_km, 
           location_lat, location_lng, verified, active, rating,
-          created_at, updated_at, permanent_address,
-          alternate_email, alternate_phone_number,
-          emergency_contact_name, emergency_contact_relationship,
-          emergency_contact_phone 
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, ?, ?)`,
+          created_at, updated_at, alternate_email,
+          alternate_phone_number, emergency_contact_name, 
+          emergency_contact_relationship, emergency_contact_phone
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, ?)`,
         [
           userId,
           providerData.experience_years,
@@ -80,7 +79,6 @@ class WorkerService {
           providerData.verified || false,
           providerData.active || true,
           providerData.rating || 0,
-          providerData.permanent_address,
           providerData.alternate_email,
           providerData.alternate_phone_number,
           providerData.emergency_contact_name,
@@ -88,8 +86,23 @@ class WorkerService {
           providerData.emergency_contact_phone
         ]
       );
-
+      
       const providerId = providerResult.insertId;
+      
+      // Insert permanent address
+      await connection.query(
+        `INSERT INTO provider_addresses (
+          provider_id, address_type, street_address, city, 
+          state, zip_code, created_at, updated_at
+        ) VALUES (?, 'permanent', ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          providerId,
+          providerData.permanent_address.street,
+          providerData.permanent_address.city,
+          providerData.permanent_address.state,
+          providerData.permanent_address.zip
+        ]
+      );
 
       // Map any provided subcategoryIds (either array of numbers or objects) and filter invalid entries
       const cleanSubcategoryIds = Array.isArray(subcategoryIds)
@@ -147,27 +160,38 @@ class WorkerService {
    * Get worker profile with provider data
    */
   static async getWorkerProfile(userId) {
+    const connection = await pool.getConnection();
     try {
-      const [results] = await pool.query(
-        `SELECT 
-          u.id, u.name, u.email, u.phone_number,
-          p.id as provider_id, p.experience_years, p.bio, p.rating,
-          p.verified, p.active, p.service_radius_km,
-          p.location_lat, p.location_lng, p.last_active_at,
-          p.created_at, p.updated_at
-        FROM users u
-        LEFT JOIN providers p ON u.id = p.user_id
-        WHERE u.id = ? AND u.is_active = 1`,
+      // Get basic provider info
+      const [provider] = await connection.query(
+        `SELECT p.*, 
+          a.street_address, a.city, a.state, a.zip_code,
+          u.name, u.email, u.phone_number
+         FROM providers p
+         LEFT JOIN provider_addresses a ON p.id = a.provider_id AND a.address_type = 'permanent'
+         LEFT JOIN users u ON p.user_id = u.id
+
+         WHERE p.user_id = ?`,
         [userId]
       );
-
-      if (results.length === 0) {
-        throw new Error('Worker not found');
-      }
-
-      return results[0];
-    } catch (error) {
-      throw error;
+      
+      if (!provider.length) return null;
+      
+      // Get provider services/subcategories
+      const [subcategories] = await connection.query(
+        `SELECT s.id, s.name, s.description, s.base_price
+         FROM provider_services ps
+         JOIN subcategories s ON ps.subcategory_id = s.id
+         WHERE ps.provider_id = ?`,
+        [provider[0].id]
+      );
+      
+      return {
+        ...provider[0],
+        subcategories
+      };
+    } finally {
+      connection.release();
     }
   }
 
@@ -176,64 +200,43 @@ class WorkerService {
    */
   static async updateWorkerProfile(userId, updateData) {
     const connection = await pool.getConnection();
-
+    await connection.beginTransaction();
+    
     try {
-      await connection.beginTransaction();
-
-      // Update users table if user data provided
-      if (updateData.name || updateData.phone_number) {
-        const userUpdates = [];
-        const userValues = [];
-
-        if (updateData.name) {
-          userUpdates.push('name = ?');
-          userValues.push(updateData.name);
-        }
-        if (updateData.phone_number) {
-          userUpdates.push('phone_number = ?');
-          userValues.push(updateData.phone_number);
-        }
-
-        if (userUpdates.length > 0) {
-          userValues.push(userId);
-          await connection.query(
-            `UPDATE users SET ${userUpdates.join(', ')} WHERE id = ?`,
-            userValues
-          );
-        }
-      }
-
-      // Update providers table if provider data provided
-      const providerFields = [
-        'experience_years', 'bio', 'service_radius_km',
-        'location_lat', 'location_lng', 'active'
-      ];
-
-      const providerUpdates = [];
-      const providerValues = [];
-
-      providerFields.forEach(field => {
-        if (updateData[field] !== undefined) {
-          providerUpdates.push(`${field} = ?`);
-          providerValues.push(updateData[field]);
-        }
-      });
-
-      if (providerUpdates.length > 0) {
-        providerUpdates.push('updated_at = NOW()');
-        providerValues.push(userId);
-
+      // Update provider basic info
+      await connection.query(
+        `UPDATE providers SET 
+          experience_years = ?, bio = ?, service_radius_km = ?,
+          location_lat = ?, location_lng = ?, updated_at = NOW()
+         WHERE user_id = ?`,
+        [
+          updateData.experience_years,
+          updateData.bio,
+          updateData.service_radius_km,
+          updateData.location_lat,
+          updateData.location_lng,
+          userId
+        ]
+      );
+      
+      // Update address if provided
+      if (updateData.street_address) {
         await connection.query(
-          `UPDATE providers SET ${providerUpdates.join(', ')} WHERE user_id = ?`,
-          providerValues
+          `UPDATE provider_addresses SET
+            street_address = ?, city = ?, state = ?, zip_code = ?, updated_at = NOW()
+           WHERE provider_id = (SELECT id FROM providers WHERE user_id = ?) AND address_type = 'permanent'`,
+          [
+            updateData.street_address,
+            updateData.city,
+            updateData.state,
+            updateData.zip_code,
+            userId
+          ]
         );
       }
-
+      
       await connection.commit();
-
-      // Return updated profile
       return await this.getWorkerProfile(userId);
-
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -495,215 +498,379 @@ router.put('/worker/profile', verifyToken, async (req, res) => {
     });
   }
 });
-
-// ------------------------
-// Get All Workers (Admin Only)
-// ------------------------
-router.get('/worker/all', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+// Get worker settings
+router.get('/worker/settings', verifyToken, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const filters = {};
+    const [settings] = await pool.query(
+      `SELECT * FROM provider_settings 
+       WHERE provider_id = (SELECT id FROM providers WHERE user_id = ?)`,
+      [req.user.id]
+    );
     
-    // Parse filters from query params
-    if (req.query.verified !== undefined) {
-      filters.verified = req.query.verified === 'true';
+    if (settings.length === 0) {
+      // Return default settings if none exist
+      return res.json({
+        notify_on_job_alerts: true,
+        notify_on_messages: true,
+        notify_on_payments: true,
+        notify_by_sms: false,
+        notify_by_push: true,
+        notify_by_email: false,
+        auto_accept_jobs: false,
+        max_jobs_per_day: 5,
+        allow_weekend_work: true,
+        allow_holiday_work: false,
+        profile_visibility: 'public',
+        display_rating: true,
+        allow_direct_contact: true,
+        location_sharing_mode: 'on_job',
+        preferred_language: 'en',
+        preferred_currency: 'INR',
+        distance_unit: 'km',
+        time_format: '24h',
+        working_hours_start: '09:00',
+        working_hours_end: '18:00'
+      });
     }
     
-    if (req.query.active !== undefined) {
-      filters.active = req.query.active === 'true';
-    }
-    
-    if (req.query.location) {
-      filters.location = true;
-    }
-    
-    console.log('Admin fetching workers:', { page, limit, filters });
-    
-    const result = await WorkerService.getAllWorkers(page, limit, filters);
-    
-    res.json({
-      message: 'Workers retrieved successfully',
-      ...result
-    });
-    
+    res.json(settings[0]);
   } catch (error) {
-    console.error('Get all workers error:', error);
-    
-    res.status(500).json({ 
-      message: 'Failed to retrieve workers',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// ------------------------
-// Get Specific Worker (Admin Only)
-// ------------------------
-router.get('/worker/:workerId', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+// Update worker settings
+router.put('/worker/settings', verifyToken, async (req, res) => {
+  const {
+    notify_on_job_alerts,
+    notify_on_messages,
+    notify_on_payments,
+    notify_by_sms,
+    notify_by_push,
+    auto_accept_jobs,
+    max_jobs_per_day,
+    allow_weekend_work,
+    allow_holiday_work,
+    profile_visibility,
+    display_rating,
+    allow_direct_contact,
+    location_sharing_mode,
+    preferred_language,
+    preferred_currency,
+    distance_unit,
+    time_format
+  , working_hours_start,
+  working_hours_end
+  } = req.body;
+  
   try {
-    const workerId = req.params.workerId;
+    // Check if settings exist
+    const [existing] = await pool.query(
+      `SELECT id FROM provider_settings 
+       WHERE provider_id = (SELECT id FROM providers WHERE user_id = ?)`,
+      [req.user.id]
+    );
     
-    if (!workerId || isNaN(workerId)) {
-      return res.status(400).json({ message: 'Invalid worker ID' });
+    if (existing.length > 0) {
+      // Update existing settings
+      await pool.query(
+        `UPDATE provider_settings SET
+          notify_on_job_alerts = ?,
+          notify_on_messages = ?,
+          notify_on_payments = ?,
+          notify_by_sms = ?,
+          notify_by_push = ?,
+          auto_accept_jobs = ?,
+          max_jobs_per_day = ?,
+          allow_weekend_work = ?,
+          allow_holiday_work = ?,
+          profile_visibility = ?,
+          display_rating = ?,
+          allow_direct_contact = ?,
+          location_sharing_mode = ?,
+          preferred_language = ?,
+          preferred_currency = ?,
+          distance_unit = ?,
+          time_format = ?,
+          working_hours_start = ?,
+          working_hours_end = ?,
+          updated_at = NOW()
+        WHERE provider_id = (SELECT id FROM providers WHERE user_id = ?)`,
+        [
+          notify_on_job_alerts,
+          notify_on_messages,
+          notify_on_payments,
+          notify_by_sms,
+          notify_by_push,
+          auto_accept_jobs,
+          max_jobs_per_day,
+          allow_weekend_work,
+          allow_holiday_work,
+          profile_visibility,
+          display_rating,
+          allow_direct_contact,
+          location_sharing_mode,
+          preferred_language,
+          preferred_currency,
+          distance_unit,
+          time_format,
+          working_hours_start,
+          working_hours_end,
+          req.user.id
+        ]
+      );
+    } else {
+      // Create new settings
+      await pool.query(
+        `INSERT INTO provider_settings (
+          provider_id, notify_on_job_alerts, notify_on_messages, notify_on_payments,
+          notify_by_sms, notify_by_push, auto_accept_jobs, max_jobs_per_day,
+          allow_weekend_work, allow_holiday_work, profile_visibility, display_rating,
+          allow_direct_contact, location_sharing_mode, preferred_language,
+          preferred_currency, distance_unit, time_format, working_hours_start, working_hours_end, created_at, updated_at
+        ) VALUES (
+          (SELECT id FROM providers WHERE user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW()
+        )`,
+        [
+          req.user.id,
+          notify_on_job_alerts,
+          notify_on_messages,
+          notify_on_payments,
+          notify_by_sms,
+          notify_by_push,
+          auto_accept_jobs,
+          max_jobs_per_day,
+          allow_weekend_work,
+          allow_holiday_work,
+          profile_visibility,
+          display_rating,
+          allow_direct_contact,
+          location_sharing_mode,
+          preferred_language,
+          preferred_currency,
+          distance_unit,
+          time_format,
+          working_hours_start,
+          working_hours_end
+        ]
+      );
     }
     
-    const profile = await WorkerService.getWorkerProfile(parseInt(workerId));
-    
-    res.json({
-      message: 'Worker profile retrieved successfully',
-      profile
-    });
-    
+    res.json({ message: 'Settings updated successfully' });
   } catch (error) {
-    console.error('Get worker by ID error:', error);
-    
-    if (error.message === 'Worker not found') {
-      return res.status(404).json({ message: error.message });
-    }
-    
-    res.status(500).json({ 
-      message: 'Failed to retrieve worker profile',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
+// // ------------------------
+// // Get All Workers (Admin Only)
+// // ------------------------
+// router.get('/worker/all', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+//   try {
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = parseInt(req.query.limit) || 20;
+//     const filters = {};
+    
+//     // Parse filters from query params
+//     if (req.query.verified !== undefined) {
+//       filters.verified = req.query.verified === 'true';
+//     }
+    
+//     if (req.query.active !== undefined) {
+//       filters.active = req.query.active === 'true';
+//     }
+    
+//     if (req.query.location) {
+//       filters.location = true;
+//     }
+    
+//     console.log('Admin fetching workers:', { page, limit, filters });
+    
+//     const result = await WorkerService.getAllWorkers(page, limit, filters);
+    
+//     res.json({
+//       message: 'Workers retrieved successfully',
+//       ...result
+//     });
+    
+//   } catch (error) {
+//     console.error('Get all workers error:', error);
+    
+//     res.status(500).json({ 
+//       message: 'Failed to retrieve workers',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//     });
+//   }
+// });
 
-// ------------------------
-// Update Worker Verification Status (Admin Only)
-// ------------------------
-router.patch('/worker/:workerId/verify', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
-  try {
-    const workerId = req.params.workerId;
-    const { verified } = req.body;
+// // ------------------------
+// // Get Specific Worker (Admin Only)
+// // ------------------------
+// router.get('/worker/:workerId', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+//   try {
+//     const workerId = req.params.workerId;
     
-    if (!workerId || isNaN(workerId)) {
-      return res.status(400).json({ message: 'Invalid worker ID' });
-    }
+//     if (!workerId || isNaN(workerId)) {
+//       return res.status(400).json({ message: 'Invalid worker ID' });
+//     }
     
-    if (typeof verified !== 'boolean') {
-      return res.status(400).json({ message: 'Verified status must be a boolean' });
-    }
+//     const profile = await WorkerService.getWorkerProfile(parseInt(workerId));
     
-    console.log('Admin updating worker verification:', { 
-      workerId, 
-      verified, 
-      adminId: req.user.id 
-    });
+//     res.json({
+//       message: 'Worker profile retrieved successfully',
+//       profile
+//     });
     
-    const updatedProfile = await WorkerService.updateVerificationStatus(parseInt(workerId), verified);
+//   } catch (error) {
+//     console.error('Get worker by ID error:', error);
     
-    res.json({
-      message: `Worker ${verified ? 'verified' : 'unverified'} successfully`,
-      profile: updatedProfile
-    });
+//     if (error.message === 'Worker not found') {
+//       return res.status(404).json({ message: error.message });
+//     }
     
-  } catch (error) {
-    console.error('Update verification status error:', error);
-    
-    if (error.message === 'Worker not found') {
-      return res.status(404).json({ message: error.message });
-    }
-    
-    res.status(500).json({ 
-      message: 'Failed to update verification status',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
+//     res.status(500).json({ 
+//       message: 'Failed to retrieve worker profile',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//     });
+//   }
+// });
 
-// ------------------------
-// Update Worker Activity Status (Admin Only)
-// ------------------------
-router.patch('/worker/:workerId/activity', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
-  try {
-    const workerId = req.params.workerId;
-    const { active } = req.body;
+// // ------------------------
+// // Update Worker Verification Status (Admin Only)
+// // ------------------------
+// router.patch('/worker/:workerId/verify', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+//   try {
+//     const workerId = req.params.workerId;
+//     const { verified } = req.body;
     
-    if (!workerId || isNaN(workerId)) {
-      return res.status(400).json({ message: 'Invalid worker ID' });
-    }
+//     if (!workerId || isNaN(workerId)) {
+//       return res.status(400).json({ message: 'Invalid worker ID' });
+//     }
     
-    if (typeof active !== 'boolean') {
-      return res.status(400).json({ message: 'Active status must be a boolean' });
-    }
+//     if (typeof verified !== 'boolean') {
+//       return res.status(400).json({ message: 'Verified status must be a boolean' });
+//     }
     
-    console.log('Admin updating worker activity:', { 
-      workerId, 
-      active, 
-      adminId: req.user.id 
-    });
+//     console.log('Admin updating worker verification:', { 
+//       workerId, 
+//       verified, 
+//       adminId: req.user.id 
+//     });
     
-    const updatedProfile = await WorkerService.updateWorkerProfile(parseInt(workerId), { active });
+//     const updatedProfile = await WorkerService.updateVerificationStatus(parseInt(workerId), verified);
     
-    res.json({
-      message: `Worker ${active ? 'activated' : 'deactivated'} successfully`,
-      profile: updatedProfile
-    });
+//     res.json({
+//       message: `Worker ${verified ? 'verified' : 'unverified'} successfully`,
+//       profile: updatedProfile
+//     });
     
-  } catch (error) {
-    console.error('Update activity status error:', error);
+//   } catch (error) {
+//     console.error('Update verification status error:', error);
     
-    if (error.message === 'Worker not found') {
-      return res.status(404).json({ message: error.message });
-    }
+//     if (error.message === 'Worker not found') {
+//       return res.status(404).json({ message: error.message });
+//     }
     
-    res.status(500).json({ 
-      message: 'Failed to update activity status',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
+//     res.status(500).json({ 
+//       message: 'Failed to update verification status',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//     });
+//   }
+// });
 
-// ------------------------
-// Worker Dashboard Stats
-// ------------------------
-router.get('/worker/dashboard/stats', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
+// // ------------------------
+// // Update Worker Activity Status (Admin Only)
+// // ------------------------
+// router.patch('/worker/:workerId/activity', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+//   try {
+//     const workerId = req.params.workerId;
+//     const { active } = req.body;
     
-    // Update last active
-    await WorkerService.updateLastActive(userId);
+//     if (!workerId || isNaN(workerId)) {
+//       return res.status(400).json({ message: 'Invalid worker ID' });
+//     }
     
-    // Get worker profile for basic stats
-    const profile = await WorkerService.getWorkerProfile(userId);
+//     if (typeof active !== 'boolean') {
+//       return res.status(400).json({ message: 'Active status must be a boolean' });
+//     }
     
-    // Basic stats structure (expand as needed)
-    const stats = {
-      profile: {
-        verified: profile.verified,
-        active: profile.active,
-        rating: parseFloat(profile.rating) || 0,
-        experience_years: profile.experience_years,
-        service_radius: profile.service_radius_km
-      },
-      // Placeholder for job-related stats
-      jobs: {
-        total: 0,
-        completed: 0,
-        pending: 0,
-        cancelled: 0
-      },
-      earnings: {
-        total: 0,
-        thisMonth: 0,
-        lastMonth: 0
-      }
-    };
+//     console.log('Admin updating worker activity:', { 
+//       workerId, 
+//       active, 
+//       adminId: req.user.id 
+//     });
     
-    res.json({
-      message: 'Dashboard stats retrieved successfully',
-      stats
-    });
+//     const updatedProfile = await WorkerService.updateWorkerProfile(parseInt(workerId), { active });
     
-  } catch (error) {
-    console.error('Get dashboard stats error:', error);
+//     res.json({
+//       message: `Worker ${active ? 'activated' : 'deactivated'} successfully`,
+//       profile: updatedProfile
+//     });
     
-    res.status(500).json({ 
-      message: 'Failed to retrieve dashboard stats',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
+//   } catch (error) {
+//     console.error('Update activity status error:', error);
+    
+//     if (error.message === 'Worker not found') {
+//       return res.status(404).json({ message: error.message });
+//     }
+    
+//     res.status(500).json({ 
+//       message: 'Failed to update activity status',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//     });
+//   }
+// });
+
+// // ------------------------
+// // Worker Dashboard Stats
+// // ------------------------
+// router.get('/worker/dashboard/stats', verifyToken, async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+    
+//     // Update last active
+//     await WorkerService.updateLastActive(userId);
+    
+//     // Get worker profile for basic stats
+//     const profile = await WorkerService.getWorkerProfile(userId);
+    
+//     // Basic stats structure (expand as needed)
+//     const stats = {
+//       profile: {
+//         verified: profile.verified,
+//         active: profile.active,
+//         rating: parseFloat(profile.rating) || 0,
+//         experience_years: profile.experience_years,
+//         service_radius: profile.service_radius_km
+//       },
+//       // Placeholder for job-related stats
+//       jobs: {
+//         total: 0,
+//         completed: 0,
+//         pending: 0,
+//         cancelled: 0
+//       },
+//       earnings: {
+//         total: 0,
+//         thisMonth: 0,
+//         lastMonth: 0
+//       }
+//     };
+    
+//     res.json({
+//       message: 'Dashboard stats retrieved successfully',
+//       stats
+//     });
+    
+//   } catch (error) {
+//     console.error('Get dashboard stats error:', error);
+    
+//     res.status(500).json({ 
+//       message: 'Failed to retrieve dashboard stats',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//     });
+//   }
+// });
 
 module.exports = router;

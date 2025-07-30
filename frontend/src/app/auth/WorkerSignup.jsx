@@ -38,7 +38,12 @@ const WorkerSignup = () => {
     serviceRadius: '10',
     latitude: null,
     longitude: null,
-    permanentAddress: '',
+    permanentAddress: {
+      street: '',
+      city: '',
+      state: '',
+      zip: ''
+    },
     serviceType: '',
     categories: [],
     subcategories: [],
@@ -74,12 +79,47 @@ const WorkerSignup = () => {
   
 
 
-  const handleInputChange = (e) => {
+  const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value
-    });
+    
+    // Handle nested fields (like permanentAddress)
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.');
+      setFormData({
+        ...formData,
+        [parent]: {
+          ...formData[parent],
+          [child]: type === 'checkbox' ? checked : value
+        }
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: type === 'checkbox' ? checked : value
+      });
+    }
+    
+    // Only attempt geocoding if we have at least 10 characters (to avoid too many API calls)
+    if (name === 'permanentAddress.street' && value.length > 10) {
+      try {
+        // Use browser's built-in geocoding API if available
+        if (navigator.geolocation && window.fetch) {
+          const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(value)}&key=${GOOGLE_MAPS_API_KEY}`);
+          const data = await response.json();
+          if (data.results && data.results.length > 0) {
+            const location = data.results[0].geometry.location;
+            setFormData(prev => ({
+              ...prev,
+              latitude: location.lat,
+              longitude: location.lng
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('Geocoding error:', err);
+      }
+    }
+    
     if (error) setError('');
   };
 
@@ -145,7 +185,7 @@ const WorkerSignup = () => {
         setError('Please provide location access or enter coordinates manually');
         return false;
       }
-      if (!formData.permanentAddress) {
+      if (!formData.permanentAddress.street || !formData.permanentAddress.city || !formData.permanentAddress.state || !formData.permanentAddress.zip) {
         setError('Please enter your permanent address');
         return false;
       }
@@ -420,11 +460,14 @@ const WorkerSignup = () => {
     const { name, value } = e.target;
     setFormData({
       ...formData,
-      [name]: value
+      permanentAddress: {
+        ...formData.permanentAddress,
+        [name]: value
+      }
     });
     
     // Only attempt geocoding if we have at least 10 characters (to avoid too many API calls)
-    if (name === 'permanentAddress' && value.length > 10) {
+    if (name === 'street' && value.length > 10) {
       try {
         // Use browser's built-in geocoding API if available
         if (navigator.geolocation && window.fetch) {
@@ -552,7 +595,12 @@ const WorkerSignup = () => {
           service_radius_km: parseInt(formData.serviceRadius || '10'),
           location_lat: formData.latitude,
           location_lng: formData.longitude,
-          permanent_address: formData.permanentAddress,
+          permanent_address: {
+            street: formData.permanentAddress.street,
+            city: formData.permanentAddress.city,
+            state: formData.permanentAddress.state,
+            zip: formData.permanentAddress.zip
+          },
           alternate_email: formData.alternateEmail,
           alternate_phone_number: formData.alternatePhone,
           emergency_contact_name: formData.emergencyContactName,
@@ -988,6 +1036,81 @@ const WorkerSignup = () => {
       case 3:
         return (
           <div className="space-y-6">
+            {/* Address Section */}
+            <div className={`border-t pt-6 mt-6 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
+              <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Permanent Address
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                    Street Address *
+                  </label>
+                  <input
+                    type="text"
+                    name="permanentAddress.street"
+                    value={formData.permanentAddress.street || ''}
+                    onChange={handleInputChange}
+                    required
+                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                    placeholder="Enter street address"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      name="permanentAddress.city"
+                      value={formData.permanentAddress.city || ''}
+                      onChange={handleInputChange}
+                      required
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter city"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      State *
+                    </label>
+                    <input
+                      type="text"
+                      name="permanentAddress.state"
+                      value={formData.permanentAddress.state || ''}
+                      onChange={handleInputChange}
+                      required
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter state"
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                      ZIP Code *
+                    </label>
+                    <input
+                      type="text"
+                      name="permanentAddress.zip"
+                      value={formData.permanentAddress.zip || ''}
+                      onChange={handleInputChange}
+                      required
+                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                      placeholder="Enter ZIP code"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Location Section */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
@@ -1102,24 +1225,6 @@ const WorkerSignup = () => {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Permanent Address - Always shown but with different instructions based on mode */}
-            <div className="mt-4">
-              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                Permanent Address
-              </label>
-              <textarea
-                name="permanentAddress"
-                value={formData.permanentAddress || ''}
-                onChange={locationEditMode === 'manual' ? handleManualAddressEntry : handleInputChange}
-                required
-                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                }`}
-                placeholder={locationEditMode === 'manual' ? "Enter your full address (will be geocoded)" : "Enter your permanent address"}
-                rows="3"
-              />
             </div>
 
             {/* Alternate Email and Phone */}

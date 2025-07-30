@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+ 
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft,
@@ -20,54 +21,20 @@ import {
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
+import workerService from '../../services/worker.service'
 import { toast } from 'react-toastify';
 
-const WorkerSettings = () => {
+export default function WorkerSettings() {
+  // Memoize currentUser so that its reference stays stable between renders.
+  const currentUser = useMemo(() => AuthService.getCurrentUser('worker'), []);
+  const [settings, setSettings] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(isDarkMode());
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  
-  // Settings state
-  const [settings, setSettings] = useState({
-    // Notification preferences
-    notifications: {
-      newJobAlerts: true,
-      messageAlerts: true,
-      paymentAlerts: true,
-      promotionalEmails: false,
-      smsNotifications: true,
-      pushNotifications: true
-    },
-    
-    // Availability settings
-    availability: {
-      autoAcceptJobs: false,
-      maxJobsPerDay: 5,
-      workingHours: {
-        start: '09:00',
-        end: '18:00'
-      },
-      weekendWork: true,
-      holidayWork: false
-    },
-    
-    // Privacy settings
-    privacy: {
-      showProfileToCustomers: true,
-      showRatingPublicly: true,
-      allowDirectContact: true,
-      shareLocationData: true
-    },
-    
-    // App preferences
-    preferences: {
-      language: 'en',
-      currency: 'INR',
-      distanceUnit: 'km',
-      timeFormat: '24h'
-    }
-  });
 
   // Listen for theme changes
   useEffect(() => {
@@ -86,26 +53,25 @@ const WorkerSettings = () => {
       navigate('/worker/login');
       return;
     }
-    
-    // Load settings from localStorage or API
-    loadSettings();
   }, [navigate]);
 
-  const loadSettings = () => {
-    setLoading(true);
-    try {
-      // For now, load from localStorage
-      const savedSettings = localStorage.getItem('workerSettings');
-      if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await workerService.getSettings();
+        setSettings(response);
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+        setError('Failed to load settings');
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading settings:', error);
-      toast.error('Failed to load settings');
-    } finally {
-      setLoading(false);
+    };
+    
+    if (currentUser) {
+      fetchSettings();
     }
-  };
+  }, []);
 
   const handleSettingChange = (category, setting, value) => {
     setSettings(prev => ({
@@ -130,21 +96,20 @@ const WorkerSettings = () => {
     }));
   };
 
-  const handleSaveSettings = async () => {
-    setSaving(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    
     try {
-      // For now, save to localStorage
-      localStorage.setItem('workerSettings', JSON.stringify(settings));
-      
-      // TODO: Send to backend API when available
-      // await WorkerService.updateSettings(settings);
-      
-      toast.success('Settings saved successfully!');
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      toast.error('Failed to save settings');
+      await workerService.updateSettings(settings);
+      setSuccess('Settings updated successfully');
+    } catch (err) {
+      console.error('Failed to update settings:', err);
+      setError(err.message || 'Failed to update settings');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
 
@@ -241,6 +206,8 @@ const WorkerSettings = () => {
     </div>
   );
 
+  if (loading) return <div>Loading settings...</div>;
+
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Header */}
@@ -278,7 +245,7 @@ const WorkerSettings = () => {
                 Reset to Default
               </button>
               <button
-                onClick={handleSaveSettings}
+                onClick={handleSubmit}
                 disabled={saving}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50"
               >
@@ -308,7 +275,7 @@ const WorkerSettings = () => {
               description="Get notified when new jobs match your criteria"
               control={
                 <ToggleSwitch
-                  enabled={settings.notifications.newJobAlerts}
+                  enabled={settings.notifications?.newJobAlerts}
                   onChange={(value) => handleSettingChange('notifications', 'newJobAlerts', value)}
                 />
               }
@@ -319,7 +286,7 @@ const WorkerSettings = () => {
               description="Receive notifications for new messages from customers"
               control={
                 <ToggleSwitch
-                  enabled={settings.notifications.messageAlerts}
+                  enabled={settings.notifications?.messageAlerts}
                   onChange={(value) => handleSettingChange('notifications', 'messageAlerts', value)}
                 />
               }
@@ -330,7 +297,7 @@ const WorkerSettings = () => {
               description="Get notified about payments and earnings"
               control={
                 <ToggleSwitch
-                  enabled={settings.notifications.paymentAlerts}
+                  enabled={settings.notifications?.paymentAlerts}
                   onChange={(value) => handleSettingChange('notifications', 'paymentAlerts', value)}
                 />
               }
@@ -341,7 +308,7 @@ const WorkerSettings = () => {
               description="Receive important updates via SMS"
               control={
                 <ToggleSwitch
-                  enabled={settings.notifications.smsNotifications}
+                  enabled={settings.notifications?.smsNotifications}
                   onChange={(value) => handleSettingChange('notifications', 'smsNotifications', value)}
                 />
               }
@@ -352,7 +319,7 @@ const WorkerSettings = () => {
               description="Allow the app to send push notifications"
               control={
                 <ToggleSwitch
-                  enabled={settings.notifications.pushNotifications}
+                  enabled={settings.notifications?.pushNotifications}
                   onChange={(value) => handleSettingChange('notifications', 'pushNotifications', value)}
                 />
               }
@@ -363,7 +330,7 @@ const WorkerSettings = () => {
               description="Receive emails about new features and promotions"
               control={
                 <ToggleSwitch
-                  enabled={settings.notifications.promotionalEmails}
+                  enabled={settings.notifications?.promotionalEmails}
                   onChange={(value) => handleSettingChange('notifications', 'promotionalEmails', value)}
                 />
               }
@@ -381,7 +348,7 @@ const WorkerSettings = () => {
               description="Automatically accept jobs that match your criteria"
               control={
                 <ToggleSwitch
-                  enabled={settings.availability.autoAcceptJobs}
+                  enabled={settings.availability?.autoAcceptJobs}
                   onChange={(value) => handleSettingChange('availability', 'autoAcceptJobs', value)}
                 />
               }
@@ -392,7 +359,7 @@ const WorkerSettings = () => {
               description="Limit the number of jobs you can take in a day"
               control={
                 <select
-                  value={settings.availability.maxJobsPerDay}
+                  value={settings.availability?.maxJobsPerDay}
                   onChange={(e) => handleSettingChange('availability', 'maxJobsPerDay', parseInt(e.target.value))}
                   className={`px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     darkMode 
@@ -418,7 +385,7 @@ const WorkerSettings = () => {
                   </label>
                   <input
                     type="time"
-                    value={settings.availability.workingHours.start}
+                    value={settings.availability?.workingHours?.start}
                     onChange={(e) => handleNestedSettingChange('availability', 'workingHours', 'start', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       darkMode 
@@ -433,7 +400,7 @@ const WorkerSettings = () => {
                   </label>
                   <input
                     type="time"
-                    value={settings.availability.workingHours.end}
+                    value={settings.availability?.workingHours?.end}
                     onChange={(e) => handleNestedSettingChange('availability', 'workingHours', 'end', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       darkMode 
@@ -447,10 +414,10 @@ const WorkerSettings = () => {
             
             <SettingRow
               label="Weekend Work"
-              description="Accept jobs on weekends (Saturday & Sunday)"
+              description="Allow jobs during weekends"
               control={
                 <ToggleSwitch
-                  enabled={settings.availability.weekendWork}
+                  enabled={settings.availability?.weekendWork}
                   onChange={(value) => handleSettingChange('availability', 'weekendWork', value)}
                 />
               }
@@ -458,10 +425,10 @@ const WorkerSettings = () => {
             
             <SettingRow
               label="Holiday Work"
-              description="Accept jobs on public holidays"
+              description="Allow jobs during public holidays"
               control={
                 <ToggleSwitch
-                  enabled={settings.availability.holidayWork}
+                  enabled={settings.availability?.holidayWork}
                   onChange={(value) => handleSettingChange('availability', 'holidayWork', value)}
                 />
               }
@@ -476,10 +443,10 @@ const WorkerSettings = () => {
           >
             <SettingRow
               label="Show Profile to Customers"
-              description="Allow customers to see your profile information"
+              description="Allow customers to see your profile and contact you"
               control={
                 <ToggleSwitch
-                  enabled={settings.privacy.showProfileToCustomers}
+                  enabled={settings.privacy?.showProfileToCustomers}
                   onChange={(value) => handleSettingChange('privacy', 'showProfileToCustomers', value)}
                 />
               }
@@ -487,10 +454,10 @@ const WorkerSettings = () => {
             
             <SettingRow
               label="Show Rating Publicly"
-              description="Display your rating and reviews to other users"
+              description="Display your rating on your profile"
               control={
                 <ToggleSwitch
-                  enabled={settings.privacy.showRatingPublicly}
+                  enabled={settings.privacy?.showRatingPublicly}
                   onChange={(value) => handleSettingChange('privacy', 'showRatingPublicly', value)}
                 />
               }
@@ -498,10 +465,10 @@ const WorkerSettings = () => {
             
             <SettingRow
               label="Allow Direct Contact"
-              description="Let customers contact you directly through the app"
+              description="Let customers contact you directly via phone or email"
               control={
                 <ToggleSwitch
-                  enabled={settings.privacy.allowDirectContact}
+                  enabled={settings.privacy?.allowDirectContact}
                   onChange={(value) => handleSettingChange('privacy', 'allowDirectContact', value)}
                 />
               }
@@ -509,10 +476,10 @@ const WorkerSettings = () => {
             
             <SettingRow
               label="Share Location Data"
-              description="Allow the app to use your location for job matching"
+              description="Share your location with customers during jobs"
               control={
                 <ToggleSwitch
-                  enabled={settings.privacy.shareLocationData}
+                  enabled={settings.privacy?.shareLocationData}
                   onChange={(value) => handleSettingChange('privacy', 'shareLocationData', value)}
                 />
               }
@@ -530,7 +497,7 @@ const WorkerSettings = () => {
               description="Choose your preferred language"
               control={
                 <select
-                  value={settings.preferences.language}
+                  value={settings.preferences?.language}
                   onChange={(e) => handleSettingChange('preferences', 'language', e.target.value)}
                   className={`px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     darkMode 
@@ -551,7 +518,7 @@ const WorkerSettings = () => {
               description="Display prices in your preferred currency"
               control={
                 <select
-                  value={settings.preferences.currency}
+                  value={settings.preferences?.currency}
                   onChange={(e) => handleSettingChange('preferences', 'currency', e.target.value)}
                   className={`px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     darkMode 
@@ -570,7 +537,7 @@ const WorkerSettings = () => {
               description="Choose how distances are displayed"
               control={
                 <select
-                  value={settings.preferences.distanceUnit}
+                  value={settings.preferences?.distanceUnit}
                   onChange={(e) => handleSettingChange('preferences', 'distanceUnit', e.target.value)}
                   className={`px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     darkMode 
@@ -589,7 +556,7 @@ const WorkerSettings = () => {
               description="Choose 12-hour or 24-hour time display"
               control={
                 <select
-                  value={settings.preferences.timeFormat}
+                  value={settings.preferences?.timeFormat}
                   onChange={(e) => handleSettingChange('preferences', 'timeFormat', e.target.value)}
                   className={`px-3 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     darkMode 
@@ -631,6 +598,4 @@ const WorkerSettings = () => {
       </div>
     </div>
   );
-};
-
-export default WorkerSettings; 
+}
