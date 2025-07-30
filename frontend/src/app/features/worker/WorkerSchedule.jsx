@@ -10,13 +10,17 @@ import {
   Save,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Settings,
+  Bell
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
+import AuthService from '../../services/auth.service';
 
 const WorkerSchedule = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(isDarkMode());
+  const [user, setUser] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isAvailable, setIsAvailable] = useState(true);
   const [editingSlot, setEditingSlot] = useState(null);
@@ -37,8 +41,18 @@ const WorkerSchedule = () => {
   useEffect(() => {
     setDarkMode(isDarkMode());
     const cleanup = addThemeListener((isDark) => setDarkMode(isDark));
+    
+    // Get user data using AuthService for worker role
+    const userInfo = AuthService.getCurrentUser('worker');
+    const userRole = userInfo?.role?.toLowerCase();
+    if (userInfo && (userRole === 'worker' || userRole === 'provider')) {
+      setUser(userInfo);
+    } else {
+      navigate('/worker/login');
+    }
+    
     return cleanup;
-  }, []);
+  }, [navigate]);
 
   const daysOfWeek = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
@@ -147,6 +161,30 @@ const WorkerSchedule = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                <Bell className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => navigate('/worker/settings')}
+                className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                title="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => navigate('/worker/profile')}
+                className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                title="Profile"
+              >
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-semibold text-sm">
+                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                  </span>
+                </div>
+                <span className={`hidden sm:block ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {user?.firstName} {user?.lastName}
+                </span>
+              </button>
               <div className="flex items-center space-x-2">
                 <label className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   Available for work:

@@ -261,6 +261,13 @@ const WorkerSettings = () => {
             
             <div className="flex items-center space-x-3">
               <button
+                onClick={() => navigate('/worker/profile')}
+                className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                title="Profile"
+              >
+                <User className="w-5 h-5" />
+              </button>
+              <button
                 onClick={handleResetSettings}
                 className={`px-4 py-2 rounded-lg border transition-colors ${
                   darkMode 

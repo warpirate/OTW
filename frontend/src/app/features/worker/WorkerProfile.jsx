@@ -15,7 +15,8 @@ import {
   Star,
   Shield,
   CheckCircle,
-  XCircle
+  XCircle,
+  Settings
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
@@ -38,8 +39,16 @@ const WorkerProfile = () => {
     experience_years: 0,
     bio: '',
     service_radius_km: 0,
-    location_lat: '',
-    location_lng: '',
+    permanent_address: '',
+    permanent_street: '',
+    permanent_city: '',
+    permanent_state: '',
+    permanent_zip: '',
+    alternate_email: '',
+    alternate_phone_number: '',
+    emergency_contact_name: '',
+    emergency_contact_relationship: '',
+    emergency_contact_phone: '',
     verified: false,
     active: true,
     rating: 0.0,
@@ -103,7 +112,6 @@ const WorkerProfile = () => {
       formattedPhone: profileData.phone_number ? 
         profileData.phone_number.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3') : 
         null,
-      hasLocation: profileData.location_lat && profileData.location_lng,
       experienceDisplay: profileData.experience_years ? 
         `${profileData.experience_years} year${profileData.experience_years !== 1 ? 's' : ''}` : 
         'Not specified'
@@ -112,8 +120,14 @@ const WorkerProfile = () => {
 
   // Get profile completion status
   const getProfileCompletionStatus = (profileData) => {
-    const requiredFields = ['bio', 'experience_years', 'service_radius_km', 'location_lat', 'location_lng'];
-    const completedFields = requiredFields.filter(field => {
+    const allFields = [
+      'name', 'phone_number', 'bio', 'experience_years', 'service_radius_km', 
+      'permanent_street', 'permanent_city', 'permanent_state', 'permanent_zip',
+      'alternate_email', 'alternate_phone_number', 'emergency_contact_name', 
+      'emergency_contact_relationship', 'emergency_contact_phone'
+    ];
+    
+    const completedFields = allFields.filter(field => {
       const value = profileData[field];
       if (field === 'experience_years' || field === 'service_radius_km') {
         return value && value > 0;
@@ -121,11 +135,14 @@ const WorkerProfile = () => {
       return value && value.toString().trim().length > 0;
     });
     
+    // Calculate completion based on all fields
+    const completionPercentage = Math.round((completedFields.length / allFields.length) * 100);
+    
     return {
-      completionPercentage: Math.round((completedFields.length / requiredFields.length) * 100),
+      completionPercentage,
       completedFields: completedFields.length,
-      totalFields: requiredFields.length,
-      missingFields: requiredFields.filter(field => {
+      totalFields: allFields.length,
+      missingFields: allFields.filter(field => {
         const value = profileData[field];
         if (field === 'experience_years' || field === 'service_radius_km') {
           return !value || value <= 0;
@@ -149,17 +166,19 @@ const WorkerProfile = () => {
       errors.service_radius_km = 'Service radius must be between 1 and 100 km';
     }
     
-    // Validate latitude range
-    if (profileData.location_lat && (profileData.location_lat < -90 || profileData.location_lat > 90)) {
-      errors.location_lat = 'Latitude must be between -90 and 90';
+    // Validate permanent address fields
+    if (!profileData.permanent_street || profileData.permanent_street.trim() === '') {
+      errors.permanent_street = 'Street address is required';
     }
-    
-    // Validate longitude range
-    if (profileData.location_lng && (profileData.location_lng < -180 || profileData.location_lng > 180)) {
-      errors.location_lng = 'Longitude must be between -180 and 180';
+    if (!profileData.permanent_city || profileData.permanent_city.trim() === '') {
+      errors.permanent_city = 'City is required';
     }
-    
-   
+    if (!profileData.permanent_state || profileData.permanent_state.trim() === '') {
+      errors.permanent_state = 'State is required';
+    }
+    if (!profileData.permanent_zip || profileData.permanent_zip.trim() === '') {
+      errors.permanent_zip = 'ZIP code is required';
+    }
     
     return {
       isValid: Object.keys(errors).length === 0,
@@ -187,8 +206,16 @@ const WorkerProfile = () => {
         experience_years: editedProfile.experience_years,
         bio: editedProfile.bio,
         service_radius_km: editedProfile.service_radius_km,
-        location_lat: editedProfile.location_lat,
-        location_lng: editedProfile.location_lng,
+        permanent_street: editedProfile.permanent_street,
+        permanent_city: editedProfile.permanent_city,
+        permanent_state: editedProfile.permanent_state,
+        permanent_zip: editedProfile.permanent_zip,
+        permanent_address: `${editedProfile.permanent_street}, ${editedProfile.permanent_city}, ${editedProfile.permanent_state} ${editedProfile.permanent_zip}`,
+        alternate_email: editedProfile.alternate_email,
+        alternate_phone_number: editedProfile.alternate_phone_number,
+        emergency_contact_name: editedProfile.emergency_contact_name,
+        emergency_contact_relationship: editedProfile.emergency_contact_relationship,
+        emergency_contact_phone: editedProfile.emergency_contact_phone,
         active: editedProfile.active
       };
 
@@ -270,6 +297,15 @@ const WorkerProfile = () => {
                 My Profile
               </h1>
             </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => navigate('/worker/settings')}
+                className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                title="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -281,17 +317,27 @@ const WorkerProfile = () => {
             <h2 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               Worker Profile
             </h2>
-            <p className={`mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <p className={`mb-6 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Manage your professional information and service settings
             </p>
-            
-            {/* Profile Completion Indicator */}
-            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-4 shadow-sm`}>
-              <div className="flex items-center justify-between mb-2">
-                <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Profile Completion
-                </span>
-                <span className={`text-sm font-bold ${
+          </div>
+
+          {/* Profile Completion Setup Guide */}
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm border ${darkMode ? 'border-gray-700' : 'border-gray-200'} mb-8`}>
+            <div className="flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}">
+              <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Profile Setup Guide
+              </h3>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    completionStatus.completionPercentage === 100 
+                      ? 'bg-green-500' 
+                      : completionStatus.completionPercentage >= 60 
+                        ? 'bg-yellow-500' 
+                        : 'bg-red-500'
+                  }`}></div>
+                  <span className={`text-sm font-medium ${
                   completionStatus.completionPercentage === 100 
                     ? 'text-green-600' 
                     : completionStatus.completionPercentage >= 60 
@@ -301,9 +347,9 @@ const WorkerProfile = () => {
                   {completionStatus.completionPercentage}%
                 </span>
               </div>
-              <div className={`w-full rounded-full h-2 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                <div className={`w-24 h-2 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
                 <div 
-                  className={`h-2 rounded-full transition-all duration-300 ${
+                    className={`h-2 rounded-full transition-all duration-500 ease-out ${
                     completionStatus.completionPercentage === 100 
                       ? 'bg-green-500' 
                       : completionStatus.completionPercentage >= 60 
@@ -313,11 +359,127 @@ const WorkerProfile = () => {
                   style={{ width: `${completionStatus.completionPercentage}%` }}
                 ></div>
               </div>
-              {completionStatus.missingFields.length > 0 && (
-                <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Missing: {completionStatus.missingFields.join(', ')}
-                </p>
-              )}
+              </div>
+            </div>
+            
+            <div className="p-4">
+              <div className="space-y-3">
+                {/* Personal Information Section */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                      profile.name && profile.phone_number && profile.bio
+                        ? 'bg-green-500' 
+                        : 'bg-gray-300'
+                    }`}>
+                      {profile.name && profile.phone_number && profile.bio ? (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                      )}
+                    </div>
+                    <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Personal Information
+                    </span>
+                  </div>
+                  <span className={`text-xs ${
+                    profile.name && profile.phone_number && profile.bio
+                      ? 'text-green-600' 
+                      : 'text-gray-500'
+                  }`}>
+                    {profile.name && profile.phone_number && profile.bio ? 'Complete' : 'Incomplete'}
+                  </span>
+                </div>
+
+                {/* Permanent Address Section */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                      profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip
+                        ? 'bg-green-500' 
+                        : 'bg-gray-300'
+                    }`}>
+                      {profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip ? (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                      )}
+                    </div>
+                    <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Permanent Address
+                    </span>
+                  </div>
+                  <span className={`text-xs ${
+                    profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip
+                      ? 'text-green-600' 
+                      : 'text-gray-500'
+                  }`}>
+                    {profile.permanent_street && profile.permanent_city && profile.permanent_state && profile.permanent_zip ? 'Complete' : 'Incomplete'}
+                  </span>
+                </div>
+
+                {/* Service Information Section */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                      profile.experience_years > 0 && profile.service_radius_km > 0
+                        ? 'bg-green-500' 
+                        : 'bg-gray-300'
+                    }`}>
+                      {profile.experience_years > 0 && profile.service_radius_km > 0 ? (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                      )}
+                    </div>
+                    <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Service Information
+                    </span>
+                  </div>
+                  <span className={`text-xs ${
+                    profile.experience_years > 0 && profile.service_radius_km > 0
+                      ? 'text-green-600' 
+                      : 'text-gray-500'
+                  }`}>
+                    {profile.experience_years > 0 && profile.service_radius_km > 0 ? 'Complete' : 'Incomplete'}
+                  </span>
+                </div>
+
+                {/* Emergency Contact Section */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                      profile.emergency_contact_name && profile.emergency_contact_relationship && profile.emergency_contact_phone
+                        ? 'bg-green-500' 
+                        : 'bg-gray-300'
+                    }`}>
+                      {profile.emergency_contact_name && profile.emergency_contact_relationship && profile.emergency_contact_phone ? (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                      )}
+                    </div>
+                    <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Emergency Contact
+                    </span>
+                  </div>
+                  <span className={`text-xs ${
+                    profile.emergency_contact_name && profile.emergency_contact_relationship && profile.emergency_contact_phone
+                      ? 'text-green-600' 
+                      : 'text-gray-500'
+                  }`}>
+                    {profile.emergency_contact_name && profile.emergency_contact_relationship && profile.emergency_contact_phone ? 'Complete' : 'Incomplete'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -396,13 +558,14 @@ const WorkerProfile = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Personal Information */}
-              <div className="space-y-6">
-                <h4 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            <div className="space-y-8">
+              {/* Personal Information Section */}
+              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
+                <h4 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Personal Information
                 </h4>
                 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     Full Name
@@ -431,20 +594,6 @@ const WorkerProfile = () => {
 
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Email Address
-                  </label>
-                  <div className={`w-full px-3 py-2 border rounded-lg cursor-not-allowed ${
-                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-500'
-                  }`}>
-                    {profile.email || 'Not provided'}
-                  </div>
-                  <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
-                    Contact support to change your email
-                  </p>
-                </div>
-
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     Phone Number
                   </label>
                   {isEditing ? (
@@ -467,9 +616,24 @@ const WorkerProfile = () => {
                       {profile.formattedPhone || profile.phone_number || 'Not provided'}
                     </div>
                   )}
+                  </div>
                 </div>
 
-                <div>
+                <div className="mt-6">
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Email Address
+                  </label>
+                  <div className={`w-full px-3 py-2 border rounded-lg cursor-not-allowed ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-500'
+                  }`}>
+                    {profile.email || 'Not provided'}
+                  </div>
+                  <p className={`text-sm mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                    Contact support to change your email
+                  </p>
+                </div>
+
+                <div className="mt-6">
                   <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     Professional Bio
                   </label>
@@ -496,12 +660,281 @@ const WorkerProfile = () => {
                 </div>
               </div>
 
-              {/* Service Information */}
+              {/* Permanent Address Section */}
+              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
+                <h4 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Permanent Address
+                </h4>
+                
+                <div className="space-y-6">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Street Address
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        name="permanent_street"
+                        value={editedProfile.permanent_street || ''}
+                        onChange={handleInputChange}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                            : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                        placeholder="Enter your street address"
+                      />
+                    ) : (
+                      <div className={`w-full px-3 py-2 border rounded-lg ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
+                        {profile.permanent_street || 'Not provided'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        City
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          name="permanent_city"
+                          value={editedProfile.permanent_city || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter city"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.permanent_city || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        State
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          name="permanent_state"
+                          value={editedProfile.permanent_state || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter state"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.permanent_state || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        ZIP Code
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          name="permanent_zip"
+                          value={editedProfile.permanent_zip || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter ZIP code"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.permanent_zip || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Information Section */}
+              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
+                <h4 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Contact Information
+                </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Alternate Email
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="email"
+                          name="alternate_email"
+                          value={editedProfile.alternate_email || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter alternate email"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.alternate_email || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Alternate Phone
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="tel"
+                          name="alternate_phone_number"
+                          value={editedProfile.alternate_phone_number || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter alternate phone"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.alternate_phone_number || 'Not provided'}
+                        </div>
+                      )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Emergency Contact Section */}
+              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
+                <h4 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Emergency Contact Information
+                </h4>
+                
               <div className="space-y-6">
-                <h4 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Emergency Contact Name
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        name="emergency_contact_name"
+                        value={editedProfile.emergency_contact_name || ''}
+                        onChange={handleInputChange}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                            : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                        placeholder="Enter emergency contact name"
+                      />
+                    ) : (
+                      <div className={`w-full px-3 py-2 border rounded-lg ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
+                        {profile.emergency_contact_name || 'Not provided'}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Relationship
+                      </label>
+                      {isEditing ? (
+                        <select
+                          name="emergency_contact_relationship"
+                          value={editedProfile.emergency_contact_relationship || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        >
+                          <option value="">Select relationship</option>
+                          <option value="parent">Parent</option>
+                          <option value="spouse">Spouse</option>
+                          <option value="sibling">Sibling</option>
+                          <option value="child">Child</option>
+                          <option value="friend">Friend</option>
+                          <option value="relative">Relative</option>
+                          <option value="other">Other</option>
+                        </select>
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.emergency_contact_relationship || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Emergency Contact Phone
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="tel"
+                          name="emergency_contact_phone"
+                          value={editedProfile.emergency_contact_phone || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter emergency contact phone"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.emergency_contact_phone || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Service Information Section */}
+              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
+                <h4 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Service Information
                 </h4>
                 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     Years of Experience
@@ -556,65 +989,11 @@ const WorkerProfile = () => {
                       {profile.service_radius_km ? `${profile.service_radius_km} km` : 'Not specified'}
                     </div>
                   )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Latitude
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        step="any"
-                        name="location_lat"
-                        value={editedProfile.location_lat || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode 
-                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                            : 'bg-white border-gray-300 text-gray-900'
-                        }`}
-                        placeholder="Enter latitude"
-                      />
-                    ) : (
-                      <div className={`w-full px-3 py-2 border rounded-lg ${
-                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                      }`}>
-                        {profile.location_lat || 'Not provided'}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Longitude
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        step="any"
-                        name="location_lng"
-                        value={editedProfile.location_lng || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode 
-                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                            : 'bg-white border-gray-300 text-gray-900'
-                        }`}
-                        placeholder="Enter longitude"
-                      />
-                    ) : (
-                      <div className={`w-full px-3 py-2 border rounded-lg ${
-                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
-                      }`}>
-                        {profile.location_lng || 'Not provided'}
-                      </div>
-                    )}
                   </div>
                 </div>
 
                 {isEditing && (
+                  <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
                   <div className="flex items-center space-x-3">
                     <input
                       type="checkbox"
@@ -627,6 +1006,7 @@ const WorkerProfile = () => {
                     <label htmlFor="active" className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       Available for new jobs
                     </label>
+                    </div>
                   </div>
                 )}
               </div>

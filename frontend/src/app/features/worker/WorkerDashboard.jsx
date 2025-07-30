@@ -127,18 +127,26 @@ const WorkerDashboard = () => {
               <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
                 <Bell className="w-5 h-5" />
               </button>
-              <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <button 
+                onClick={() => navigate('/worker/settings')}
+                className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
                 <Settings className="w-5 h-5" />
               </button>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold text-sm">
-                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                <button 
+                  onClick={() => navigate('/worker/profile')}
+                  className="flex items-center space-x-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-semibold text-sm">
+                      {user?.firstName?.[0]}{user?.lastName?.[0]}
+                    </span>
+                  </div>
+                  <span className={`hidden sm:block ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {user?.firstName} {user?.lastName}
                   </span>
-                </div>
-                <span className={`hidden sm:block ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {user?.firstName} {user?.lastName}
-                </span>
+                </button>
               </div>
               <button
                 onClick={handleLogout}
