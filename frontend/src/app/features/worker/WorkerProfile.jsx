@@ -159,10 +159,7 @@ const WorkerProfile = () => {
       errors.location_lng = 'Longitude must be between -180 and 180';
     }
     
-    // Validate bio length
-    if (profileData.bio && profileData.bio.trim().length < 10) {
-      errors.bio = 'Bio must be at least 10 characters';
-    }
+   
     
     return {
       isValid: Object.keys(errors).length === 0,

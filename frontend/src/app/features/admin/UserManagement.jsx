@@ -1,150 +1,227 @@
-import React, { useState } from 'react';
-
-// Mock user data (updated with new required fields)
-const initialUsers = [
-  { 
-    id: 1, 
-    name: 'Priya Sharma', 
-    email: 'priya@example.com', 
-    phone: '9876543210', 
-    type: 'Worker', 
-    service: 'Home Cleaning', 
-    joinDate: '2023-04-15', 
-    status: 'Pending', 
-    documents: ['ID Proof', 'Address Proof'],
-    // New required fields for workers
-    emergencyContactName: 'Raj Sharma',
-    emergencyContactRelationship: 'spouse',
-    emergencyContactPhone: '9876543211',
-    bankName: 'State Bank of India',
-    accountNumber: '123456789012',
-    ifscCode: 'SBIN0123456',
-    accountHolderName: 'Priya Sharma'
-  },
-  { id: 2, name: 'Rahul Patel', email: 'rahul@example.com', phone: '8765432109', type: 'Driver', vehicle: 'Sedan', joinDate: '2023-05-22', status: 'Approved', documents: ['License', 'Vehicle RC', 'Insurance'] },
-  { id: 3, name: 'Amit Singh', email: 'amit@example.com', phone: '7654321098', type: 'Customer', joinDate: '2023-03-10', status: 'Active', bookings: 7 },
-  { 
-    id: 4, 
-    name: 'Sneha Kumar', 
-    email: 'sneha@example.com', 
-    phone: '6543210987', 
-    type: 'Worker', 
-    service: 'Plumbing', 
-    joinDate: '2023-06-05', 
-    status: 'Approved', 
-    documents: ['ID Proof', 'Skill Certificate'],
-    // New required fields for workers
-    emergencyContactName: 'Ravi Kumar',
-    emergencyContactRelationship: 'sibling',
-    emergencyContactPhone: '6543210988',
-    bankName: 'HDFC Bank',
-    accountNumber: '987654321098',
-    ifscCode: 'HDFC0001234',
-    accountHolderName: 'Sneha Kumar'
-  },
-  { id: 5, name: 'Vikas Gupta', email: 'vikas@example.com', phone: '5432109876', type: 'Driver', vehicle: 'Bike', joinDate: '2023-06-18', status: 'Pending', documents: ['License', 'Vehicle RC'] },
-  { 
-    id: 6, 
-    name: 'Neha Verma', 
-    email: 'neha@example.com', 
-    phone: '4321098765', 
-    type: 'Worker', 
-    service: 'Salon', 
-    joinDate: '2023-05-30', 
-    status: 'Approved', 
-    documents: ['ID Proof', 'Certification'],
-    // New required fields for workers
-    emergencyContactName: 'Amit Verma',
-    emergencyContactRelationship: 'parent',
-    emergencyContactPhone: '4321098766',
-    bankName: 'ICICI Bank',
-    accountNumber: '456789012345',
-    ifscCode: 'ICIC0001234',
-    accountHolderName: 'Neha Verma'
-  },
-  { id: 7, name: 'Rajesh Kumar', email: 'rajesh@example.com', phone: '3210987654', type: 'Driver', vehicle: 'SUV', joinDate: '2023-06-02', status: 'Rejected', documents: ['License'] },
-  { id: 8, name: 'Preeti Joshi', email: 'preeti@example.com', phone: '2109876543', type: 'Customer', joinDate: '2023-04-25', status: 'Active', bookings: 3 },
-];
+import React, { useState, useEffect } from 'react';
+import AdminService from '../../services/admin.service';
 
 const UserManagement = () => {
-  const [users, setUsers] = useState(initialUsers);
+  const [providers, setProviders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
   const [filters, setFilters] = useState({
-    type: 'All',
-    status: 'All',
+    verified: '',
+    active: '',
     search: '',
   });
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedProvider, setSelectedProvider] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Fetch providers on component mount and filter changes
+  useEffect(() => {
+    fetchProviders();
+  }, [pagination.page, filters]);
+
+  const fetchProviders = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const params = {
+        page: pagination.page,
+        limit: pagination.limit,
+        search: filters.search || undefined,
+        verified: filters.verified !== '' ? filters.verified : undefined,
+        active: filters.active !== '' ? filters.active : undefined
+      };
+
+      const response = await AdminService.getProviders(params);
+      
+      if (response.success) {
+        setProviders(response.data.providers);
+        setPagination(prev => ({
+          ...prev,
+          total: response.data.pagination.total,
+          totalPages: response.data.pagination.totalPages
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching providers:', err);
+      setError(err.response?.data?.message || 'Failed to fetch providers');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFilterChange = (e) => {
-    setFilters({
+    const newFilters = {
       ...filters,
       [e.target.name]: e.target.value,
-    });
+    };
+    setFilters(newFilters);
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page when filtering
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesType = filters.type === 'All' || user.type === filters.type;
-    const matchesStatus = filters.status === 'All' || user.status === filters.status;
-    const matchesSearch = filters.search === '' || 
-      user.name.toLowerCase().includes(filters.search.toLowerCase()) || 
-      user.email.toLowerCase().includes(filters.search.toLowerCase()) ||
-      user.phone.includes(filters.search);
-    
-    return matchesType && matchesStatus && matchesSearch;
-  });
-
-  const handleViewUser = (user) => {
-    setSelectedUser(user);
-    setShowModal(true);
+  const handleSearchChange = (e) => {
+    const newFilters = {
+      ...filters,
+      search: e.target.value
+    };
+    setFilters(newFilters);
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const handleStatusChange = (userId, newStatus) => {
-    setUsers(users.map(user => 
-      user.id === userId ? { ...user, status: newStatus } : user
-    ));
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser({ ...selectedUser, status: newStatus });
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const handleViewProvider = async (provider) => {
+    try {
+      setLoading(true);
+      const response = await AdminService.getProvider(provider.id);
+      if (response.success) {
+        setSelectedProvider(response.data);
+        setShowModal(true);
+      }
+    } catch (err) {
+      console.error('Error fetching provider details:', err);
+      setError(err.response?.data?.message || 'Failed to fetch provider details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveProvider = async (providerId) => {
+    try {
+      setActionLoading(true);
+      const response = await AdminService.approveProvider(providerId);
+      if (response.success) {
+        await fetchProviders(); // Refresh the list
+        if (selectedProvider && selectedProvider.id === providerId) {
+          setSelectedProvider(prev => ({ ...prev, verified: true }));
+        }
+      }
+    } catch (err) {
+      console.error('Error approving provider:', err);
+      setError(err.response?.data?.message || 'Failed to approve provider');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRejectProvider = async (providerId) => {
+    try {
+      setActionLoading(true);
+      const response = await AdminService.rejectProvider(providerId);
+      if (response.success) {
+        await fetchProviders(); // Refresh the list
+        if (selectedProvider && selectedProvider.id === providerId) {
+          setSelectedProvider(prev => ({ ...prev, verified: false }));
+        }
+      }
+    } catch (err) {
+      console.error('Error rejecting provider:', err);
+      setError(err.response?.data?.message || 'Failed to reject provider');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleToggleActive = async (providerId, currentActive) => {
+    try {
+      setActionLoading(true);
+      const response = await AdminService.toggleProviderActive(providerId, !currentActive);
+      if (response.success) {
+        await fetchProviders(); // Refresh the list
+        if (selectedProvider && selectedProvider.id === providerId) {
+          setSelectedProvider(prev => ({ ...prev, active: !currentActive }));
+        }
+      }
+    } catch (err) {
+      console.error('Error toggling provider status:', err);
+      setError(err.response?.data?.message || 'Failed to update provider status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteProvider = async (providerId) => {
+    if (!window.confirm('Are you sure you want to delete this provider? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const response = await AdminService.deleteProvider(providerId);
+      if (response.success) {
+        await fetchProviders(); // Refresh the list
+        setShowModal(false); // Close modal if open
+        setSelectedProvider(null);
+      }
+    } catch (err) {
+      console.error('Error deleting provider:', err);
+      setError(err.response?.data?.message || 'Failed to delete provider');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const getStatusBadge = (provider) => {
+    if (!provider.verified && provider.active) {
+      return { text: 'Pending', class: 'bg-yellow-100 text-yellow-800' };
+    } else if (provider.verified && provider.active) {
+      return { text: 'Approved', class: 'bg-green-100 text-green-800' };
+    } else if (!provider.verified && !provider.active) {
+      return { text: 'Rejected', class: 'bg-red-100 text-red-800' };
+    } else {
+      return { text: 'Inactive', class: 'bg-gray-100 text-gray-800' };
     }
   };
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">User Management</h1>
+      <h1 className="text-2xl font-bold">Provider Management</h1>
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
       
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
+            <label htmlFor="verified" className="block text-sm font-medium text-gray-700 mb-1">Verification Status</label>
             <select
-              id="type"
-              name="type"
-              value={filters.type}
+              id="verified"
+              name="verified"
+              value={filters.verified}
               onChange={handleFilterChange}
               className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
             >
-              <option value="All">All Types</option>
-              <option value="Worker">Workers</option>
-              <option value="Driver">Drivers</option>
-              <option value="Customer">Customers</option>
+              <option value="">All Verification Status</option>
+              <option value="true">Verified</option>
+              <option value="false">Not Verified</option>
             </select>
           </div>
           
           <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <label htmlFor="active" className="block text-sm font-medium text-gray-700 mb-1">Active Status</label>
             <select
-              id="status"
-              name="status"
-              value={filters.status}
+              id="active"
+              name="active"
+              value={filters.active}
               onChange={handleFilterChange}
               className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
             >
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Pending">Pending Approval</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
+              <option value="">All Active Status</option>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
             </select>
           </div>
           
@@ -155,8 +232,8 @@ const UserManagement = () => {
               name="search"
               id="search"
               value={filters.search}
-              onChange={handleFilterChange}
-              placeholder="Search by name, email, phone..."
+              onChange={handleSearchChange}
+              placeholder="Search providers by name, email, phone..."
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
@@ -169,105 +246,138 @@ const UserManagement = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Provider</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Join Date</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
-                <tr key={user.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">{user.email}</div>
-                    <div className="text-sm text-gray-500">{user.phone}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.type}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">
-                      {user.service && `Service: ${user.service}`}
-                      {user.vehicle && `Vehicle: ${user.vehicle}`}
-                      {user.bookings !== undefined && `Bookings: ${user.bookings}`}
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="px-6 py-4 text-center">
+                    <div className="flex justify-center items-center space-x-2">
+                      <div className="w-5 h-5 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
+                      <span className="text-gray-500">Loading providers...</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.joinDate}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                      ${user.status === 'Approved' || user.status === 'Active' ? 'bg-green-100 text-green-800' : 
-                        user.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
-                        'bg-red-100 text-red-800'}`}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <button 
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                      onClick={() => handleViewUser(user)}
-                    >
-                      View
-                    </button>
-                    {user.status === 'Pending' && (
-                      <>
-                        <button 
-                          className="text-green-600 hover:text-green-900 mr-3"
-                          onClick={() => handleStatusChange(user.id, 'Approved')}
-                        >
-                          Approve
-                        </button>
-                        <button 
-                          className="text-red-600 hover:text-red-900"
-                          onClick={() => handleStatusChange(user.id, 'Rejected')}
-                        >
-                          Reject
-                        </button>
-                      </>
-                    )}
+                </tr>
+              ) : providers.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                    No providers found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                providers.map((provider) => {
+                  const status = getStatusBadge(provider);
+                  return (
+                    <tr key={provider.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{provider.name}</div>
+                        <div className="text-sm text-gray-500">ID: {provider.id}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">{provider.email}</div>
+                        <div className="text-sm text-gray-500">{provider.phone}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {provider.experience_years} year{provider.experience_years !== 1 ? 's' : ''}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="text-sm text-gray-900">{provider.rating.toFixed(1)}</div>
+                          <div className="ml-1 text-yellow-400">★</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(provider.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${status.class}`}>
+                          {status.text}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <button
+                          onClick={() => handleViewProvider(provider)}
+                          className="text-blue-600 hover:text-blue-900"
+                          disabled={actionLoading}
+                        >
+                          View
+                        </button>
+                        {!provider.verified && (
+                          <>
+                            <button
+                              onClick={() => handleApproveProvider(provider.id)}
+                              className="text-green-600 hover:text-green-900"
+                              disabled={actionLoading}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleRejectProvider(provider.id)}
+                              className="text-red-600 hover:text-red-900"
+                              disabled={actionLoading}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => handleToggleActive(provider.id, provider.active)}
+                          className={`${provider.active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}`}
+                          disabled={actionLoading}
+                        >
+                          {provider.active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
         
-        {filteredUsers.length === 0 && (
-          <div className="text-center py-10">
-            <p className="text-gray-500 text-sm">No users found matching your filters</p>
-          </div>
-        )}
-        
+        {/* Pagination */}
         <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 flex items-center justify-between">
           <div className="text-sm text-gray-500">
-            Showing <span className="font-medium">{filteredUsers.length}</span> of <span className="font-medium">{users.length}</span> users
+            Showing <span className="font-medium">{providers.length}</span> of <span className="font-medium">{pagination.total}</span> providers
           </div>
-          <div className="flex justify-end">
-            <button className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+          <div className="flex justify-end space-x-2">
+            <button 
+              onClick={() => handlePageChange(pagination.page - 1)}
+              disabled={!pagination.hasPrev}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Previous
             </button>
-            <button className="ml-3 px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            <span className="px-3 py-1 text-sm text-gray-700">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button 
+              onClick={() => handlePageChange(pagination.page + 1)}
+              disabled={!pagination.hasNext}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Next
             </button>
           </div>
         </div>
       </div>
 
-      {/* User Detail Modal */}
-      {showModal && selectedUser && (
+      {/* Provider Detail Modal */}
+      {showModal && selectedProvider && (
         <div className="fixed inset-0 overflow-y-auto z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black opacity-50"></div>
           <div className="relative bg-white rounded-lg max-w-2xl w-full mx-auto shadow-xl">
             <div className="p-6">
               <div className="flex justify-between items-center border-b pb-3">
-                <h3 className="text-lg font-medium text-gray-900">User Details</h3>
+                <h3 className="text-lg font-medium text-gray-900">Provider Details</h3>
                 <button 
                   className="text-gray-400 hover:text-gray-500"
                   onClick={() => setShowModal(false)}
@@ -280,149 +390,186 @@ const UserManagement = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm font-medium text-gray-500">Name</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.name}</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.name}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Email</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.email}</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.email}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Phone</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.phone}</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.phone}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Type</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.type}</p>
+                    <p className="text-sm font-medium text-gray-500">Experience</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.experience_years} years</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Join Date</p>
-                    <p className="mt-1 text-sm text-gray-900">{selectedUser.joinDate}</p>
+                    <p className="mt-1 text-sm text-gray-900">{new Date(selectedProvider.created_at).toLocaleDateString()}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Status</p>
                     <p className={`mt-1 text-sm font-semibold 
-                      ${selectedUser.status === 'Approved' || selectedUser.status === 'Active' ? 'text-green-600' : 
-                        selectedUser.status === 'Pending' ? 'text-yellow-600' : 
+                      ${selectedProvider.verified && selectedProvider.active ? 'text-green-600' : 
+                        !selectedProvider.verified && selectedProvider.active ? 'text-yellow-600' : 
                         'text-red-600'}`}>
-                      {selectedUser.status}
+                      {getStatusBadge(selectedProvider).text}
                     </p>
                   </div>
                   
-                  {selectedUser.service && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Service</p>
-                      <p className="mt-1 text-sm text-gray-900">{selectedUser.service}</p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Rating</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.rating.toFixed(1)} ⭐</p>
+                  </div>
                   
-                  {selectedUser.vehicle && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Vehicle</p>
-                      <p className="mt-1 text-sm text-gray-900">{selectedUser.vehicle}</p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Service Radius</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.service_radius_km} km</p>
+                  </div>
                   
-                  {selectedUser.bookings !== undefined && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Bookings</p>
-                      <p className="mt-1 text-sm text-gray-900">{selectedUser.bookings}</p>
+                  {selectedProvider.bio && (
+                    <div className="col-span-2">
+                      <p className="text-sm font-medium text-gray-500">Bio</p>
+                      <p className="mt-1 text-sm text-gray-900">{selectedProvider.bio}</p>
                     </div>
                   )}
                 </div>
 
-                {/* Emergency Contact Section for Workers */}
-                {selectedUser.type === 'Worker' && selectedUser.emergencyContactName && (
+                {/* Location Information */}
+                {selectedProvider.location && (
+                  <div className="mt-6 border-t pt-4">
+                    <h4 className="text-lg font-medium text-gray-900 mb-3">Location</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Latitude</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.location.lat}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500">Longitude</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.location.lng}</p>
+                      </div>
+                      {selectedProvider.permanent_address && (
+                        <div className="col-span-2">
+                          <p className="text-sm font-medium text-gray-500">Address</p>
+                          <p className="mt-1 text-sm text-gray-900">{selectedProvider.permanent_address}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Emergency Contact Section */}
+                {selectedProvider.emergency_contact && selectedProvider.emergency_contact.name && (
                   <div className="mt-6 border-t pt-4">
                     <h4 className="text-lg font-medium text-gray-900 mb-3">Emergency Contact</h4>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm font-medium text-gray-500">Name</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedUser.emergencyContactName}</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.emergency_contact.name}</p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-500">Relationship</p>
-                        <p className="mt-1 text-sm text-gray-900 capitalize">{selectedUser.emergencyContactRelationship}</p>
+                        <p className="mt-1 text-sm text-gray-900 capitalize">{selectedProvider.emergency_contact.relationship}</p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-500">Phone</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedUser.emergencyContactPhone}</p>
+                        <p className="mt-1 text-sm text-gray-900">{selectedProvider.emergency_contact.phone}</p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Banking Details Section for Workers */}
-                {selectedUser.type === 'Worker' && selectedUser.bankName && (
+                {/* Services Offered */}
+                {selectedProvider.services && selectedProvider.services.length > 0 && (
                   <div className="mt-6 border-t pt-4">
-                    <h4 className="text-lg font-medium text-gray-900 mb-3">Banking Details</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Bank Name</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedUser.bankName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Account Holder</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedUser.accountHolderName}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Account Number</p>
-                        <p className="mt-1 text-sm text-gray-900">****{selectedUser.accountNumber.slice(-4)}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">IFSC Code</p>
-                        <p className="mt-1 text-sm text-gray-900">{selectedUser.ifscCode}</p>
-                      </div>
+                    <h4 className="text-lg font-medium text-gray-900 mb-3">Services Offered</h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      {selectedProvider.services.map((service, index) => (
+                        <div key={index} className="flex items-center p-2 bg-gray-50 rounded">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{service.category_name}</p>
+                            <p className="text-xs text-gray-500">{service.subcategory_name}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                      <p className="text-xs text-yellow-700">
-                        🔒 Account number is masked for security. Full details available in secure admin panel.
-                      </p>
+                  </div>
+                )}
+
+                {/* Additional Contact Info */}
+                {(selectedProvider.alternate_email || selectedProvider.alternate_phone_number) && (
+                  <div className="mt-6 border-t pt-4">
+                    <h4 className="text-lg font-medium text-gray-900 mb-3">Additional Contact</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {selectedProvider.alternate_email && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Alternate Email</p>
+                          <p className="mt-1 text-sm text-gray-900">{selectedProvider.alternate_email}</p>
+                        </div>
+                      )}
+                      {selectedProvider.alternate_phone_number && (
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Alternate Phone</p>
+                          <p className="mt-1 text-sm text-gray-900">{selectedProvider.alternate_phone_number}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
                 
-                {selectedUser.documents && selectedUser.documents.length > 0 && (
-                  <div className="mt-6">
-                    <h4 className="text-sm font-medium text-gray-500">Documents</h4>
-                    <ul className="mt-2 border-t border-b border-gray-200 divide-y divide-gray-200">
-                      {selectedUser.documents.map((doc, index) => (
-                        <li key={index} className="py-3 flex justify-between items-center">
-                          <div className="flex items-center">
-                            <i className="fas fa-file-alt text-gray-400 mr-2"></i>
-                            <span className="text-sm text-gray-900">{doc}</span>
-                          </div>
-                          <button className="text-blue-600 hover:text-blue-500 text-sm">
-                            View
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                {/* Last Active */}
+                {selectedProvider.last_active_at && (
+                  <div className="mt-6 border-t pt-4">
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Last Active</p>
+                      <p className="mt-1 text-sm text-gray-900">{new Date(selectedProvider.last_active_at).toLocaleString()}</p>
+                    </div>
                   </div>
                 )}
               </div>
               
-              {selectedUser.status === 'Pending' && (
-                <div className="border-t pt-4 flex justify-end space-x-3">
+              <div className="border-t pt-4 flex justify-between">
+                <button 
+                  className="px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  onClick={() => handleDeleteProvider(selectedProvider.id)}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'Processing...' : 'Delete Provider'}
+                </button>
+                
+                <div className="flex space-x-3">
+                  {!selectedProvider.verified && (
+                    <>
+                      <button 
+                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        onClick={() => handleRejectProvider(selectedProvider.id)}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? 'Processing...' : 'Reject'}
+                      </button>
+                      <button 
+                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        onClick={() => handleApproveProvider(selectedProvider.id)}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? 'Processing...' : 'Approve'}
+                      </button>
+                    </>
+                  )}
                   <button 
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    onClick={() => {
-                      handleStatusChange(selectedUser.id, 'Rejected');
-                      setShowModal(false);
-                    }}
+                    className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                      selectedProvider.active 
+                        ? 'bg-gray-600 hover:bg-gray-700 focus:ring-gray-500' 
+                        : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+                    }`}
+                    onClick={() => handleToggleActive(selectedProvider.id, selectedProvider.active)}
+                    disabled={actionLoading}
                   >
-                    Reject
-                  </button>
-                  <button 
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    onClick={() => {
-                      handleStatusChange(selectedUser.id, 'Approved');
-                      setShowModal(false);
-                    }}
-                  >
-                    Approve
+                    {actionLoading ? 'Processing...' : (selectedProvider.active ? 'Deactivate' : 'Activate')}
                   </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>

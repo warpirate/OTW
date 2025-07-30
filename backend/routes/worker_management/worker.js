@@ -17,9 +17,9 @@ class WorkerService {
     try {
       await connection.beginTransaction();
 
-      const { firstName, lastName, email, phone, password, providerData } = userData;
+      const { firstName, lastName, email, phone, password, providerData, subcategoryIds = [] } = userData;
       const name = `${firstName} ${lastName}`;
-
+      console.log('Worker registration attempt:', { email, firstName, lastName, hasProviderData: !!providerData });
       // Check if email already exists
       const [existingUsers] = await connection.query(
         'SELECT id FROM users WHERE email = ? LIMIT 1',
@@ -60,13 +60,16 @@ class WorkerService {
         [userId, roleId]
       );
 
-      // Insert into providers table
-      await connection.query(
+      // Insert into providers table and capture newly created provider_id
+      const [providerResult] = await connection.query(
         `INSERT INTO providers (
           user_id, experience_years, bio, service_radius_km, 
           location_lat, location_lng, verified, active, rating,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          created_at, updated_at, permanent_address,
+          alternate_email, alternate_phone_number,
+          emergency_contact_name, emergency_contact_relationship,
+          emergency_contact_phone 
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, ?, ?)`,
         [
           userId,
           providerData.experience_years,
@@ -76,9 +79,35 @@ class WorkerService {
           providerData.location_lng,
           providerData.verified || false,
           providerData.active || true,
-          providerData.rating || 0.0
+          providerData.rating || 0,
+          providerData.permanent_address,
+          providerData.alternate_email,
+          providerData.alternate_phone_number,
+          providerData.emergency_contact_name,
+          providerData.emergency_contact_relationship,
+          providerData.emergency_contact_phone
         ]
       );
+
+      const providerId = providerResult.insertId;
+
+      // Map any provided subcategoryIds (either array of numbers or objects) and filter invalid entries
+      const cleanSubcategoryIds = Array.isArray(subcategoryIds)
+        ? subcategoryIds.map(sc => {
+            if (typeof sc === 'number') return sc;
+            if (typeof sc === 'string') return parseInt(sc, 10);
+            if (sc && typeof sc === 'object') return sc.subcategoryId || sc.id;
+            return null;
+          }).filter(id => id && !isNaN(id))
+        : [];
+
+      if (cleanSubcategoryIds.length) {
+        const values = cleanSubcategoryIds.map(id => [providerId, id]);
+        await connection.query(
+          'INSERT INTO provider_services (provider_id, subcategory_id) VALUES ?',
+          [values]
+        );
+      }
 
       await connection.commit();
 
@@ -313,67 +342,72 @@ class WorkerService {
     }
   }
 }
+
 const verifyToken = require('../middlewares/verify_token');
 const authorizeRole = require('../middlewares/authorizeRole');
 
-// ------------------------
-// Worker Registration Route
-// ------------------------
+/**
+ * Worker Registration Route
+ */
 router.post('/worker/register', async (req, res) => {
-  const { firstName, lastName, email, phone, password, role, providerData } = req.body;
-  
+  const { firstName, lastName, email, phone, password, role, providerData, subcategoryIds = [] } = req.body;
+
   // Validate required fields
   if (!firstName || !lastName || !email || !password || !providerData) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       message: 'Missing required fields',
-      required: ['firstName', 'lastName', 'email', 'password', 'providerData']
+      required: ['firstName', 'lastName', 'email', 'password', 'providerData', 'subcategoryIds']
     });
   }
-  
+
   // Validate provider data
   const requiredProviderFields = ['experience_years', 'bio', 'service_radius_km', 'location_lat', 'location_lng'];
-  const missingProviderFields = requiredProviderFields.filter(field => 
+  const missingProviderFields = requiredProviderFields.filter(field =>
     providerData[field] === undefined || providerData[field] === null
   );
-  
+
   if (missingProviderFields.length > 0) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       message: 'Missing required provider fields',
       missingFields: missingProviderFields
     });
   }
-  
+
+  // Validate subcategory IDs
+  if (!Array.isArray(subcategoryIds) || subcategoryIds.length === 0) {
+    return res.status(400).json({
+      message: 'At least one service subcategory is required',
+      missingFields: ['subcategoryIds']
+    });
+  }
+
   try {
-    console.log('Worker registration attempt:', { email, firstName, lastName, hasProviderData: !!providerData });
-    
     const result = await WorkerService.registerWorker({
       firstName,
       lastName,
       email,
       phone,
       password,
-      providerData
+      providerData,
+      subcategoryIds
     });
-    
-    console.log('Worker registration successful:', { userId: result.user.id, email });
-    
+
     res.status(201).json({
       message: 'Worker registered successfully',
       ...result
     });
-    
   } catch (error) {
     console.error('Worker registration error:', error);
-    
+
     if (error.message === 'Email already registered') {
       return res.status(409).json({ message: error.message });
     }
-    
+
     if (error.message === 'Worker role not found in system') {
       return res.status(500).json({ message: 'System configuration error' });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       message: 'Registration failed',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });

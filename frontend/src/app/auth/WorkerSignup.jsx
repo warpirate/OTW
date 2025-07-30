@@ -42,6 +42,8 @@ const WorkerSignup = () => {
     serviceType: '',
     categories: [],
     subcategories: [],
+    alternateEmail: '',
+    alternatePhone: '',
     // Emergency Contact Fields (as requested in requirements)
     emergencyContactName: '',
     emergencyContactRelationship: '',
@@ -543,6 +545,7 @@ const WorkerSignup = () => {
         emergencyContactRelationship: formData.emergencyContactRelationship,
         emergencyContactPhone: formData.emergencyContactPhone,
         // Provider specific data (only fields in providers table)
+        subcategoryIds: formData.subcategories.map(sc => sc.subcategoryId ?? sc.id ?? sc),
         providerData: {
           experience_years: getExperienceYears(formData.experience),
           bio: formData.bio,
@@ -550,6 +553,11 @@ const WorkerSignup = () => {
           location_lat: formData.latitude,
           location_lng: formData.longitude,
           permanent_address: formData.permanentAddress,
+          alternate_email: formData.alternateEmail,
+          alternate_phone_number: formData.alternatePhone,
+          emergency_contact_name: formData.emergencyContactName,
+          emergency_contact_relationship: formData.emergencyContactRelationship,
+          emergency_contact_phone: formData.emergencyContactPhone,
           verified: false,
           active: true,
           rating: 0.0 // Default rating
@@ -1114,86 +1122,39 @@ const WorkerSignup = () => {
               />
             </div>
 
-            {/* Banking Details Section (as per requirements)
-            <div className={`border-t pt-6 mt-6 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
-              <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Banking Details
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                    Bank Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="bankName"
-                    value={formData.bankName}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                    }`}
-                    placeholder="Enter bank name (e.g., State Bank of India)"
-                  />
-                </div>
-                <div>
-                  <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                    Account Holder Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="accountHolderName"
-                    value={formData.accountHolderName}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                    }`}
-                    placeholder="Enter account holder name"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                      Account Number *
-                    </label>
-                    <input
-                      type="text"
-                      name="accountNumber"
-                      value={formData.accountNumber}
-                      onChange={handleInputChange}
-                      required
-                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                      }`}
-                      placeholder="Enter account number"
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                      IFSC Code *
-                    </label>
-                    <input
-                      type="text"
-                      name="ifscCode"
-                      value={formData.ifscCode}
-                      onChange={handleInputChange}
-                      required
-                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                      }`}
-                      placeholder="Enter IFSC code (e.g., SBIN0123456)"
-                      style={{ textTransform: 'uppercase' }}
-                    />
-                  </div>
-                </div>
-                <div className={`p-3 rounded-lg ${darkMode ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
-                  <p className={`text-sm ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                    💡 <strong>Note:</strong> This information is required for payment processing. Your banking details are securely encrypted and stored.
-                  </p>
-                </div>
+            {/* Alternate Email and Phone */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                  Alternate Email
+                </label>
+                <input
+                  type="email"
+                  name="alternateEmail"
+                  value={formData.alternateEmail}
+                  onChange={handleInputChange}
+                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  placeholder="Enter alternate email address"
+                />
               </div>
-            </div> */}
+              <div>
+                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                  Alternate Phone Number
+                </label>
+                <input
+                  type="tel"
+                  name="alternatePhone"
+                  value={formData.alternatePhone}
+                  onChange={handleInputChange}
+                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  placeholder="Enter alternate phone number"
+                />
+              </div>
+            </div>
 
             {/* Terms and Conditions */}
             <div className="flex items-center">
