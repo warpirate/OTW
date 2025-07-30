@@ -47,11 +47,11 @@ const WorkerSignup = () => {
     emergencyContactRelationship: '',
     emergencyContactPhone: '',
     // Banking Details Fields (as requested in requirements)
-    bankName: '',
-    accountNumber: '',
-    ifscCode: '',
-    accountHolderName: '',
-    agreeToTerms: false
+    // bankName: '',
+    // accountNumber: '',
+    // ifscCode: '',
+    // accountHolderName: '',
+    // agreeToTerms: false
   });
 
   // Location states
@@ -145,28 +145,6 @@ const WorkerSignup = () => {
       }
       if (!formData.permanentAddress) {
         setError('Please enter your permanent address');
-        return false;
-      }
-      // Banking Details validation (as per requirements)
-      if (!formData.bankName) {
-        setError('Please enter bank name');
-        return false;
-      }
-      if (!formData.accountNumber) {
-        setError('Please enter account number');
-        return false;
-      }
-      if (!formData.ifscCode) {
-        setError('Please enter IFSC code');
-        return false;
-      }
-      if (!formData.accountHolderName) {
-        setError('Please enter account holder name');
-        return false;
-      }
-      // Basic IFSC code validation
-      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(formData.ifscCode)) {
-        setError('Please enter a valid IFSC code (e.g., SBIN0123456)');
         return false;
       }
       if (!formData.agreeToTerms) {
@@ -564,11 +542,6 @@ const WorkerSignup = () => {
         emergencyContactName: formData.emergencyContactName,
         emergencyContactRelationship: formData.emergencyContactRelationship,
         emergencyContactPhone: formData.emergencyContactPhone,
-        // Banking Details Data (as per requirements)
-        bankName: formData.bankName,
-        accountNumber: formData.accountNumber,
-        ifscCode: formData.ifscCode.toUpperCase(),
-        accountHolderName: formData.accountHolderName,
         // Provider specific data (only fields in providers table)
         providerData: {
           experience_years: getExperienceYears(formData.experience),
@@ -1100,7 +1073,6 @@ const WorkerSignup = () => {
                         <div className={`text-xs mt-1 ${
                           darkMode ? 'text-green-200' : 'text-green-700'
                         }`}>
-                          Coordinates: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                         </div>
                       )}
                     </div>
@@ -1123,49 +1095,6 @@ const WorkerSignup = () => {
                 </div>
               )}
             </div>
-            
-            {/* Manual coordinates entry only shown in auto mode when location is not granted */}
-            {locationEditMode === 'auto' && locationStatus !== 'granted' && (
-              <div className="text-center">
-                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
-                  or enter coordinates manually
-                </p>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                      Latitude
-                    </label>
-                    <input
-                      type="number"
-                      name="latitude"
-                      value={formData.latitude || ''}
-                      onChange={handleManualLocationEntry}
-                      step="any"
-                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                      }`}
-                      placeholder="Enter latitude"
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                      Longitude
-                    </label>
-                    <input
-                      type="number"
-                      name="longitude"
-                      value={formData.longitude || ''}
-                      onChange={handleManualLocationEntry}
-                      step="any"
-                      className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                      }`}
-                      placeholder="Enter longitude"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Permanent Address - Always shown but with different instructions based on mode */}
             <div className="mt-4">
@@ -1185,7 +1114,7 @@ const WorkerSignup = () => {
               />
             </div>
 
-            {/* Banking Details Section (as per requirements) */}
+            {/* Banking Details Section (as per requirements)
             <div className={`border-t pt-6 mt-6 ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}>
               <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 Banking Details
@@ -1264,7 +1193,7 @@ const WorkerSignup = () => {
                   </p>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Terms and Conditions */}
             <div className="flex items-center">
