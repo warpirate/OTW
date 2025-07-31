@@ -462,6 +462,7 @@ const WorkerSignup = () => {
         last_name: formData.lastName,
         email: formData.email,
         password: formData.password,
+        phone_number: formData.phone,
         provider_data: {
           phone: formData.phone,
           emergency_contact_name: formData.emergencyContactName,

@@ -205,16 +205,15 @@ class WorkerService {
     try {
       // Update provider basic info
       await connection.query(
-        `UPDATE providers SET 
-          experience_years = ?, bio = ?, service_radius_km = ?,
-          location_lat = ?, location_lng = ?, updated_at = NOW()
-         WHERE user_id = ?`,
+        `UPDATE providers p JOIN users u ON p.user_id = u.id SET 
+          p.experience_years = ?, p.bio = ?, p.service_radius_km = ?,
+          u.phone_number = ?, p.updated_at = NOW()
+         WHERE p.user_id = ?`,
         [
           updateData.experience_years,
           updateData.bio,
           updateData.service_radius_km,
-          updateData.location_lat,
-          updateData.location_lng,
+          updateData.phone_number,
           userId
         ]
       );
@@ -222,9 +221,9 @@ class WorkerService {
       // Update address if provided
       if (updateData.street_address) {
         await connection.query(
-          `UPDATE provider_addresses SET
-            street_address = ?, city = ?, state = ?, zip_code = ?, updated_at = NOW()
-           WHERE provider_id = (SELECT id FROM providers WHERE user_id = ?) AND address_type = 'permanent'`,
+          `UPDATE provider_addresses pa JOIN providers p ON pa.provider_id = p.id SET
+            pa.street_address = ?, pa.city = ?, pa.state = ?, pa.zip_code = ?, pa.updated_at = NOW()
+           WHERE p.user_id = ? AND pa.address_type = 'permanent'`,
           [
             updateData.street_address,
             updateData.city,
@@ -251,7 +250,7 @@ class WorkerService {
   static async updateLastActive(userId) {
     try {
       await pool.query(
-        'UPDATE providers SET last_active_at = NOW() WHERE user_id = ?',
+        'UPDATE providers p JOIN users u ON p.user_id = u.id SET p.last_active_at = NOW() WHERE u.id = ?',
         [userId]
       );
     } catch (error) {
@@ -459,7 +458,7 @@ router.put('/worker/profile', verifyToken, async (req, res) => {
     // Remove sensitive fields that shouldn't be updated via this endpoint
     const allowedFields = [
       'name', 'phone_number', 'experience_years', 'bio', 
-      'service_radius_km', 'location_lat', 'location_lng', 'active'
+      'service_radius_km', 'active'
     ];
     
     const filteredData = {};
