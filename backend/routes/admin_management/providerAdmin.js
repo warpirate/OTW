@@ -58,37 +58,43 @@ router.get('/providers', verifyToken, authorizeRole(['admin', 'superadmin']), as
     // Get providers with pagination
     const dataQuery = `
       SELECT 
-        u.id as user_id,
-        u.name,
-        u.email,
-        u.phone_number,
-        u.created_at as user_created_at,
-        p.id as provider_id,
-        p.experience_years,
-        p.rating,
-        p.bio,
-        p.verified,
-        p.active,
-        p.last_active_at,
-        p.service_radius_km,
-        p.location_lat,
-        p.location_lng,
-        p.permanent_address,
-        p.alternate_email,
-        p.alternate_phone_number,
-        p.emergency_contact_name,
-        p.emergency_contact_relationship,
-        p.emergency_contact_phone,
-        p.created_at as provider_created_at,
-        p.updated_at as provider_updated_at,
-        GROUP_CONCAT(DISTINCT ps.subcategory_id) as subcategory_ids
-      FROM users u
-      INNER JOIN providers p ON u.id = p.user_id
-      LEFT JOIN provider_services ps ON p.id = ps.provider_id
-      ${whereClause}
-      GROUP BY u.id, p.id
-      ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
+  u.id as user_id,
+  u.name,
+  u.email,
+  u.phone_number,
+  u.created_at as user_created_at,
+  p.id as provider_id,
+  p.experience_years,
+  p.rating,
+  p.bio,
+  p.verified,
+  p.active,
+  p.last_active_at,
+  p.service_radius_km,
+  p.location_lat,
+  p.location_lng,
+  p.alternate_email,
+  p.alternate_phone_number,
+  p.emergency_contact_name,
+  p.emergency_contact_relationship,
+  p.emergency_contact_phone,
+  p.created_at as provider_created_at,
+  p.updated_at as provider_updated_at,
+  ANY_VALUE(pa.street_address) AS street_address,
+  ANY_VALUE(pa.city) AS city,
+  ANY_VALUE(pa.state) AS state,
+  ANY_VALUE(pa.zip_code) AS zip_code,
+  ANY_VALUE(pa.address_type) AS address_type,
+  GROUP_CONCAT(DISTINCT ps.subcategory_id) as subcategory_ids
+FROM users u
+INNER JOIN providers p ON u.id = p.user_id
+LEFT JOIN provider_services ps ON p.id = ps.provider_id
+LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
+${whereClause}
+GROUP BY u.id, p.id
+ORDER BY p.created_at DESC
+LIMIT ? OFFSET ?
+
     `;
 
     queryParams.push(limit, offset);
@@ -112,7 +118,12 @@ router.get('/providers', verifyToken, authorizeRole(['admin', 'superadmin']), as
         lat: parseFloat(provider.location_lat),
         lng: parseFloat(provider.location_lng)
       },
-      permanent_address: provider.permanent_address,
+      permanent_address: {
+        street: provider.street_address,
+        city: provider.city,
+        state: provider.state,
+        zip_code: provider.zip_code
+      },
       alternate_email: provider.alternate_email,
       alternate_phone_number: provider.alternate_phone_number,
       emergency_contact: {
@@ -176,17 +187,22 @@ router.get('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
         p.service_radius_km,
         p.location_lat,
         p.location_lng,
-        p.permanent_address,
         p.alternate_email,
         p.alternate_phone_number,
         p.emergency_contact_name,
         p.emergency_contact_relationship,
         p.emergency_contact_phone,
         p.created_at as provider_created_at,
-        p.updated_at as provider_updated_at
+        p.updated_at as provider_updated_at,
+        ANY_VALUE(pa.street_address) AS street_address,
+        ANY_VALUE(pa.city) AS city,
+        ANY_VALUE(pa.state) AS state,
+        ANY_VALUE(pa.zip_code) AS zip_code
       FROM users u
       INNER JOIN providers p ON u.id = p.user_id
+      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
       WHERE u.id = ? AND u.is_active = 1
+      GROUP BY u.id, p.id
     `;
 
     const [providers] = await pool.query(query, [userId]);
@@ -212,38 +228,43 @@ router.get('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
     const [services] = await pool.query(servicesQuery, [provider.provider_id]);
 
     const formattedProvider = {
-      id: provider.user_id,
-      provider_id: provider.provider_id,
-      name: provider.name,
-      email: provider.email,
-      phone: provider.phone_number,
-      experience_years: provider.experience_years,
-      rating: parseFloat(provider.rating) || 0,
-      bio: provider.bio,
-      verified: Boolean(provider.verified),
-      active: Boolean(provider.active),
-      last_active_at: provider.last_active_at,
-      service_radius_km: provider.service_radius_km,
+      id: providers[0].user_id,
+      provider_id: providers[0].provider_id,
+      name: providers[0].name,
+      email: providers[0].email,
+      phone: providers[0].phone_number,
+      experience_years: providers[0].experience_years,
+      rating: parseFloat(providers[0].rating) || 0,
+      bio: providers[0].bio,
+      verified: Boolean(providers[0].verified),
+      active: Boolean(providers[0].active),
+      last_active_at: providers[0].last_active_at,
+      service_radius_km: providers[0].service_radius_km,
       location: {
-        lat: parseFloat(provider.location_lat),
-        lng: parseFloat(provider.location_lng)
+        lat: parseFloat(providers[0].location_lat),
+        lng: parseFloat(providers[0].location_lng)
       },
-      permanent_address: provider.permanent_address,
-      alternate_email: provider.alternate_email,
-      alternate_phone_number: provider.alternate_phone_number,
+      permanent_address: {
+        street: providers[0].street_address,
+        city: providers[0].city,
+        state: providers[0].state,
+        zip_code: providers[0].zip_code
+      },
+      alternate_email: providers[0].alternate_email,
+      alternate_phone_number: providers[0].alternate_phone_number,
       emergency_contact: {
-        name: provider.emergency_contact_name,
-        relationship: provider.emergency_contact_relationship,
-        phone: provider.emergency_contact_phone
+        name: providers[0].emergency_contact_name,
+        relationship: providers[0].emergency_contact_relationship,
+        phone: providers[0].emergency_contact_phone
       },
       services: services.map(service => ({
         subcategory_id: service.subcategory_id,
         subcategory_name: service.subcategory_name,
         category_name: service.category_name
       })),
-      created_at: provider.user_created_at,
-      provider_created_at: provider.provider_created_at,
-      updated_at: provider.provider_updated_at
+      created_at: providers[0].user_created_at,
+      provider_created_at: providers[0].provider_created_at,
+      updated_at: providers[0].provider_updated_at
     };
 
     res.json({
@@ -379,7 +400,6 @@ router.put('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
       service_radius_km,
       location_lat,
       location_lng,
-      permanent_address,
       alternate_email,
       alternate_phone_number,
       emergency_contact_name,
@@ -404,11 +424,120 @@ router.put('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
       );
     }
 
+    // Update provider addresses table
+    if (permanent_address) {
+      const addressFields = {
+        street_address: permanent_address.street,
+        city: permanent_address.city,
+        state: permanent_address.state,
+        zip_code: permanent_address.zip_code
+      };
+
+      const addressUpdates = [];
+      const addressValues = [];
+
+      Object.entries(addressFields).forEach(([field, value]) => {
+        if (value !== undefined) {
+          addressUpdates.push(`${field} = ?`);
+          addressValues.push(value);
+        }
+      });
+
+      if (addressUpdates.length > 0) {
+        addressUpdates.push('provider_id = ?');
+        addressValues.push(userId);
+        addressUpdates.push('address_type = ?');
+        addressValues.push('permanent');
+
+        await connection.query(
+          `UPDATE provider_addresses SET ${addressUpdates.join(', ')} WHERE provider_id = ? AND address_type = 'permanent'`,
+          [...addressValues, userId]
+        );
+      }
+    }
+
     await connection.commit();
+
+    const query = `
+      SELECT 
+        u.id as user_id,
+        u.name,
+        u.email,
+        u.phone_number,
+        u.created_at as user_created_at,
+        p.id as provider_id,
+        p.experience_years,
+        p.rating,
+        p.bio,
+        p.verified,
+        p.active,
+        p.last_active_at,
+        p.service_radius_km,
+        p.location_lat,
+        p.location_lng,
+        p.alternate_email,
+        p.alternate_phone_number,
+        p.emergency_contact_name,
+        p.emergency_contact_relationship,
+        p.emergency_contact_phone,
+        p.created_at as provider_created_at,
+        p.updated_at as provider_updated_at,
+        ANY_VALUE(pa.street_address) AS street_address,
+        ANY_VALUE(pa.city) AS city,
+        ANY_VALUE(pa.state) AS state,
+        ANY_VALUE(pa.zip_code) AS zip_code
+      FROM users u
+      INNER JOIN providers p ON u.id = p.user_id
+      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
+      WHERE u.id = ? AND u.is_active = 1
+      GROUP BY u.id, p.id
+    `;
+
+    const [providers] = await pool.query(query, [userId]);
+
+    if (providers.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    const provider = providers[0];
 
     res.json({
       success: true,
-      message: 'Provider updated successfully'
+      message: 'Provider updated successfully',
+      data: {
+        id: provider.user_id,
+        provider_id: provider.provider_id,
+        name: provider.name,
+        email: provider.email,
+        phone: provider.phone_number,
+        experience_years: provider.experience_years,
+        rating: parseFloat(provider.rating) || 0,
+        bio: provider.bio,
+        verified: Boolean(provider.verified),
+        active: Boolean(provider.active),
+        last_active_at: provider.last_active_at,
+        service_radius_km: provider.service_radius_km,
+        location: {
+          lat: parseFloat(provider.location_lat),
+          lng: parseFloat(provider.location_lng)
+        },
+        permanent_address: {
+          street: provider.street_address,
+          city: provider.city,
+          state: provider.state,
+          zip_code: provider.zip_code
+        },
+        alternate_email: provider.alternate_email,
+        alternate_phone_number: provider.alternate_phone_number,
+        emergency_contact: {
+          name: provider.emergency_contact_name,
+          relationship: provider.emergency_contact_relationship,
+          phone: provider.emergency_contact_phone
+        }
+      }
     });
 
   } catch (error) {

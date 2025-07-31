@@ -372,88 +372,76 @@ const UserManagement = () => {
 
       {/* Provider Detail Modal */}
       {showModal && selectedProvider && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black opacity-50"></div>
-          <div className="relative bg-white rounded-lg max-w-2xl w-full mx-auto shadow-xl">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              {/* Header */}
-              <div className="flex justify-between items-center border-b pb-3">
-                <h1 className="text-lg font-medium text-brand">{selectedProvider.name}</h1>
-                <button className="text-gray-400 hover:text-brand" onClick={() => setShowModal(false)}>
-                  <i className="fas fa-times"></i>
+              <h2 className="text-xl font-bold mb-4">Provider Details</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Basic Info */}
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Basic Information</h3>
+                  <div className="space-y-2">
+                    <p><span className="font-medium">Name:</span> {selectedProvider.name}</p>
+                    <p><span className="font-medium">Email:</span> {selectedProvider.email}</p>
+                    <p><span className="font-medium">Phone:</span> {selectedProvider.phone}</p>
+                    <p><span className="font-medium">Experience:</span> {selectedProvider.experience_years} years</p>
+                    <p><span className="font-medium">Rating:</span> {selectedProvider.rating?.toFixed(1) || 'N/A'}</p>
+                  </div>
+                </div>
+                
+                {/* Address */}
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Address</h3>
+                  {selectedProvider.permanent_address ? (
+                    <div className="space-y-2">
+                      <p><span className="font-medium">Street:</span> {selectedProvider.permanent_address.street || 'N/A'}</p>
+                      <p><span className="font-medium">City:</span> {selectedProvider.permanent_address.city || 'N/A'}</p>
+                      <p><span className="font-medium">State:</span> {selectedProvider.permanent_address.state || 'N/A'}</p>
+                      <p><span className="font-medium">ZIP Code:</span> {selectedProvider.permanent_address.zip_code || 'N/A'}</p>
+                    </div>
+                  ) : (
+                    <p>No address information available</p>
+                  )}
+                </div>
+                
+                {/* Bio */}
+                {selectedProvider.bio && (
+                  <div className="py-2 border-t">
+                    <p className="text-sm font-medium text-gray-500">Bio</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.bio}</p>
+                  </div>
+                )}
+
+                {/* Emergency Contact */}
+                {selectedProvider.emergency_contact && (
+                  <div className="py-2 border-t">
+                    <p className="text-sm font-medium text-gray-500">Emergency Contact</p>
+                    <p className="mt-1 text-sm text-gray-900">{selectedProvider.emergency_contact.name} ({selectedProvider.emergency_contact.relationship}) - {selectedProvider.emergency_contact.phone}</p>
+                  </div>
+                )}
+
+                {/* Services Offered */}
+                {selectedProvider.services && selectedProvider.services.length > 0 && (
+                  <div className="py-2 border-t">
+                    <p className="text-sm font-medium text-gray-500">Services Offered</p>
+                    <ul className="mt-1 text-sm text-gray-900 list-disc pl-5">
+                      {selectedProvider.services.map((service, idx) => (
+                        <li key={idx}>{service.category_name} - {service.subcategory_name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              
+              {/* Modal footer with action buttons */}
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Close
                 </button>
-              </div>
-
-              {/* Basic Info */}
-              <div className="py-4 grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Email</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.email}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Phone</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.phone}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Experience</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.experience_years} years</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Join Date</p>
-                  <p className="mt-1 text-sm text-gray-900">{new Date(selectedProvider.created_at).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Status</p>
-                  <p className={`mt-1 text-sm font-semibold ${selectedProvider.verified && selectedProvider.active ? 'text-green-600' : !selectedProvider.verified && selectedProvider.active ? 'text-yellow-600' : 'text-red-600'}`}>{getStatusBadge(selectedProvider).text}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Rating</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.rating?.toFixed(1) || 'N/A'} ⭐</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Service Radius</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.service_radius_km} km</p>
-                </div>
-              </div>
-
-              {/* Bio */}
-              {selectedProvider.bio && (
-                <div className="py-2 border-t">
-                  <p className="text-sm font-medium text-gray-500">Bio</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.bio}</p>
-                </div>
-              )}
-
-              {/* Location */}
-              {selectedProvider.permanent_address && (
-                <div className="py-2 border-t">
-                  <p className="text-sm font-medium text-gray-500">Permanent Address</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.permanent_address}</p>
-                </div>
-              )}
-
-              {/* Emergency Contact */}
-              {selectedProvider.emergency_contact && (
-                <div className="py-2 border-t">
-                  <p className="text-sm font-medium text-gray-500">Emergency Contact</p>
-                  <p className="mt-1 text-sm text-gray-900">{selectedProvider.emergency_contact.name} ({selectedProvider.emergency_contact.relationship}) - {selectedProvider.emergency_contact.phone}</p>
-                </div>
-              )}
-
-              {/* Services Offered */}
-              {selectedProvider.services && selectedProvider.services.length > 0 && (
-                <div className="py-2 border-t">
-                  <p className="text-sm font-medium text-gray-500">Services Offered</p>
-                  <ul className="mt-1 text-sm text-gray-900 list-disc pl-5">
-                    {selectedProvider.services.map((service, idx) => (
-                      <li key={idx}>{service.category_name} - {service.subcategory_name}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="border-t pt-4 flex flex-col sm:flex-row sm:justify-between gap-3 mt-4">
                 <button 
                   className="px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                   onClick={() => handleDeleteProvider(selectedProvider.id)}

@@ -114,13 +114,12 @@ router.get('/profile', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-// NEW ROUTE: Search categories and subcategories
+ 
 router.get('/search-services', async (req, res) => {
   try {
     const { q, limit = 10 } = req.query;
 
-    // If no query term provided, return empty results
+      // If no query term provided, return empty results
     if (!q || q.trim().length === 0) {
       return res.json({ categories: [], subcategories: [] });
     }
