@@ -51,7 +51,7 @@ const CartService = {
       // If user is authenticated, fetch from API
       if (AuthService.isLoggedIn('customer')) {
         const response = await apiClient.get('/cart');
-        return response.data;
+        return CartService.utils.mapCartData(response.data);
       } else {
         // Otherwise, get from local storage
         const cartData = localStorage.getItem(CART_STORAGE_KEY);
@@ -70,8 +70,12 @@ const CartService = {
     try {
       if (AuthService.isLoggedIn('customer')) {
         // Send to API if logged in
-        const response = await apiClient.post('/cart/add', serviceItem);
-        return response.data;
+        const cartItem = {
+          subcategory_id: serviceItem.id || serviceItem.subcategory_id,
+          quantity: serviceItem.quantity || 1
+        };
+        const response = await apiClient.post('/cart/add', cartItem);
+        return CartService.utils.mapCartData(response.data);
       } else {
         // Otherwise, store in local storage
         const cart = CartService.getLocalCart();
@@ -109,7 +113,7 @@ const CartService = {
       if (AuthService.isLoggedIn('customer')) {
         // Update via API if logged in
         const response = await apiClient.put(`/cart/update/${itemId}`, { quantity });
-        return response.data;
+        return CartService.utils.mapCartData(response.data);
       } else {
         // Update in local storage
         const cart = CartService.getLocalCart();
@@ -139,7 +143,7 @@ const CartService = {
       if (AuthService.isLoggedIn('customer')) {
         // Remove via API if logged in
         const response = await apiClient.delete(`/cart/remove/${itemId}`);
-        return response.data;
+        return CartService.utils.mapCartData(response.data);
       } else {
         // Remove from local storage
         const cart = CartService.getLocalCart();
@@ -164,7 +168,7 @@ const CartService = {
       if (AuthService.isLoggedIn('customer')) {
         // Clear via API if logged in
         const response = await apiClient.delete('/cart/clear');
-        return response.data;
+        return CartService.utils.mapCartData(response.data);
       } else {
         // Clear local storage
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ items: [], total: 0 }));
@@ -188,7 +192,7 @@ const CartService = {
         // Clear local storage after sync
         localStorage.removeItem(CART_STORAGE_KEY);
         
-        return response.data;
+        return CartService.utils.mapCartData(response.data);
       }
       
       return { items: [], total: 0 };
@@ -212,6 +216,26 @@ const CartService = {
     } catch (error) {
       console.error('Error during checkout:', error);
       throw error;
+    }
+  },
+
+  // Utility methods
+  utils: {
+    // Map backend cart data to frontend format
+    mapCartData: (backendCart) => {
+      const items = backendCart.items || [];
+      return {
+        items: items.map(item => ({
+          id: item.id,
+          subcategory_id: item.subcategory_id,
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          quantity: item.quantity,
+          total_price: item.total_price
+        })),
+        total: backendCart.total || 0
+      };
     }
   }
 };

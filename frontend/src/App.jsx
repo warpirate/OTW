@@ -18,6 +18,7 @@ import CheckoutSuccess from './app/customer/CheckoutSuccess';
 import Booking from './app/customer/Booking';
 import BookingSuccess from './app/customer/BookingSuccess';
 import CustomerProfile from './app/customer/CustomerProfile';
+import Bookings from './app/customer/Bookings';
 import SearchResults from './app/customer/SearchResults';
 import AboutUs from './app/customer/AboutUs';
 import Careers from './app/customer/Careers';
@@ -354,6 +355,11 @@ function App() {
                   <CustomerProfile />
                 </CustomerProtectedRoute>
               } />
+                      <Route path="bookings" element={
+          <CustomerProtectedRoute>
+            <Bookings />
+          </CustomerProtectedRoute>
+        } />
             </Route>
 
             {/* Admin Routes */}

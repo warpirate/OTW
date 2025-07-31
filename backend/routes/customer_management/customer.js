@@ -62,31 +62,43 @@ router.put('/:id', verifyToken, async (req, res) => {
     state,
     country,
     location_lat,
-    location_lng
+    location_lng,
+    phone_number
   } = req.body;
 
   try {
-    const fields = [];
-    const values = [];
+    // Update customer address fields
+    const customerFields = [];
+    const customerValues = [];
 
-    if (address) { fields.push('address = ?'); values.push(address); }
-    if (pin_code) { fields.push('pin_code = ?'); values.push(pin_code); }
-    if (city) { fields.push('city = ?'); values.push(city); }
-    if (state) { fields.push('state = ?'); values.push(state); }
-    if (country) { fields.push('country = ?'); values.push(country); }
-    if (location_lat) { fields.push('location_lat = ?'); values.push(location_lat); }
-    if (location_lng) { fields.push('location_lng = ?'); values.push(location_lng); }
+    if (address) { customerFields.push('address = ?'); customerValues.push(address); }
+    if (pin_code) { customerFields.push('pin_code = ?'); customerValues.push(pin_code); }
+    if (city) { customerFields.push('city = ?'); customerValues.push(city); }
+    if (state) { customerFields.push('state = ?'); customerValues.push(state); }
+    if (country) { customerFields.push('country = ?'); customerValues.push(country); }
+    if (location_lat) { customerFields.push('location_lat = ?'); customerValues.push(location_lat); }
+    if (location_lng) { customerFields.push('location_lng = ?'); customerValues.push(location_lng); }
 
-    if (fields.length === 0) {
-      return res.status(400).json({ message: 'No fields provided to update' });
+    // Update customer address if there are fields to update
+    if (customerFields.length > 0) {
+      customerValues.push(id); // Add ID for WHERE clause
+      await pool.query(
+        `UPDATE customer_addresses SET ${customerFields.join(', ')} WHERE customer_id = ? AND is_default = 1`,
+        customerValues
+      );
     }
 
-    values.push(id); // Add ID for WHERE clause
+    // Update phone number in users table if provided
+    if (phone_number) {
+      await pool.query(
+        'UPDATE users SET phone_number = ? WHERE id = ?',
+        [phone_number, id]
+      );
+    }
 
-    await pool.query(
-      `UPDATE customers SET ${fields.join(', ')} WHERE id = ?`,
-      values
-    );
+    if (customerFields.length === 0 && !phone_number) {
+      return res.status(400).json({ message: 'No fields provided to update' });
+    }
 
     res.json({ message: 'Customer profile updated successfully' });
   } catch (err) {

@@ -218,16 +218,16 @@ const BookingSuccess = () => {
           
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <button 
-              onClick={() => navigate('/profile')}
-              className={`px-8 py-3 border rounded-lg transition-colors ${
-                darkMode 
-                  ? 'border-gray-600 text-gray-300 hover:bg-gray-700' 
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              View My Bookings
-            </button>
+                          <button
+                onClick={() => navigate('/bookings')}
+                className={`px-8 py-3 border rounded-lg transition-colors ${
+                  darkMode
+                    ? 'border-gray-600 text-gray-300 hover:bg-gray-700'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                View My Bookings
+              </button>
             
             <button 
               onClick={() => navigate('/')}

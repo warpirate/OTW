@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, Calendar, Clock, MapPin } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
-import { isDarkMode } from '../utils/themeUtils';
+import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
@@ -33,6 +33,20 @@ const Cart = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+
+  // Listen for theme changes
+  useEffect(() => {
+    // Update dark mode state when theme changes
+    const removeListener = addThemeListener(() => {
+      setDarkMode(isDarkMode());
+    });
+    
+    return () => {
+      // Clean up listener on component unmount
+      removeListener();
+    };
+  }, []);
+
   useEffect(() => {
     const checkAuthStatus = () => {
       try {
@@ -99,23 +113,21 @@ const Cart = () => {
   const handleCheckout = async (e) => {
     e.preventDefault();
     
+    if (!isAuthenticated) {
+      toast.error('Please login to continue with booking');
+      navigate('/login');
+      return;
+    }
+
+    if (cart.items.length === 0) {
+      toast.error('Your cart is empty');
+      return;
+    }
+
+    setIsProcessing(true);
+    
     try {
-      setIsProcessing(true);
-      
-      // Check if user is authenticated
-      if (!isAuthenticated) {
-        toast.error('Please login to continue with booking');
-        navigate('/login');
-        return;
-      }
-      
-      // Check if cart has items
-      if (!cart.items || cart.items.length === 0) {
-        toast.error('Your cart is empty');
-        return;
-      }
-      
-      // Redirect to booking flow
+      // Navigate to booking page with cart data
       navigate('/booking');
       
     } catch (err) {
@@ -128,7 +140,7 @@ const Cart = () => {
   // Empty cart view
   if (!loading && cart.items.length === 0) {
     return (
-      <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
         <Header />
         <div className="container-custom py-12">
           <div className="text-center py-16">
@@ -159,7 +171,7 @@ const Cart = () => {
   // Loading state
   if (loading) {
     return (
-      <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
         <Header />
         <div className="container-custom py-12">
           <div className="flex justify-center py-16">
@@ -174,7 +186,7 @@ const Cart = () => {
   // Error state
   if (error) {
     return (
-      <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
         <Header />
         <div className="container-custom py-12">
           <div className="text-center py-16">
@@ -196,7 +208,7 @@ const Cart = () => {
 
   // Cart view (default)
   return (
-    <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
       <Header />
       
       <div className="container-custom py-12">
@@ -214,68 +226,56 @@ const Cart = () => {
           {/* Cart Items Section */}
           <div className="lg:w-2/3">
             <div className={`rounded-lg shadow-md ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} border overflow-hidden`}>
-              <div className="p-6 border-b border-gray-200">
+              <div className={`p-6 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Your Cart ({cart.items.length} {cart.items.length === 1 ? 'item' : 'items'})
                 </h1>
               </div>
               
               {/* Cart Items */}
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
                 {cart.items.map((item) => (
-                  <div key={item.id} className="p-6 flex flex-col sm:flex-row items-start sm:items-center">
-                    {/* Service Icon/Image */}
-                    <div className={`rounded-lg p-4 mb-4 sm:mb-0 sm:mr-6 ${darkMode ? 'bg-gray-700' : 'bg-purple-50'}`}>
-                      <div className="h-12 w-12 text-purple-600">
-                        {item.icon ? (
-                          <img src={item.icon} alt={item.name} className="h-full w-full object-contain" />
-                        ) : (
-                          <ShoppingBag className="h-full w-full" />
-                        )}
+                  <div key={item.id} className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {item.name}
+                        </h3>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {item.description}
+                        </p>
+                        <p className={`text-lg font-bold mt-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          ${item.price}
+                        </p>
                       </div>
-                    </div>
-                    
-                    {/* Service Details */}
-                    <div className="flex-1">
-                      <h3 className={`font-bold text-lg mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {item.name}
-                      </h3>
-                      <p className={`text-sm mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        {item.description || 'Professional service'}
-                      </p>
                       
-                      {/* Service Price */}
-                      <div className="flex flex-wrap items-center justify-between mt-2">
-                        <div className="flex items-center space-x-4 mb-2 sm:mb-0">
-                          <div className="flex items-center border rounded-lg">
-                            <button 
-                              onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
-                              className={`p-2 ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
-                            >
-                              <Minus className="h-4 w-4" />
-                            </button>
-                            <span className={`px-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                              {item.quantity}
-                            </span>
-                            <button 
-                              onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
-                              className={`p-2 ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          </div>
-                          
-                          <button 
-                            onClick={() => handleRemoveItem(item.id)}
-                            className={`p-2 rounded-full ${darkMode ? 'text-red-400 hover:bg-gray-700' : 'text-red-500 hover:bg-gray-100'}`}
+                      <div className="flex items-center space-x-4">
+                        {/* Quantity Controls */}
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                            className={`p-2 ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
                           >
-                            <Trash2 className="h-5 w-5" />
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className={`w-12 text-center ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                            className={`p-2 ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                          >
+                            <Plus className="h-4 w-4" />
                           </button>
                         </div>
                         
-                        <div className="font-semibold text-purple-600">
-                          ₹{(item.price * item.quantity).toFixed(2)}
-                        </div>
+                        {/* Remove Button */}
+                        <button
+                          onClick={() => handleRemoveItem(item.id)}
+                          className={`p-2 rounded-full ${darkMode ? 'text-red-400 hover:bg-gray-700' : 'text-red-500 hover:bg-gray-100'}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -283,69 +283,69 @@ const Cart = () => {
               </div>
               
               {/* Cart Actions */}
-              <div className="p-6 border-t border-gray-200 flex justify-between items-center">
-                <button 
-                  onClick={handleClearCart}
-                  className={`px-4 py-2 rounded-lg ${
-                    darkMode 
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Clear Cart
-                </button>
+              <div className={`p-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={handleClearCart}
+                    className={`text-sm ${darkMode ? 'text-gray-400 hover:text-red-400' : 'text-gray-600 hover:text-red-600'}`}
+                  >
+                    Clear Cart
+                  </button>
+                  <div className="text-right">
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Total ({cart.items.length} {cart.items.length === 1 ? 'item' : 'items'})
+                    </p>
+                    <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      ${cart.total}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           
-          {/* Order Summary Section */}
+          {/* Order Summary */}
           <div className="lg:w-1/3">
             <div className={`rounded-lg shadow-md ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} border overflow-hidden sticky top-24`}>
-              <div className="p-6 border-b border-gray-200">
+              <div className={`p-6 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Order Summary
                 </h2>
               </div>
               
               <div className="p-6">
-                {/* Summary Items */}
-                <div className="space-y-4 mb-6">
-                  <div className="flex justify-between">
-                    <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Subtotal</span>
-                    <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      ₹{cart.total.toFixed(2)}
-                    </span>
-                  </div>
+                <div className="space-y-4">
+                  {cart.items.map((item) => (
+                    <div key={item.id} className="flex justify-between items-center">
+                      <div className="flex-1">
+                        <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                          {item.name} x {item.quantity}
+                        </p>
+                      </div>
+                      <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        ${(item.price * item.quantity).toFixed(2)}
+                      </p>
+                    </div>
+                  ))}
                   
-                  <div className="flex justify-between">
-                    <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Service Fee</span>
-                    <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      ₹{(cart.total * 0.05).toFixed(2)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Tax</span>
-                    <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      ₹{(cart.total * 0.18).toFixed(2)}
-                    </span>
-                  </div>
-                  
-                  <div className="border-t border-gray-200 pt-4 flex justify-between">
-                    <span className={`font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Total</span>
-                    <span className="font-bold text-purple-600">
-                      ₹{(cart.total + (cart.total * 0.05) + (cart.total * 0.18)).toFixed(2)}
-                    </span>
+                  <div className={`border-t pt-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                    <div className="flex justify-between items-center">
+                      <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        Total
+                      </span>
+                      <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        ${cart.total}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 
-                {/* Checkout Button */}
-                <button 
+                <button
                   onClick={handleCheckout}
-                  className="w-full btn-brand py-3"
                   disabled={isProcessing || cart.items.length === 0}
+                  className="w-full btn-brand mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isProcessing ? 'Processing...' : 'Book Now'}
+                  {isProcessing ? 'Processing...' : 'Proceed to Booking'}
                 </button>
               </div>
             </div>

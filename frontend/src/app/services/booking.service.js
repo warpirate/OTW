@@ -243,6 +243,45 @@ const BookingService = {
       }
       
       return dates;
+    },
+
+    // Map backend booking data to frontend format
+    mapBookingData: (backendBooking) => {
+      return {
+        booking_id: backendBooking.id,
+        service_name: backendBooking.service_name,
+        subcategory_name: backendBooking.service_description,
+        status: backendBooking.service_status,
+        payment_status: backendBooking.payment_status,
+        booking_date: backendBooking.scheduled_time,
+        time_slot: backendBooking.scheduled_time ? 
+          new Date(backendBooking.scheduled_time).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }) : null,
+        address: backendBooking.address,
+        total_amount: backendBooking.price,
+        gst_amount: backendBooking.gst,
+        provider_name: backendBooking.provider_name || 'Not Assigned',
+        provider_phone: backendBooking.provider_phone,
+        created_at: backendBooking.created_at,
+        notes: backendBooking.notes
+      };
+    },
+
+    // Map backend booking list to frontend format
+    mapBookingList: (backendResponse) => {
+      const bookings = backendResponse.bookings || [];
+      return {
+        bookings: bookings.map(BookingService.utils.mapBookingData),
+        pagination: backendResponse.pagination || {
+          current_page: 1,
+          per_page: 10,
+          total: bookings.length,
+          total_pages: 1
+        }
+      };
     }
   }
 };

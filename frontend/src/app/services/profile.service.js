@@ -79,6 +79,11 @@ const ProfileService = {
       errors.pin_code = 'PIN code must be 6 digits';
     }
     
+    // Validate phone number format (basic validation for 10-15 digits)
+    if (profileData.phone_number && !/^\d{10,15}$/.test(profileData.phone_number.replace(/\D/g, ''))) {
+      errors.phone_number = 'Phone number must be 10-15 digits';
+    }
+    
     // Validate latitude range
     if (profileData.location_lat && (profileData.location_lat < -90 || profileData.location_lat > 90)) {
       errors.location_lat = 'Latitude must be between -90 and 90';

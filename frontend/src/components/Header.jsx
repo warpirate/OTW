@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Moon, Sun, User, ChevronDown, ShoppingCart, LogOut, Search, Wrench, Sparkles } from 'lucide-react';
+import { Moon, Sun, User, ChevronDown, ShoppingCart, LogOut, Search, Wrench, Sparkles, Package } from 'lucide-react';
 import AuthService from '../app/services/auth.service';
 import { LandingPageService } from '../app/services/landing_page.service';
+import BookingService from '../app/services/booking.service';
 import { isDarkMode, addThemeListener, toggleTheme } from '../app/utils/themeUtils';
 import { useCart } from '../app/contexts/CartContext';
 
@@ -14,6 +15,7 @@ const Header = () => {
   const [user, setUser] = useState(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [cartItemCount, setCartItemCount] = useState(0);
+  const [bookingCount, setBookingCount] = useState(0);
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,31 +41,45 @@ const Header = () => {
     return cleanup;
   }, []);
 
-  // Update cart count
+  // Update cart count and booking count
   useEffect(() => {
-    const updateCartCount = () => {
+    const updateCounts = async () => {
       setCartItemCount(getItemCount());
+      
+      // Update booking count if authenticated
+      if (isAuthenticated && user) {
+        try {
+          const response = await BookingService.bookings.getHistory(1, 1);
+          const activeBookings = (response.bookings || []).filter(booking =>
+            ['pending', 'confirmed', 'in_progress'].includes(booking.status?.toLowerCase())
+          );
+          setBookingCount(activeBookings.length);
+        } catch (error) {
+          console.error('Error loading booking count:', error);
+        }
+      } else {
+        setBookingCount(0);
+      }
     };
     
     // Update initially
-    updateCartCount();
+    updateCounts();
     
-    // Set up interval to check cart count (using a more reasonable interval)
-    const cartCheckInterval = setInterval(updateCartCount, 1000);
+    // Set up interval to check counts
+    const countCheckInterval = setInterval(updateCounts, 5000);
     
-    // Listen for login event to update cart count immediately
+    // Listen for login event to update counts immediately
     const handleLogin = () => {
-      updateCartCount();
+      updateCounts();
     };
     
-    // Add login event listener
     window.addEventListener('customer_login', handleLogin);
     
     return () => {
-      clearInterval(cartCheckInterval);
+      clearInterval(countCheckInterval);
       window.removeEventListener('customer_login', handleLogin);
     };
-  }, [getItemCount]);
+  }, [getItemCount, isAuthenticated, user]);
 
   // Realtime search effect with debounce
   useEffect(() => {
@@ -331,6 +347,26 @@ const Header = () => {
                         {cartItemCount > 0 && (
                           <span className="ml-1 bg-purple-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                             {cartItemCount}
+                          </span>
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowProfileDropdown(false);
+                          navigate('/bookings');
+                        }}
+                        className={`flex items-center space-x-2 w-full px-4 py-2 text-left transition-colors ${
+                          darkMode
+                            ? 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Package className="h-4 w-4" />
+                        <span>My Bookings</span>
+                        {bookingCount > 0 && (
+                          <span className="ml-1 bg-orange-600 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+                            {bookingCount}
                           </span>
                         )}
                       </button>
