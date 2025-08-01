@@ -37,7 +37,41 @@ apiClient.interceptors.response.use(
   }
 );
 
-const DriverService = {
+export const DriverService = {
+  // Location Search
+  location: {
+    // Search for location suggestions
+    search: async (query) => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`
+        );
+        const data = await response.json();
+        return data.map(item => ({
+          display: item.display_name,
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lon)
+        }));
+      } catch (error) {
+        console.error('Error searching locations:', error);
+        throw error;
+      }
+    },
+    
+    // Reverse geocoding
+    reverse: async (lat, lng) => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+        );
+        return await response.json();
+      } catch (error) {
+        console.error('Error in reverse geocoding:', error);
+        throw error;
+      }
+    }
+  },
+
   // Driver Search
   search: {
     // Search for available drivers
@@ -57,7 +91,7 @@ const DriverService = {
     // Create a new driver booking
     create: async (bookingData) => {
       try {
-        const response = await apiClient.post('/book', bookingData);
+        const response = await apiClient.post('/book-ride', bookingData);
         return response.data;
       } catch (error) {
         console.error('Error creating driver booking:', error);
@@ -86,6 +120,19 @@ const DriverService = {
         throw error;
       }
     }
+  },
+
+  // Calculate distance between two points using Haversine formula
+  calculateDistance: (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
   },
 
   // Utility methods
@@ -249,4 +296,4 @@ const DriverService = {
   }
 };
 
-export default DriverService; 
+ 

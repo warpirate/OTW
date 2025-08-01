@@ -26,6 +26,7 @@ import Blog from './app/customer/Blog';
 import Contact from './app/customer/Contact';
 import Terms from './app/customer/Terms';
 import Privacy from './app/customer/Privacy';
+import DriverBooking from './app/customer/DriverBooking';
 
 // Admin Components
 import AdminLayout from './app/layouts/AdminLayout';
@@ -356,10 +357,15 @@ function App() {
                 </CustomerProtectedRoute>
               } />
                       <Route path="bookings" element={
-          <CustomerProtectedRoute>
-            <Bookings />
-          </CustomerProtectedRoute>
-        } />
+              <CustomerProtectedRoute>
+                <Bookings />
+              </CustomerProtectedRoute>
+            } />
+            <Route path="driver" element={
+              <CustomerProtectedRoute>
+                <DriverBooking />
+              </CustomerProtectedRoute>
+            } />
             </Route>
 
             {/* Admin Routes */}

@@ -325,7 +325,7 @@ const LandingPage = () => {
                 We are on the way to make your life easier with our services.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                <button className="btn-accent py-3 px-8 rounded-xl" onClick={() => navigate('/booking')}>
+                <button className="btn-accent py-3 px-8 rounded-xl" onClick={() => navigate('/driver')}>
                   Book a Service
                 </button>
               </div>

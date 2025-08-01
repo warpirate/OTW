@@ -139,6 +139,62 @@ const Booking = () => {
     }));
   };
   
+  // Geocode address to get latitude and longitude
+  const geocodeAddress = async (addressData) => {
+    try {
+      const { address, city, state, country } = addressData;
+      
+      // Try different address combinations in order of specificity
+      const addressCombinations = [
+        `${address}, ${city}, ${state}, ${country}`,
+        `${city}, ${state}, ${country}`,
+        `${state}, ${country}`
+      ];
+      
+      let latitude = null;
+      let longitude = null;
+      
+      for (const addr of addressCombinations) {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          console.error('Geocoding API error:', response.statusText);
+          continue;
+        }
+        
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          latitude = parseFloat(data[0].lat);
+          longitude = parseFloat(data[0].lon);
+          break;
+        }
+      }
+      
+      if (!latitude || !longitude) {
+        console.warn('Could not determine precise location from address, using default coordinates');
+        // Return default coordinates (center of India) if geocoding fails
+        return { 
+          location_lat: 0.0000, 
+          location_lng: 0.0000 
+        };
+      }
+      
+      return { 
+        location_lat: latitude, 
+        location_lng: longitude 
+      };
+    } catch (error) {
+      console.error('Error in geocoding:', error);
+      // Return default coordinates (center of India) in case of error
+      return { 
+        location_lat: 0.0000, 
+        location_lng: 0.0000 
+      };
+    }
+  };
+
   // Add new address
   const handleAddAddress = async () => {
     try {
@@ -149,7 +205,16 @@ const Booking = () => {
         return;
       }
       
-      const result = await BookingService.addresses.create(newAddress);
+      // Get coordinates before saving
+      const coordinates = await geocodeAddress(newAddress);
+      
+      // Create address object with coordinates
+      const addressWithCoords = {
+        ...newAddress,
+        ...coordinates
+      };
+      
+      const result = await BookingService.addresses.create(addressWithCoords);
       toast.success('Address added successfully');
       
       // Refresh addresses

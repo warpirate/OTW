@@ -43,6 +43,7 @@ const WorkerProfile = () => {
     city: '',
     state: '',
     zip_code: '',
+
     alternate_email: '',
     alternate_phone_number: '',
     emergency_contact_name: '',
@@ -106,6 +107,7 @@ const WorkerProfile = () => {
 
   // Format profile data for display
   const formatProfileData = (profileData) => {
+    console.log('Profile Data:', profileData);
     return {
       ...profileData,
       displayName: profileData.name || 'Worker',
@@ -195,11 +197,12 @@ const WorkerProfile = () => {
       [name]: finalValue
     }));
   };
-
+  
   const handleSave = async () => {
     setSaving(true);
     try {
       // Only send the editable fields to the update endpoint
+      console.log('Edited Profile:', editedProfile);
       const updateData = {
         name: editedProfile.name,
         phone_number: editedProfile.phone_number,
@@ -217,7 +220,7 @@ const WorkerProfile = () => {
         emergency_contact_phone: editedProfile.emergency_contact_phone,
         active: editedProfile.active
       };
-
+      console.log('Update Data:', updateData);
       // Validate data before sending
       const validation = validateProfileData(updateData);
       if (!validation.isValid) {

@@ -306,6 +306,8 @@ const WorkerSignup = () => {
     try {
       setIsLoadingSubcategories(true);
       const response = await LandingPageService.getAllSubCategories(categoryId);
+      console.log('Fetched subcategories for category:', categoryId);
+      console.log('Fetched subcategories:', response);
       
       if (response) {
         // Add subcategories to the map

@@ -200,6 +200,8 @@ class WorkerService {
    */
   static async updateWorkerProfile(userId, updateData) {
     const connection = await pool.getConnection();
+    console.log('Update Data:', updateData);
+
     await connection.beginTransaction();
     
     try {
@@ -223,7 +225,7 @@ class WorkerService {
         await connection.query(
           `UPDATE provider_addresses pa JOIN providers p ON pa.provider_id = p.id SET
             pa.street_address = ?, pa.city = ?, pa.state = ?, pa.zip_code = ?, pa.updated_at = NOW()
-           WHERE p.user_id = ? AND pa.address_type = 'permanent'`,
+           WHERE p.user_id = ?`,
           [
             updateData.street_address,
             updateData.city,
@@ -458,8 +460,12 @@ router.put('/worker/profile', verifyToken, async (req, res) => {
     // Remove sensitive fields that shouldn't be updated via this endpoint
     const allowedFields = [
       'name', 'phone_number', 'experience_years', 'bio', 
-      'service_radius_km', 'active'
+      'service_radius_km', 'active',
+      'street_address', 'city', 'state', 'zip_code',
+      'alternate_email', 'alternate_phone_number',
+      'emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_phone'
     ];
+    
     
     const filteredData = {};
     Object.keys(updateData).forEach(key => {
