@@ -90,11 +90,6 @@ const LandingPage = () => {
     }
   };
   
-  // Driver selection states
-  const [driverStep, setDriverStep] = useState(1); // 1 for car selection, 2 for booking basis
-  const [selectedCarOption, setSelectedCarOption] = useState(null); // 'with-car' or 'without-car'
-  const [showDriverSteps, setShowDriverSteps] = useState(false);
-  
   // User authentication and profile dropdown states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
@@ -452,10 +447,6 @@ const LandingPage = () => {
                       setActiveTab(category.id);
                       setShowSubcategories(false);
                       setSelectedCategory(null);
-                      // Reset driver states
-                      setShowDriverSteps(false);
-                      setDriverStep(1);
-                      setSelectedCarOption(null);
                     }}
                     className={`px-8 py-3 rounded-lg font-medium transition-all ${
                       activeTab === category.id
@@ -544,243 +535,62 @@ const LandingPage = () => {
                 <div key={categoryKey}>
                   {categoryKey === 'driver' ? (
                     <div className="max-w-4xl mx-auto">
-                      {showDriverSteps ? (
-                        <div className="space-y-8">
-                          <h2 className={`text-3xl font-bold text-center mb-8 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            Driver Services
-                          </h2>
-                          
-                          {/* Back button */}
-                          <button 
-                            onClick={() => {
-                              setShowDriverSteps(false);
-                              setDriverStep(1);
-                              setSelectedCarOption(null);
-                            }}
-                            className={`flex items-center ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
-                          >
-                            <ChevronRight className="h-5 w-5 mr-1 transform rotate-180" /> Back to Driver Options
-                          </button>
-                          
-                          {/* Step indicator */}
-                          <div className="flex justify-center mb-8">
-                            <div className="flex items-center space-x-4">
-                              <div className={`flex items-center justify-center w-10 h-10 rounded-full border ${
-                                driverStep >= 1 
-                                  ? 'bg-brand text-white border-brand-light' 
-                                  : (darkMode 
-                                    ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' 
-                                    : 'bg-gray-200 text-gray-500 border-gray-300 hover:bg-gray-100')
-                              }`}>
-                                1
-                              </div>
-                              <div className={`h-0.5 w-16 ${
-                                driverStep >= 2 
-                                  ? 'bg-brand' 
-                                  : (darkMode ? 'bg-gray-600' : 'bg-gray-200')
-                              }`}></div>
-                              <div className={`flex items-center justify-center w-10 h-10 rounded-full border ${
-                                driverStep >= 2 
-                                  ? 'bg-brand text-white border-brand-light' 
-                                  : (darkMode 
-                                    ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' 
-                                    : 'bg-gray-200 text-gray-500 border-gray-300 hover:bg-gray-100')
-                              }`}>
-                                2
-                              </div>
+                      <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        Driver Services
+                      </h2>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                        {/* Service Overview Card */}
+                        <div className="service-card">
+                          <div className="flex flex-col items-center text-center p-8">
+                            <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
+                              <Car className="h-12 w-12 text-brand" />
                             </div>
-                          </div>
-                          
-                          {driverStep === 1 ? (
-                            <div>
-                              <h3 className={`text-2xl font-bold text-center mb-8 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                Choose Driver Type
-                              </h3>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* With Car Option */}
-                                <div 
-                                  onClick={() => {
-                                    setSelectedCarOption('with-car');
-                                    setDriverStep(2);
-                                  }}
-                                  className="service-card hover:shadow-xl cursor-pointer transition-all hover:border-brand"
-                                >
-                                  <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
-                                      <Car className="h-8 w-8 text-brand" />
-                                    </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                      With Car
-                                    </h4>
-                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
-                                      Driver will provide their own vehicle
-                                    </p>
-                                    <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
-                                      Select <ChevronRight className="inline-block h-4 w-4 ml-1" />
-                                    </button>
-                                  </div>
-                                </div>
-                                
-                                {/* Without Car Option */}
-                                <div 
-                                  onClick={() => {
-                                    setSelectedCarOption('without-car');
-                                    setDriverStep(2);
-                                  }}
-                                  className="service-card hover:shadow-xl cursor-pointer transition-all hover:border-brand"
-                                >
-                                  <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
-                                      <UserCheck className="h-8 w-8 text-brand" />
-                                    </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                      Without Car
-                                    </h4>
-                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
-                                      Driver will use your vehicle
-                                    </p>
-                                    <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
-                                      Select <ChevronRight className="inline-block h-4 w-4 ml-1" />
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <h3 className={`text-2xl font-bold text-center mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                Choose Booking Basis
-                              </h3>
-                              <p className={`text-center mb-8 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                                Selected: {selectedCarOption === 'with-car' ? 'With Car' : 'Without Car'}
-                              </p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Per Hour Basis */}
-                                <div 
-                                  onClick={() => {
-                                    // Handle per hour booking logic here
-                                  }}
-                                  className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
-                                  }`}
-                                >
-                                  <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-orange-50'} rounded-full p-4`}>
-                                      <Clock className="h-8 w-8 text-brand" />
-                                    </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                      Per Hour Basis
-                                    </h4>
-                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
-                                      Flexible hourly booking
-                                    </p>
-                                    <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
-                                      Book Now <ChevronRight className="inline-block h-4 w-4 ml-1" />
-                                    </button>
-                                  </div>
-                                </div>
-                                
-                                {/* Per Day Basis */}
-                                <div 
-                                  onClick={() => {
-                                    // Handle per day booking logic here
-                                  }}
-                                  className={`service-card hover:shadow-xl cursor-pointer transition-all ${
-                                    darkMode ? 'bg-gray-800 border-gray-700 hover:border-brand' : 'bg-white border-gray-100 hover:border-brand'
-                                  }`}
-                                >
-                                  <div className="flex flex-col items-center text-center p-8">
-                                    <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-purple-50'} rounded-full p-4`}>
-                                      <Calendar className="h-8 w-8 text-brand" />
-                                    </div>
-                                    <h4 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                      Per Day Basis
-                                    </h4>
-                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4 text-sm leading-relaxed`}>
-                                      Full day booking
-                                    </p>
-                                    <button className="w-full btn-ghost border border-brand text-brand hover:bg-brand hover:text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors">
-                                      Book Now <ChevronRight className="inline-block h-4 w-4 ml-1" />
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              {/* Back to step 1 */}
-                              <div className="text-center mt-8">
-                                <button 
-                                  onClick={() => {
-                                    setDriverStep(1);
-                                    setSelectedCarOption(null);
-                                  }}
-                                  className={`${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-brand'}`}
-                                >
-                                  <ChevronRight className="h-4 w-4 mr-1 transform rotate-180 inline-block" /> Change Driver Type
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            Driver Services
-                          </h2>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                            {/* Service Overview Card */}
-                            <div className="service-card">
-                              <div className="flex flex-col items-center text-center p-8">
-                                <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
-                                  <Car className="h-12 w-12 text-brand" />
-                                </div>
-                                <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                  Professional Drivers
-                                </h3>
-                                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
-                                  Experienced and verified drivers for all your transportation needs
-                                </p>
-                                <div className="flex items-center space-x-2 text-sm">
-                                  <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                                  <span className="font-medium">4.8+ Rating</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Service Features Card */}
-                            <div className="service-card">
-                              <div className="flex flex-col items-center text-center p-8">
-                                <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
-                                  <Shield className="h-12 w-12 text-brand" />
-                                </div>
-                                <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                  Safe & Reliable
-                                </h3>
-                                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
-                                  Background-verified drivers with comprehensive insurance coverage
-                                </p>
-                                <div className="flex items-center space-x-2 text-sm">
-                                  <Shield className="h-4 w-4 text-green-500" />
-                                  <span className="font-medium">100% Verified</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Call to Action */}
-                          <div className="text-center mt-12">
-                            <button 
-                              onClick={() => setShowDriverSteps(true)}
-                              className="bg-brand text-white hover:bg-brand-dark transition-colors duration-200 px-12 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
-                            >
-                              Book a Driver <ChevronRight className="inline-block h-5 w-5 ml-2" />
-                            </button>
-                            <p className={`mt-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              Choose your preferred driver type and booking duration
+                            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              Professional Drivers
+                            </h3>
+                            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
+                              Experienced and verified drivers for all your transportation needs
                             </p>
+                            <div className="flex items-center space-x-2 text-sm">
+                              <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                              <span className="font-medium">4.8+ Rating</span>
+                            </div>
                           </div>
                         </div>
-                      )}
+                        
+                        {/* Service Features Card */}
+                        <div className="service-card">
+                          <div className="flex flex-col items-center text-center p-8">
+                            <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
+                              <Shield className="h-12 w-12 text-brand" />
+                            </div>
+                            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              Safe & Reliable
+                            </h3>
+                            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
+                              Background-verified drivers with comprehensive insurance coverage
+                            </p>
+                            <div className="flex items-center space-x-2 text-sm">
+                              <Shield className="h-4 w-4 text-green-500" />
+                              <span className="font-medium">100% Verified</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Call to Action */}
+                      <div className="text-center mt-12">
+                        <button 
+                          onClick={() => navigate('/driver')}
+                          className="bg-brand text-white hover:bg-brand-dark transition-colors duration-200 px-12 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
+                        >
+                          Book Vehicle <ChevronRight className="inline-block h-5 w-5 ml-2" />
+                        </button>
+                        <p className={`mt-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Choose your preferred vehicle type and booking duration
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <div>

@@ -878,4 +878,196 @@ router.put('/worker/settings', verifyToken, async (req, res) => {
 //   }
 // });
 
+// ------------------------
+// Booking Requests Management
+// ------------------------
+
+/**
+ * Get booking requests for worker
+ */
+router.get('/worker/booking-requests', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { status, page = 1, limit = 20 } = req.query;
+    
+    console.log('Worker fetching booking requests:', { 
+      userId, 
+      status, 
+      page, 
+      limit 
+    });
+
+    // Get provider_id for this worker
+    const [providerResult] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (providerResult.length === 0) {
+      return res.status(404).json({ message: 'Provider profile not found' });
+    }
+
+    const providerId = providerResult[0].id;
+
+    // Build query with filters
+    let query = `
+      SELECT 
+        br.id as request_id,
+        br.booking_id,
+        br.status,
+        br.requested_at,
+        br.responded_at,
+        b.user_id,
+        b.with_vehicle,
+        b.pickup_address,
+        b.drop_address,
+        b.actual_cost,
+        b.price,
+        b.service_status,
+        b.payment_status,
+        b.created_at as booking_created_at,
+        b.duration,
+        b.cost_type,
+        u.name as customer_name,
+        u.phone_number as customer_phone
+      FROM booking_requests br
+      INNER JOIN bookings b ON br.booking_id = b.id
+      INNER JOIN users u ON b.user_id = u.id
+      WHERE br.provider_id = ?
+    `;
+
+    const queryParams = [providerId];
+
+    if (status && status !== 'all') {
+      query += ' AND br.status = ?';
+      queryParams.push(status);
+    }
+
+    query += ' ORDER BY br.requested_at DESC LIMIT ? OFFSET ?';
+    queryParams.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    // Get booking requests
+    const [bookingRequests] = await pool.query(query, queryParams);
+
+    // Get total count for pagination
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM booking_requests br
+      WHERE br.provider_id = ?
+    `;
+    const countParams = [providerId];
+
+    if (status && status !== 'all') {
+      countQuery += ' AND br.status = ?';
+      countParams.push(status);
+    }
+
+    const [countResult] = await pool.query(countQuery, countParams);
+    const total = countResult[0].total;
+
+    res.json({
+      message: 'Booking requests retrieved successfully',
+      booking_requests: bookingRequests,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('Get booking requests error:', error);
+    res.status(500).json({ 
+      message: 'Failed to retrieve booking requests',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Update booking request status (accept/reject)
+ */
+router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const requestId = req.params.requestId;
+    const { status, reason } = req.body;
+    
+    console.log('Worker updating booking request:', { 
+      userId, 
+      requestId, 
+      status, 
+      reason 
+    });
+
+    // Validate status
+    if (!['accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be "accepted" or "rejected"' });
+    }
+
+    // Get provider_id for this worker
+    const [providerResult] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (providerResult.length === 0) {
+      return res.status(404).json({ message: 'Provider profile not found' });
+    }
+
+    const providerId = providerResult[0].id;
+
+    // Get the booking request
+    const [requestResult] = await pool.query(
+      'SELECT * FROM booking_requests WHERE id = ? AND provider_id = ? LIMIT 1',
+      [requestId, providerId]
+    );
+
+    if (requestResult.length === 0) {
+      return res.status(404).json({ message: 'Booking request not found' });
+    }
+
+    const bookingRequest = requestResult[0];
+
+    // Check if request is already processed
+    if (bookingRequest.status !== 'pending') {
+      return res.status(400).json({ message: 'Booking request has already been processed' });
+    }
+
+    // Update the booking request
+    await pool.query(
+      'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE id = ?',
+      [status, requestId]
+    );
+
+    // If accepted, update the main booking and reject other pending requests
+    if (status === 'accepted') {
+      await pool.query(
+        'UPDATE bookings SET provider_id = ?, service_status = ? WHERE id = ?',
+        [providerId, 'assigned', bookingRequest.booking_id]
+      );
+
+      // Reject other pending requests for the same booking
+      await pool.query(
+        'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE booking_id = ? AND id != ? AND status = ?',
+        ['rejected', bookingRequest.booking_id, requestId, 'pending']
+      );
+    }
+
+    res.json({
+      message: `Booking request ${status} successfully`,
+      request_id: requestId,
+      status
+    });
+
+  } catch (error) {
+    console.error('Update booking request error:', error);
+    res.status(500).json({ 
+      message: 'Failed to update booking request',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;

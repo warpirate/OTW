@@ -12,6 +12,8 @@ import CustomerLayout from './app/layouts/CustomerLayout';
 import LandingPage from './app/customer/LandingPage';
 import CustomerLogin from './app/auth/CustomerLogin';
 import CustomerSignup from './app/auth/CustomerSignup';
+import ForgotPassword from './app/auth/ForgotPassword';
+import ResetPassword from './app/auth/ResetPassword';
 import CategoryServices from './app/customer/CategoryServices';
 import Cart from './app/customer/Cart';
 import CheckoutSuccess from './app/customer/CheckoutSuccess';
@@ -337,6 +339,8 @@ function App() {
               <Route index element={<LandingPage />} />
               <Route path="login" element={<CustomerLogin />} />
               <Route path="signup" element={<CustomerSignup />} />
+                <Route path="forgot-password" element={<ForgotPassword />} />
+                <Route path="reset-password/:token" element={<ResetPassword />} />
               <Route path="category/:categoryId/:categoryName" element={<CategoryServices />} />
               <Route path="search" element={<SearchResults />} />
               <Route path="cart" element={<Cart />} />
@@ -399,6 +403,8 @@ function App() {
 
             {/* Worker Routes */}
             <Route path="/worker/login" element={<WorkerLogin />} />
+            <Route path="/worker/forgot-password" element={<ForgotPassword />} />
+            <Route path="/worker/reset-password/:token" element={<ResetPassword />} />
             <Route path="/worker/signup" element={<WorkerSignup />} />
             <Route path="/worker" element={
               <WorkerProtectedRoute>

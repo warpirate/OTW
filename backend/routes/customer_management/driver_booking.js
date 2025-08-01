@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
+const fetch = require('node-fetch');
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
   const toRad = deg => (deg * Math.PI) / 180;
@@ -82,18 +83,60 @@ router.post('/book-ride', verifyToken, async (req, res) => {
 
     const rideCategoryId = rideCategory[0].id;
 
-    // 3. Fetch provider locations
-    const [locations] = await connection.query(`
-      SELECT pll.provider_id, pll.latitude, pll.longitude, p.service_radius_km
-      FROM provider_location_logs pll
-      INNER JOIN (
-        SELECT provider_id, MAX(recorded_at) as max_time
-        FROM provider_location_logs
-        GROUP BY provider_id
-      ) latest ON pll.provider_id = latest.provider_id AND pll.recorded_at = latest.max_time
-      INNER JOIN providers p ON p.id = pll.provider_id
+    // 3. Fetch provider permanent addresses and convert to coordinates
+    const [providers] = await connection.query(`
+      SELECT 
+        p.id as provider_id,
+        p.service_radius_km,
+        pa.street_address,
+        pa.city,
+        pa.state,
+        pa.zip_code,
+        p.location_lat,
+        p.location_lng
+      FROM providers p
+      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
       WHERE p.active = 1 AND p.verified = 1
     `);
+
+    const locations = [];
+    for (const provider of providers) {
+      let latitude = provider.location_lat;
+      let longitude = provider.location_lng;
+      
+      // If no coordinates in providers table, geocode the permanent address
+      if (!latitude || !longitude) {
+        const address = `${provider.street_address}, ${provider.city}, ${provider.state}, ${provider.zip_code}, India`;
+        try {
+          const geocodeUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json`;
+          const geocodeResponse = await fetch(geocodeUrl);
+          const geocodeData = await geocodeResponse.json();
+          
+          if (geocodeData && geocodeData.length > 0) {
+            latitude = parseFloat(geocodeData[0].lat);
+            longitude = parseFloat(geocodeData[0].lon);
+            
+            // Update provider's location in database
+            await connection.query(
+              'UPDATE providers SET location_lat = ?, location_lng = ? WHERE id = ?',
+              [latitude, longitude, provider.provider_id]
+            );
+          }
+        } catch (error) {
+          console.error(`Error geocoding address for provider ${provider.provider_id}:`, error);
+          continue; // Skip this provider if geocoding fails
+        }
+      }
+      
+      if (latitude && longitude) {
+        locations.push({
+          provider_id: provider.provider_id,
+          latitude: latitude,
+          longitude: longitude,
+          service_radius_km: provider.service_radius_km
+        });
+      }
+    }
 
     const driverIds = [];
     console.log("locations", locations);

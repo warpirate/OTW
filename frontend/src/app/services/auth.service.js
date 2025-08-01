@@ -159,6 +159,26 @@ const AuthService = {
     }
   },
 
+  // Forgot password - request reset link
+  forgotPassword: async (email) => {
+    try {
+      const response = await authClient.post('/forgot-password', { email });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Reset password - update password
+  resetPassword: async (token, password) => {
+    try {
+      const response = await authClient.post('/reset-password', { token, password });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Get role-specific storage keys
   _getStorageKeys: (role = null) => {
     // If role is provided, use role-specific keys

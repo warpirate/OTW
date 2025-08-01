@@ -232,7 +232,14 @@ const WorkerSignup = () => {
           const name = (cat.name || '').toLowerCase();
           return name.includes('transport') || 
                  name.includes('driver') ||
-                 name.includes('delivery');
+                 name.includes('delivery') ||
+                 name.includes('vehicle') ||
+                 name.includes('car') ||
+                 name.includes('innova') ||
+                 name.includes('crysta') ||
+                 name.includes('taxi') ||
+                 name.includes('cab') ||
+                 name.includes('rental');
         });
       }
       setFilteredCategories(filtered);
@@ -279,7 +286,14 @@ const WorkerSignup = () => {
             } else if (serviceType === 'driver') {
               return name.includes('transport') || 
                      name.includes('driver') ||
-                     name.includes('delivery');
+                     name.includes('delivery') ||
+                     name.includes('vehicle') ||
+                     name.includes('car') ||
+                     name.includes('innova') ||
+                     name.includes('crysta') ||
+                     name.includes('taxi') ||
+                     name.includes('cab') ||
+                     name.includes('rental');
             }
             return false;
           });

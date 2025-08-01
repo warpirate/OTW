@@ -116,10 +116,10 @@ const Bookings = () => {
   };
 
   const formatPrice = (price) => {
-    if (!price) return '$0.00';
+    if (!price) return '₹0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'INR'
     }).format(price);
   };
 
@@ -231,7 +231,7 @@ const Bookings = () => {
                   <div>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Active Bookings</p>
                     <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {bookings.filter(b => ['pending', 'confirmed', 'in_progress'].includes(b.status?.toLowerCase())).length}
+                      {bookings.filter(b => ['pending', 'accepted'].includes(b.status?.toLowerCase())).length}
                     </p>
                   </div>
                   <Clock className="h-8 w-8 text-blue-600" />

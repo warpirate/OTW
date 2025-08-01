@@ -249,12 +249,23 @@ router.get('/history', verifyToken, async (req, res) => {
     }
 
     const [bookings] = await pool.query(
-      `SELECT b.*, s.name as service_name, s.description as service_description,
+      `SELECT b.*, 
+              COALESCE(s.name, 'Ride Service') as service_name, 
+              COALESCE(s.description, 'Driver transportation service') as service_description,
               CASE WHEN b.provider_id IS NOT NULL THEN 
                 (SELECT u.name FROM users u WHERE u.id = b.provider_id)
-              ELSE 'Not Assigned' END as provider_name
+              ELSE 'Not Assigned' END as provider_name,
+              CASE 
+                WHEN b.booking_type = 'ride' THEN 
+                  CONCAT(b.pickup_address, ' → ', b.drop_address)
+                ELSE b.address 
+              END as display_address,
+              CASE 
+                WHEN b.booking_type = 'ride' THEN b.estimated_cost
+                ELSE b.price 
+              END as display_price
        FROM bookings b
-       JOIN subcategories s ON s.id = b.subcategory_id
+       LEFT JOIN subcategories s ON s.id = b.subcategory_id
        ${whereClause}
        ORDER BY b.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -290,15 +301,26 @@ router.get('/:id', verifyToken, async (req, res) => {
     const bookingId = req.params.id;
 
     const [bookings] = await pool.query(
-      `SELECT b.*, s.name as service_name, s.description as service_description,
+      `SELECT b.*, 
+              COALESCE(s.name, 'Ride Service') as service_name, 
+              COALESCE(s.description, 'Driver transportation service') as service_description,
               CASE WHEN b.provider_id IS NOT NULL THEN 
                 (SELECT u.name FROM users u WHERE u.id = b.provider_id)
               ELSE 'Not Assigned' END as provider_name,
               CASE WHEN b.provider_id IS NOT NULL THEN 
                 (SELECT u.phone_number FROM users u WHERE u.id = b.provider_id)
-              ELSE NULL END as provider_phone
+              ELSE NULL END as provider_phone,
+              CASE 
+                WHEN b.booking_type = 'ride' THEN 
+                  CONCAT(b.pickup_address, ' → ', b.drop_address)
+                ELSE b.address 
+              END as display_address,
+              CASE 
+                WHEN b.booking_type = 'ride' THEN b.estimated_cost
+                ELSE b.price 
+              END as display_price
        FROM bookings b
-       JOIN subcategories s ON s.id = b.subcategory_id
+       LEFT JOIN subcategories s ON s.id = b.subcategory_id
        WHERE b.id = ? AND b.user_id = ?`,
       [bookingId, customerId]
     );

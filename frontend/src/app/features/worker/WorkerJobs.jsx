@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
+import WorkerService from '../../services/worker.service';
 
 const WorkerJobs = () => {
   const navigate = useNavigate();
@@ -26,74 +27,16 @@ const WorkerJobs = () => {
   const [user, setUser] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   
-  const [jobs, setJobs] = useState([
-    {
-      id: 1,
-      title: 'Home Deep Cleaning',
-      customer: 'Priya Sharma',
-      date: '2024-01-18',
-      time: '10:00 AM - 1:00 PM',
-      status: 'upcoming',
-      amount: 1500,
-      address: 'Sector 21, Gurgaon',
-      description: 'Deep cleaning for 3BHK apartment including kitchen and bathrooms',
-      customerPhone: '+91 98765 43210',
-      estimatedDuration: '3 hours'
-    },
-    {
-      id: 2,
-      title: 'Kitchen Plumbing Repair',
-      customer: 'Rahul Kumar',
-      date: '2024-01-17',
-      time: '2:00 PM - 4:00 PM',
-      status: 'in-progress',
-      amount: 800,
-      address: 'DLF Phase 2, Gurgaon',
-      description: 'Fix kitchen sink leakage and replace faucet',
-      customerPhone: '+91 87654 32109',
-      estimatedDuration: '2 hours'
-    },
-    {
-      id: 3,
-      title: 'Electrical Outlet Installation',
-      customer: 'Amit Singh',
-      date: '2024-01-15',
-      time: '11:30 AM - 12:30 PM',
-      status: 'completed',
-      amount: 1200,
-      address: 'Cyber City, Gurgaon',
-      description: 'Install 3 new electrical outlets in living room',
-      customerPhone: '+91 76543 21098',
-      estimatedDuration: '1 hour'
-    },
-    {
-      id: 4,
-      title: 'AC Service & Cleaning',
-      customer: 'Sneha Patel',
-      date: '2024-01-14',
-      time: '9:00 AM - 11:00 AM',
-      status: 'completed',
-      amount: 900,
-      address: 'Golf Course Road, Gurgaon',
-      description: 'Complete AC servicing for 2 split ACs',
-      customerPhone: '+91 65432 10987',
-      estimatedDuration: '2 hours'
-    },
-    {
-      id: 5,
-      title: 'Bathroom Cleaning',
-      customer: 'Vikram Gupta',
-      date: '2024-01-12',
-      time: '3:00 PM - 5:00 PM',
-      status: 'cancelled',
-      amount: 600,
-      address: 'Sohna Road, Gurgaon',
-      description: 'Deep cleaning of 2 bathrooms',
-      customerPhone: '+91 54321 09876',
-      estimatedDuration: '2 hours'
-    }
-  ]);
+  const [bookingRequests, setBookingRequests] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    pages: 0
+  });
 
   useEffect(() => {
     setDarkMode(isDarkMode());
@@ -104,6 +47,7 @@ const WorkerJobs = () => {
     const userRole = userInfo?.role?.toLowerCase();
     if (userInfo && (userRole === 'worker' || userRole === 'provider')) {
       setUser(userInfo);
+      fetchBookingRequests();
     } else {
       navigate('/worker/login');
     }
@@ -111,16 +55,63 @@ const WorkerJobs = () => {
     return cleanup;
   }, [navigate]);
 
+  // Poll for new booking requests every 10 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchBookingRequests(pagination.page);
+    }, 10000);
+    return () => clearInterval(intervalId);
+  }, [activeFilter, pagination.page]);
+
+  const fetchBookingRequests = async (page = 1, status = null) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const statusFilter = activeFilter === 'all' ? null : activeFilter;
+      const response = await WorkerService.getBookingRequests(statusFilter, page, 20);
+      
+      setBookingRequests(response.booking_requests || []);
+      setPagination(response.pagination || {
+        page: 1,
+        limit: 20,
+        total: 0,
+        pages: 0
+      });
+    } catch (error) {
+      console.error('Error fetching booking requests:', error);
+      setError(error.message || 'Failed to load booking requests');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusUpdate = async (requestId, status) => {
+    try {
+      await WorkerService.updateBookingRequest(requestId, status);
+      // Refresh the list after status update
+      fetchBookingRequests(pagination.page, activeFilter === 'all' ? null : activeFilter);
+    } catch (error) {
+      console.error('Error updating booking request:', error);
+      setError(error.message || 'Failed to update booking request');
+    }
+  };
+
+  const handleFilterChange = (filter) => {
+    setActiveFilter(filter);
+    fetchBookingRequests(1, filter === 'all' ? null : filter);
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
-      case 'completed':
+      case 'accepted':
         return 'text-green-600 bg-green-100 border-green-200';
-      case 'in-progress':
-        return 'text-blue-600 bg-blue-100 border-blue-200';
-      case 'upcoming':
+      case 'pending':
         return 'text-yellow-600 bg-yellow-100 border-yellow-200';
-      case 'cancelled':
+      case 'rejected':
         return 'text-red-600 bg-red-100 border-red-200';
+      case 'timeout':
+        return 'text-gray-600 bg-gray-100 border-gray-200';
       default:
         return 'text-gray-600 bg-gray-100 border-gray-200';
     }
@@ -128,33 +119,49 @@ const WorkerJobs = () => {
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'completed':
+      case 'accepted':
         return <CheckCircle className="w-4 h-4" />;
-      case 'in-progress':
+      case 'pending':
         return <Clock className="w-4 h-4" />;
-      case 'upcoming':
-        return <Calendar className="w-4 h-4" />;
-      case 'cancelled':
+      case 'rejected':
         return <XCircle className="w-4 h-4" />;
+      case 'timeout':
+        return <AlertCircle className="w-4 h-4" />;
       default:
         return <Clock className="w-4 h-4" />;
     }
   };
 
-  const filteredJobs = jobs.filter(job => {
-    const matchesFilter = activeFilter === 'all' || job.status === activeFilter;
-    const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.address.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
+  const formatDateTime = (dateTimeString) => {
+    if (!dateTimeString) return 'Not scheduled';
+    const date = new Date(dateTimeString);
+    return date.toLocaleString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatCost = (cost) => {
+    if (!cost) return '₹0';
+    return `₹${cost}`;
+  };
+
+  const filteredRequests = bookingRequests.filter(request => {
+    const matchesSearch = 
+      request.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      request.pickup_address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      request.drop_address?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
   });
 
   const filterOptions = [
-    { value: 'all', label: 'All Jobs', count: jobs.length },
-    { value: 'upcoming', label: 'Upcoming', count: jobs.filter(j => j.status === 'upcoming').length },
-    { value: 'in-progress', label: 'In Progress', count: jobs.filter(j => j.status === 'in-progress').length },
-    { value: 'completed', label: 'Completed', count: jobs.filter(j => j.status === 'completed').length },
-    { value: 'cancelled', label: 'Cancelled', count: jobs.filter(j => j.status === 'cancelled').length }
+    { value: 'all', label: 'All Requests', count: bookingRequests.length },
+    { value: 'pending', label: 'Pending', count: bookingRequests.filter(r => r.status === 'pending').length },
+    { value: 'accepted', label: 'Accepted', count: bookingRequests.filter(r => r.status === 'accepted').length },
+    { value: 'rejected', label: 'Rejected', count: bookingRequests.filter(r => r.status === 'rejected').length }
   ];
 
   return (
@@ -171,7 +178,7 @@ const WorkerJobs = () => {
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                My Jobs
+                Booking Requests
               </h1>
             </div>
             
@@ -200,16 +207,19 @@ const WorkerJobs = () => {
                   {user?.firstName} {user?.lastName}
                 </span>
               </button>
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
-                <Plus className="w-4 h-4" />
-                <span>Find New Jobs</span>
-              </button>
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
+
         {/* Filters and Search */}
         <div className="mb-8">
           {/* Search Bar */}
@@ -218,7 +228,7 @@ const WorkerJobs = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search jobs, customers, or locations..."
+                placeholder="Search customers, pickup, or drop locations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -235,7 +245,7 @@ const WorkerJobs = () => {
             {filterOptions.map((option) => (
               <button
                 key={option.value}
-                onClick={() => setActiveFilter(option.value)}
+                onClick={() => handleFilterChange(option.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   activeFilter === option.value
                     ? 'bg-blue-600 text-white'
@@ -250,114 +260,151 @@ const WorkerJobs = () => {
           </div>
         </div>
 
-        {/* Jobs List */}
-        <div className="space-y-4">
-          {filteredJobs.length === 0 ? (
-            <div className={`text-center py-16 ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg`}>
-              <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
-              <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                No jobs found
-              </h3>
-              <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                {searchQuery ? 'Try adjusting your search terms' : 'No jobs match the selected filter'}
-              </p>
-            </div>
-          ) : (
-            filteredJobs.map((job) => (
-              <div
-                key={job.id}
-                className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg p-6 hover:shadow-md transition-shadow`}
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {job.title}
-                      </h3>
-                      <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(job.status)}`}>
-                        {getStatusIcon(job.status)}
-                        <span className="ml-1 capitalize">{job.status.replace('-', ' ')}</span>
-                      </div>
-                    </div>
-                    
-                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-3`}>
-                      {job.description}
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                          {job.date}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                          {job.time}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <MapPin className="w-4 h-4 text-gray-400" />
-                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                          {job.address}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="w-4 h-4 text-gray-400" />
-                        <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          ₹{job.amount}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className={`mt-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              Loading booking requests...
+            </p>
+          </div>
+        )}
 
-                {/* Customer Info and Actions */}
-                <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div>
-                    <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {job.customer}
-                    </p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Duration: {job.estimatedDuration}
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    {job.status === 'upcoming' && (
-                      <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
-                        Start Job
-                      </button>
-                    )}
-                    {job.status === 'in-progress' && (
-                      <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                        Complete Job
-                      </button>
-                    )}
-                    <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-                      <MessageCircle className="w-5 h-5" />
-                    </button>
-                    <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
+        {/* Booking Requests List */}
+        {!loading && (
+          <div className="space-y-4">
+            {filteredRequests.length === 0 ? (
+              <div className={`text-center py-16 ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg`}>
+                <AlertCircle className={`w-12 h-12 mx-auto mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+                <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  No booking requests found
+                </h3>
+                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  {searchQuery ? 'Try adjusting your search terms' : 'No booking requests match the selected filter'}
+                </p>
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              filteredRequests.map((request) => (
+                <div
+                  key={request.request_id}
+                  className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg p-6 hover:shadow-md transition-shadow`}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {request.booking_type === 'ride' ? 'Driver Booking' : 'Service Booking'}
+                        </h3>
+                        <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(request.status)}`}>
+                          {getStatusIcon(request.status)}
+                          <span className="ml-1 capitalize">{request.status}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-4">
+                        <div className="flex items-center space-x-2">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {formatDateTime(request.scheduled_time)}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <MapPin className="w-4 h-4 text-gray-400" />
+                          <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {request.pickup_address || 'Pickup location not specified'}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <DollarSign className="w-4 h-4 text-gray-400" />
+                          <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {formatCost(request.estimated_cost)}
+                          </span>
+                        </div>
+                      </div>
 
-        {/* Load More Button */}
-        {filteredJobs.length > 0 && (
-          <div className="text-center mt-8">
-            <button className={`px-6 py-3 rounded-lg border transition-colors ${
-              darkMode 
-                ? 'border-gray-600 text-gray-300 hover:bg-gray-800' 
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}>
-              Load More Jobs
-            </button>
+                      {request.drop_address && (
+                        <div className="mb-3">
+                          <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                            <strong>Drop Location:</strong> {request.drop_address}
+                          </p>
+                        </div>
+                      )}
+
+                      {request.duration && (
+                        <div className="mb-3">
+                          <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                            <strong>Duration:</strong> {request.duration} hour{request.duration > 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Customer Info and Actions */}
+                  <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div>
+                      <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {request.customer_name || 'Customer'}
+                      </p>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {request.customer_phone || 'Phone not available'}
+                      </p>
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Requested: {formatDateTime(request.requested_at)}
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      {request.status === 'pending' && (
+                        <>
+                          <button 
+                            onClick={() => handleStatusUpdate(request.request_id, 'accepted')}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
+                          >
+                            Accept
+                          </button>
+                          <button 
+                            onClick={() => handleStatusUpdate(request.request_id, 'rejected')}
+                            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                        <MessageCircle className="w-5 h-5" />
+                      </button>
+                      <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && pagination.pages > 1 && (
+          <div className="flex justify-center mt-8">
+            <div className="flex space-x-2">
+              {Array.from({ length: pagination.pages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => fetchBookingRequests(page, activeFilter === 'all' ? null : activeFilter)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    pagination.page === page
+                      ? 'bg-blue-600 text-white'
+                      : darkMode 
+                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' 
+                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

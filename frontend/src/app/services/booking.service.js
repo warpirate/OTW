@@ -260,8 +260,8 @@ const BookingService = {
             minute: '2-digit',
             hour12: true
           }) : null,
-        address: backendBooking.address,
-        total_amount: backendBooking.price,
+        address: backendBooking.display_address || backendBooking.address,
+        total_amount: backendBooking.display_price || backendBooking.price,
         gst_amount: backendBooking.gst,
         provider_name: backendBooking.provider_name || 'Not Assigned',
         provider_phone: backendBooking.provider_phone,

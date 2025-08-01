@@ -165,9 +165,6 @@ const CategoryServices = () => {
                         <ShoppingCart className="h-4 w-4" />
                         <span>{addingToCart[service.id] ? 'Adding...' : 'Add to Cart'}</span>
                       </button>
-                      <button className="btn-brand px-4 py-2 text-sm">
-                        Book
-                      </button>
                     </div>
                   </div>
                 </div>

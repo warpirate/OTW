@@ -169,5 +169,77 @@ router.post('/register', async (req, res) => {
 });
 
 
+// ------------------------
+// DUMMY OTP RESET ENDPOINTS (for both customer/worker)
+// ------------------------
+
+// Send OTP for password reset (dummy)
+router.post('/reset/send-otp', async (req, res) => {
+  // Accepts: { email }
+  // Optionally validate email format
+  res.json({ success: true, message: 'OTP sent (dummy)' });
+});
+
+// Verify OTP for password reset (dummy)
+router.post('/reset/verify-otp', async (req, res) => {
+  const { email, otp } = req.body;
+  if (!otp || otp.length !== 6) {
+    return res.status(400).json({ success: false, message: 'Invalid OTP' });
+  }
+  // Accept any 6-digit code
+  res.json({ success: true, message: 'OTP verified (dummy)' });
+});
+
+// ------------------------
+// Forgot Password - Request Reset Link
+// ------------------------
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+  try {
+    const [users] = await pool.query(
+      'SELECT id FROM users WHERE email = ? LIMIT 1',
+      [email]
+    );
+    if (users.length === 0) {
+      // To prevent email enumeration
+      return res.json({ success: true, message: 'If that email is in our database, a password reset link will be sent' });
+    }
+    const user = users[0];
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
+    console.log(`Password reset link for ${email}: ${resetUrl}`);
+    // TODO: Integrate email service to send resetUrl to user.email
+    return res.json({ success: true, message: 'If that email is in our database, a password reset link will be sent' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ------------------------
+// Reset Password - Update Password
+// ------------------------
+router.post('/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) {
+    return res.status(400).json({ message: 'Token and new password are required' });
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await pool.query(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [hashedPassword, userId]
+    );
+    return res.json({ success: true, message: 'Password has been reset successfully' });
+  } catch (err) {
+    console.error(err);
+    return res.status(400).json({ message: 'Invalid or expired token' });
+  }
+});
 
 module.exports = router;

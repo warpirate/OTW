@@ -218,6 +218,49 @@ class WorkerService {
       throw error;
     }
   }
+
+  /**
+   * Booking Requests Management
+   */
+  
+  /**
+   * Get booking requests for worker
+   */
+  static async getBookingRequests(status = null, page = 1, limit = 20) {
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      
+      if (status) {
+        params.append('status', status);
+      }
+      
+      const response = await WorkerService._client.get(`/worker/booking-requests?${params}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching booking requests:', error);
+      throw new Error(error.response?.data?.message || 'Failed to load booking requests');
+    }
+  }
+  
+  /**
+   * Update booking request status (accept/reject)
+   */
+  static async updateBookingRequest(requestId, status, reason = null) {
+    try {
+      const response = await WorkerService._client.put(`/worker/booking-requests/${requestId}`, {
+        status,
+        reason
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating booking request:', error);
+      throw new Error(error.response?.data?.message || 'Failed to update booking request');
+    }
+  }
+
   /**
    * Admin Functions
    */

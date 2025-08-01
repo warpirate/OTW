@@ -16,6 +16,37 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Table structure for table `booking_requests`
+--
+
+DROP TABLE IF EXISTS `booking_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `booking_requests` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `booking_id` int NOT NULL,
+  `provider_id` int NOT NULL,
+  `status` enum('pending','accepted','rejected','timeout') DEFAULT 'pending',
+  `requested_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `responded_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `booking_id` (`booking_id`),
+  KEY `provider_id` (`provider_id`),
+  CONSTRAINT `booking_requests_ibfk_1` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `booking_requests_ibfk_2` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `booking_requests`
+--
+
+LOCK TABLES `booking_requests` WRITE;
+/*!40000 ALTER TABLE `booking_requests` DISABLE KEYS */;
+/*!40000 ALTER TABLE `booking_requests` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `bookings`
 --
 
@@ -26,14 +57,27 @@ CREATE TABLE `bookings` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int DEFAULT NULL,
   `provider_id` int DEFAULT NULL,
+  `with_vehicle` tinyint(1) DEFAULT NULL,
+  `vehicle_id` int DEFAULT NULL,
+  `pickup_address` varchar(255) DEFAULT NULL,
+  `pickup_lat` decimal(10,8) DEFAULT NULL,
+  `pickup_lon` decimal(11,8) DEFAULT NULL,
+  `drop_address` varchar(255) DEFAULT NULL,
+  `drop_lat` decimal(10,8) DEFAULT NULL,
+  `drop_lon` decimal(11,8) DEFAULT NULL,
+  `booking_type` enum('ride','service') NOT NULL DEFAULT 'service',
   `subcategory_id` int DEFAULT NULL,
   `scheduled_time` datetime DEFAULT NULL,
   `address` text,
   `gst` int DEFAULT NULL,
+  `estimated_cost` int DEFAULT NULL,
+  `actual_cost` int DEFAULT NULL,
   `price` int DEFAULT NULL,
   `service_status` varchar(20) DEFAULT NULL,
   `payment_status` varchar(20) DEFAULT 'unpaid',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `duration` int DEFAULT NULL,
+  `cost_type` enum('per_hour','per_day') DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   KEY `provider_id` (`provider_id`),
@@ -41,7 +85,7 @@ CREATE TABLE `bookings` (
   CONSTRAINT `bookings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `bookings_ibfk_2` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`id`),
   CONSTRAINT `bookings_ibfk_3` FOREIGN KEY (`subcategory_id`) REFERENCES `subcategories` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -50,7 +94,7 @@ CREATE TABLE `bookings` (
 
 LOCK TABLES `bookings` WRITE;
 /*!40000 ALTER TABLE `bookings` DISABLE KEYS */;
-INSERT INTO `bookings` VALUES (1,5,NULL,29,'2025-08-05 08:00:00','2-5 Thimmaraopeta, Khammam, Telangana - 507168, India',360,2360,'cancelled','refunded','2025-07-31 04:37:18');
+INSERT INTO `bookings` VALUES (1,5,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'service',29,'2025-08-05 08:00:00','2-5 Thimmaraopeta, Khammam, Telangana - 507168, India',360,NULL,NULL,2360,'cancelled','refunded','2025-07-31 04:37:18',NULL,NULL),(2,5,NULL,1,NULL,'Thimmaraopet, Enkoor mandal, Khammam, Telangana, India',17.37392240,80.36608580,'Khammam, Telangana, India',17.17291890,80.40575370,'ride',NULL,'2025-08-01 19:44:00',NULL,NULL,1500,NULL,NULL,'pending','pending','2025-08-01 13:09:19',3,'per_hour'),(3,5,NULL,1,NULL,'Thimmaraopet, Enkoor mandal, Khammam, Telangana, India',17.37392240,80.36608580,'Khammam, Telangana, India',17.17291890,80.40575370,'ride',NULL,'2025-08-02 09:33:00',NULL,NULL,2500,NULL,NULL,'pending','pending','2025-08-01 13:11:33',5,'per_hour'),(4,5,NULL,1,NULL,'Thimmaraopet, Enkoor mandal, Khammam, Telangana, India',17.37392240,80.36608580,'Khammam, Khammam Urban mandal, Khammam, Telangana, 507003, India',17.24653510,80.15003260,'ride',NULL,'2025-08-02 09:00:00',NULL,NULL,2500,NULL,NULL,'pending','pending','2025-08-01 13:22:08',5,'per_hour');
 /*!40000 ALTER TABLE `bookings` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -286,7 +330,7 @@ CREATE TABLE `provider_addresses` (
 
 LOCK TABLES `provider_addresses` WRITE;
 /*!40000 ALTER TABLE `provider_addresses` DISABLE KEYS */;
-INSERT INTO `provider_addresses` VALUES (1,2,'permanent','2-5 Thimmaraopeta','Khammam','Telangana','507168','2025-08-01 04:04:00','2025-08-01 04:04:00');
+INSERT INTO `provider_addresses` VALUES (1,2,'permanent','Thimmaraopet, Enkoor mandal','Khammam','Telangana','507168','2025-08-01 04:04:00','2025-08-01 13:10:43');
 /*!40000 ALTER TABLE `provider_addresses` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -507,7 +551,7 @@ CREATE TABLE `provider_services` (
   KEY `subcategory_id` (`subcategory_id`),
   CONSTRAINT `provider_services_ibfk_1` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`id`) ON DELETE CASCADE,
   CONSTRAINT `provider_services_ibfk_2` FOREIGN KEY (`subcategory_id`) REFERENCES `subcategories` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -516,7 +560,7 @@ CREATE TABLE `provider_services` (
 
 LOCK TABLES `provider_services` WRITE;
 /*!40000 ALTER TABLE `provider_services` DISABLE KEYS */;
-INSERT INTO `provider_services` VALUES (1,1,34),(2,2,67);
+INSERT INTO `provider_services` VALUES (3,1,21),(1,1,34),(2,2,67);
 /*!40000 ALTER TABLE `provider_services` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -604,7 +648,7 @@ CREATE TABLE `providers` (
 
 LOCK TABLES `providers` WRITE;
 /*!40000 ALTER TABLE `providers` DISABLE KEYS */;
-INSERT INTO `providers` VALUES (1,4,1,0.00,'Messi Koduku ni raa Saaleeeee',0,1,'2025-07-30 09:08:51',10,17.23170000,80.18260000,'2025-07-30 07:45:19','2025-07-30 09:08:51','messikoduku@gmail.com','6969696969','worker pilagadu','child','9876543210'),(2,7,2,0.00,'hi there, best bathroom cleaner here',0,1,'2025-08-01 04:28:37',10,17.24653510,80.15003260,'2025-08-01 04:04:00','2025-08-01 04:28:37','suhail.mscellpoint@gmail.com','09666339939','Suhail','friend','9666339939');
+INSERT INTO `providers` VALUES (1,4,1,0.00,'Messi Koduku ni raa Saaleeeee',0,1,'2025-07-30 09:08:51',10,17.23170000,80.18260000,'2025-07-30 07:45:19','2025-07-30 09:08:51','messikoduku@gmail.com','6969696969','worker pilagadu','child','9876543210'),(2,7,2,0.00,'hi there, best bathroom cleaner here',0,1,'2025-08-01 13:10:49',10,17.24653510,80.15003260,'2025-08-01 04:04:00','2025-08-01 13:10:49','suhail.mscellpoint@gmail.com','09666339939','Suhail','friend','9666339939');
 /*!40000 ALTER TABLE `providers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -821,4 +865,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-08-01 10:18:40
+-- Dump completed on 2025-08-01 19:02:06
