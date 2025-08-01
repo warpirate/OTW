@@ -39,7 +39,8 @@ const CustomerSignup = () => {
     password: '',
     confirmPassword: '',
     otp: '',
-    agreeToTerms: false
+    agreeToTerms: false,
+    gender: ''
   });
 
   const handleInputChange = (e) => {
@@ -379,6 +380,26 @@ const CustomerSignup = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Gender Dropdown */}
+                  <div className="mb-4">
+                    <label htmlFor="gender" className="block text-sm font-medium mb-2 text-[var(--text-secondary)]">
+                      Gender
+                    </label>
+                    <select
+                      id="gender"
+                      name="gender"
+                      value={formData.gender}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border rounded-lg bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                    >
+                      <option value="">Select gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                      <option value="prefer_not_to_say">Prefer not to say</option>
+                    </select>
+                  </div>
 
                   {/* Terms and Conditions */}
                   <div className="flex items-start">

@@ -13,6 +13,7 @@ const mapUserRow = (row) => ({
   role: row.role,
   is_active: !!row.is_active,
   created_at: row.created_at,
+  gender: row.gender || ''
 });
 
 // GET /api/superadmin  -> list admins with optional filters
@@ -86,7 +87,7 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/superadmin  -> create a new admin
 router.post('/', async (req, res) => {
-  const { name, email, phone, is_active = 1, role } = req.body;
+  const { name, email, phone, is_active = 1, role, gender } = req.body;
   console.log(req.body);
   if (!name || !email) {
     return res.status(400).json({ message: 'name, email required' });
@@ -98,8 +99,8 @@ router.post('/', async (req, res) => {
     try {
       await conn.beginTransaction();
       const [userResult] = await conn.execute(
-        'INSERT INTO users (name, email, password, phone_number, is_active, created_at) VALUES (?,?,?,?,?,NOW())',
-        [name, email, hashedPassword, phone, is_active]
+        'INSERT INTO users (name, email, password, phone_number, is_active, gender, created_at) VALUES (?,?,?,?,?,?,NOW())',
+        [name, email, hashedPassword, phone, is_active, gender]
       );
       const userId = userResult.insertId;
       // find admin role id
@@ -123,7 +124,7 @@ router.post('/', async (req, res) => {
 // PUT /api/superadmin/:id  -> update admin
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, email, phone, password, role, status } = req.body;
+  const { name, email, phone, password, role, status, gender } = req.body;
   console.log("put body",req.body);
   const is_active = status === 'Active' ? 1 : 0;
   if (!name && !email && !phone && !password && !role && !status) {
@@ -141,6 +142,7 @@ router.put('/:id', async (req, res) => {
       params.push(hashed);
     }
     if (status) { fields.push('is_active = ?'); params.push(is_active); }
+    if (gender) { fields.push('gender = ?'); params.push(gender); }
     params.push(id);
     console.log("params",params);   
     // update user basic fields if provided

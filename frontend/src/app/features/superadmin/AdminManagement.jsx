@@ -375,6 +375,22 @@ const AdminManagement = () => {
                           <option value="Inactive">Inactive</option>
                         </select>
                       </div>
+                      <div>
+                        <label htmlFor="gender" className="block text-sm font-medium text-gray-700">Gender</label>
+                        <select
+                          id="gender"
+                          name="gender"
+                          value={newAdmin.gender || ''}
+                          onChange={handleNewAdminChange}
+                          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
+                        >
+                          <option value="">Select gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                          <option value="prefer_not_to_say">Prefer not to say</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -473,6 +489,22 @@ const AdminManagement = () => {
                         >
                           <option value="Active">Active</option>
                           <option value="Inactive">Inactive</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="edit-gender" className="block text-sm font-medium text-gray-700">Gender</label>
+                        <select
+                          id="edit-gender"
+                          name="gender"
+                          value={selectedAdmin.gender || ''}
+                          onChange={handleEditAdminChange}
+                          className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
+                        >
+                          <option value="">Select gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                          <option value="prefer_not_to_say">Prefer not to say</option>
                         </select>
                       </div>
                     </div>

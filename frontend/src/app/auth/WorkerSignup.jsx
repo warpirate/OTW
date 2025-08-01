@@ -32,6 +32,7 @@ const WorkerSignup = () => {
     password: '',
     confirmPassword: '',
     otp: '',
+    gender: '',
     // Provider table fields only
     experience: '',
     bio: '',
@@ -108,6 +109,10 @@ const WorkerSignup = () => {
       }
       if (!formData.phone) {
         setError('Please enter your phone number');
+        return false;
+      }
+      if (!formData.gender) {
+        setError('Please select your gender');
         return false;
       }
       if (!formData.password || formData.password.length < 6) {
@@ -463,6 +468,7 @@ const WorkerSignup = () => {
         email: formData.email,
         password: formData.password,
         phone_number: formData.phone,
+        gender: formData.gender,
         provider_data: {
           phone: formData.phone,
           emergency_contact_name: formData.emergencyContactName,
@@ -589,6 +595,26 @@ const WorkerSignup = () => {
                 }`}
                 placeholder="Enter your phone number"
               />
+            </div>
+
+            <div>
+              <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                Gender *
+              </label>
+              <select
+                name="gender"
+                value={formData.gender}
+                onChange={handleInputChange}
+                required
+                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              >
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

@@ -14,17 +14,19 @@ const CustomerProfile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [originalProfile, setOriginalProfile] = useState(null);
   const [profile, setProfile] = useState({
     name: '',
     email: '',
-    phone: '',
+    phone_number: '',
     address: '',
     city: '',
     state: '',
-    zip_code: '',
-    date_of_birth: '',
-    gender: '',
-    profile_picture: null
+    pin_code: '',
+    country: '',
+    location_lat: '',
+    location_lng: '',
+    gender: ''
   });
 
   // Listen for theme changes
@@ -51,7 +53,10 @@ const CustomerProfile = () => {
         }
 
         const response = await ProfileService.getProfile();
-        setProfile(response.profile || {});
+        // Backend returns profile data directly, not wrapped in a profile object
+        const profileData = response || {};
+        setProfile(profileData);
+        setOriginalProfile(profileData);
         setLoading(false);
       } catch (error) {
         console.error('Error loading profile:', error);
@@ -77,6 +82,8 @@ const CustomerProfile = () => {
       await ProfileService.updateProfile(profile);
       toast.success('Profile updated successfully');
       setIsEditing(false);
+      // Update original profile after successful save
+      setOriginalProfile(profile);
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error('Failed to update profile');
@@ -86,22 +93,19 @@ const CustomerProfile = () => {
   };
 
   const handleCancel = () => {
-    // Reload profile data to discard changes
-    ProfileService.getProfile().then(response => {
-      setProfile(response.profile || {});
-      setIsEditing(false);
-    }).catch(error => {
-      console.error('Error reloading profile:', error);
-      setIsEditing(false);
-    });
+    // Reset to original profile data without making API call
+    if (originalProfile) {
+      setProfile(originalProfile);
+    }
+    setIsEditing(false);
   };
 
   // Calculate profile completion
   const completionStatus = (() => {
-    const fields = ['name', 'email', 'phone', 'address', 'city', 'state', 'zip_code'];
-    const filledFields = fields.filter(field => profile[field] && profile[field].trim() !== '');
+    const fields = ['name', 'email', 'phone_number', 'address', 'city', 'state', 'pin_code'];
+    const filledFields = fields.filter(field => profile[field] && profile[field].toString().trim() !== '');
     const completionPercentage = Math.round((filledFields.length / fields.length) * 100);
-    const missingFields = fields.filter(field => !profile[field] || profile[field].trim() === '');
+    const missingFields = fields.filter(field => !profile[field] || profile[field].toString().trim() === '');
     
     return {
       completionPercentage,
@@ -206,11 +210,7 @@ const CustomerProfile = () => {
                     disabled={saving}
                     className="btn-brand flex items-center space-x-2 disabled:opacity-50"
                   >
-                    {saving ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                    ) : (
-                      <Save className="h-4 w-4" />
-                    )}
+                    <Save className="h-4 w-4" />
                     <span>{saving ? 'Saving...' : 'Save'}</span>
                   </button>
                   <button
@@ -224,6 +224,7 @@ const CustomerProfile = () => {
               )}
             </div>
 
+            {/* Profile Form */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Personal Information */}
               <div className="space-y-4">
@@ -231,129 +232,100 @@ const CustomerProfile = () => {
                   Personal Information
                 </h3>
                 
-                <div className="space-y-4">
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Full Name
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        name="name"
-                        value={profile.name || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'border-gray-600 bg-gray-700 text-white' 
-                            : 'border-gray-300 bg-white text-gray-900'
-                        }`}
-                        placeholder="Enter your full name"
-                      />
-                    ) : (
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {profile.name || 'Not provided'}
-                      </p>
-                    )}
-                  </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={profile.name || ''}
+                    onChange={handleInputChange}
+                    disabled={!isEditing}
+                    className={`w-full px-3 py-2 border rounded-lg ${
+                      isEditing
+                        ? darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                        : darkMode
+                          ? 'bg-gray-800 border-gray-700 text-gray-400'
+                          : 'bg-gray-100 border-gray-200 text-gray-500'
+                    }`}
+                  />
+                </div>
 
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Email
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="email"
-                        name="email"
-                        value={profile.email || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'border-gray-600 bg-gray-700 text-white' 
-                            : 'border-gray-300 bg-white text-gray-900'
-                        }`}
-                        placeholder="Enter your email"
-                      />
-                    ) : (
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {profile.email || 'Not provided'}
-                      </p>
-                    )}
-                  </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={profile.email || ''}
+                    onChange={handleInputChange}
+                    disabled={!isEditing}
+                    className={`w-full px-3 py-2 border rounded-lg ${
+                      isEditing
+                        ? darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                        : darkMode
+                          ? 'bg-gray-800 border-gray-700 text-gray-400'
+                          : 'bg-gray-100 border-gray-200 text-gray-500'
+                    }`}
+                  />
+                </div>
 
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Phone Number
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={profile.phone || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'border-gray-600 bg-gray-700 text-white' 
-                            : 'border-gray-300 bg-white text-gray-900'
-                        }`}
-                        placeholder="Enter your phone number"
-                      />
-                    ) : (
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {profile.phone || 'Not provided'}
-                      </p>
-                    )}
-                  </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone_number"
+                    value={profile.phone_number || ''}
+                    onChange={handleInputChange}
+                    disabled={!isEditing}
+                    className={`w-full px-3 py-2 border rounded-lg ${
+                      isEditing
+                        ? darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                        : darkMode
+                          ? 'bg-gray-800 border-gray-700 text-gray-400'
+                          : 'bg-gray-100 border-gray-200 text-gray-500'
+                    }`}
+                  />
+                </div>
 
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Date of Birth
-                    </label>
-                    {isEditing ? (
-                      <input
-                        type="date"
-                        name="date_of_birth"
-                        value={profile.date_of_birth || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'border-gray-600 bg-gray-700 text-white' 
-                            : 'border-gray-300 bg-white text-gray-900'
-                        }`}
-                      />
-                    ) : (
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {profile.date_of_birth || 'Not provided'}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Gender
-                    </label>
-                    {isEditing ? (
-                      <select
-                        name="gender"
-                        value={profile.gender || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'border-gray-600 bg-gray-700 text-white' 
-                            : 'border-gray-300 bg-white text-gray-900'
-                        }`}
-                      >
-                        <option value="">Select gender</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                        <option value="prefer_not_to_say">Prefer not to say</option>
-                      </select>
-                    ) : (
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {profile.gender || 'Not provided'}
-                      </p>
-                    )}
-                  </div>
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Gender
+                  </label>
+                  {isEditing ? (
+                    <select
+                      name="gender"
+                      value={profile.gender || ''}
+                      onChange={handleInputChange}
+                      className={`w-full px-3 py-2 border rounded-lg ${
+                        darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                      }`}
+                    >
+                      <option value="">Select gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                      <option value="prefer_not_to_say">Prefer not to say</option>
+                    </select>
+                  ) : (
+                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {profile.gender
+                        ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1).replace(/_/g, ' ')
+                        : 'Not provided'}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -363,150 +335,125 @@ const CustomerProfile = () => {
                   Address Information
                 </h3>
                 
-                <div className="space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={profile.address || ''}
+                    onChange={handleInputChange}
+                    disabled={!isEditing}
+                    className={`w-full px-3 py-2 border rounded-lg ${
+                      isEditing
+                        ? darkMode
+                          ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                        : darkMode
+                          ? 'bg-gray-800 border-gray-700 text-gray-400'
+                          : 'bg-gray-100 border-gray-200 text-gray-500'
+                    }`}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Address
+                      City
                     </label>
-                    {isEditing ? (
-                      <textarea
-                        name="address"
-                        value={profile.address || ''}
-                        onChange={handleInputChange}
-                        rows="3"
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'border-gray-600 bg-gray-700 text-white' 
-                            : 'border-gray-300 bg-white text-gray-900'
-                        }`}
-                        placeholder="Enter your address"
-                      />
-                    ) : (
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {profile.address || 'Not provided'}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        City
-                      </label>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          name="city"
-                          value={profile.city || ''}
-                          onChange={handleInputChange}
-                          className={`w-full px-3 py-2 border rounded-lg ${
-                            darkMode 
-                              ? 'border-gray-600 bg-gray-700 text-white' 
-                              : 'border-gray-300 bg-white text-gray-900'
-                          }`}
-                          placeholder="City"
-                        />
-                      ) : (
-                        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                          {profile.city || 'Not provided'}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        State
-                      </label>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          name="state"
-                          value={profile.state || ''}
-                          onChange={handleInputChange}
-                          className={`w-full px-3 py-2 border rounded-lg ${
-                            darkMode 
-                              ? 'border-gray-600 bg-gray-700 text-white' 
-                              : 'border-gray-300 bg-white text-gray-900'
-                          }`}
-                          placeholder="State"
-                        />
-                      ) : (
-                        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                          {profile.state || 'Not provided'}
-                        </p>
-                      )}
-                    </div>
+                    <input
+                      type="text"
+                      name="city"
+                      value={profile.city || ''}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      className={`w-full px-3 py-2 border rounded-lg ${
+                        isEditing
+                          ? darkMode
+                            ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                          : darkMode
+                            ? 'bg-gray-800 border-gray-700 text-gray-400'
+                            : 'bg-gray-100 border-gray-200 text-gray-500'
+                      }`}
+                    />
                   </div>
 
                   <div>
                     <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      ZIP Code
+                      State
                     </label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        name="zip_code"
-                        value={profile.zip_code || ''}
-                        onChange={handleInputChange}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'border-gray-600 bg-gray-700 text-white' 
-                            : 'border-gray-300 bg-white text-gray-900'
-                        }`}
-                        placeholder="ZIP Code"
-                      />
-                    ) : (
-                      <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {profile.zip_code || 'Not provided'}
-                      </p>
-                    )}
+                    <input
+                      type="text"
+                      name="state"
+                      value={profile.state || ''}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      className={`w-full px-3 py-2 border rounded-lg ${
+                        isEditing
+                          ? darkMode
+                            ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                          : darkMode
+                            ? 'bg-gray-800 border-gray-700 text-gray-400'
+                            : 'bg-gray-100 border-gray-200 text-gray-500'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      name="country"
+                      value={profile.country || ''}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      className={`w-full px-3 py-2 border rounded-lg ${
+                        isEditing
+                          ? darkMode
+                            ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                          : darkMode
+                            ? 'bg-gray-800 border-gray-700 text-gray-400'
+                            : 'bg-gray-100 border-gray-200 text-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      PIN Code
+                    </label>
+                    <input
+                      type="text"
+                      name="pin_code"
+                      value={profile.pin_code || ''}
+                      onChange={handleInputChange}
+                      disabled={!isEditing}
+                      className={`w-full px-3 py-2 border rounded-lg ${
+                        isEditing
+                          ? darkMode
+                            ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                          : darkMode
+                            ? 'bg-gray-800 border-gray-700 text-gray-400'
+                            : 'bg-gray-100 border-gray-200 text-gray-500'
+                      }`}
+                    />
                   </div>
                 </div>
               </div>
             </div>
           </div>
-
-          {/* Account Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-              <div className="flex items-center space-x-3 mb-3">
-                <Shield className="h-6 w-6 text-blue-600" />
-                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Security
-                </h3>
-              </div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Manage your account security settings
-              </p>
-            </div>
-
-            <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-              <div className="flex items-center space-x-3 mb-3">
-                <CreditCard className="h-6 w-6 text-green-600" />
-                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Payment Methods
-                </h3>
-              </div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Manage your payment information
-              </p>
-            </div>
-
-            <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-gray-50'}`}>
-              <div className="flex items-center space-x-3 mb-3">
-                <Calendar className="h-6 w-6 text-purple-600" />
-                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Booking History
-                </h3>
-              </div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                View your past bookings and services
-              </p>
-            </div>
-          </div>
         </div>
       </div>
-
+      
       <Footer />
     </div>
   );

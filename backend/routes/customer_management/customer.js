@@ -63,7 +63,8 @@ router.put('/:id', verifyToken, async (req, res) => {
     country,
     location_lat,
     location_lng,
-    phone_number
+    phone_number,
+    gender // <-- add gender
   } = req.body;
 
   try {
@@ -96,6 +97,14 @@ router.put('/:id', verifyToken, async (req, res) => {
       );
     }
 
+    // Update gender in users table if provided
+    if (gender) {
+      await pool.query(
+        'UPDATE users SET gender = ? WHERE id = ?',
+        [gender, id]
+      );
+    }
+
     if (customerFields.length === 0 && !phone_number) {
       return res.status(400).json({ message: 'No fields provided to update' });
     }
@@ -112,7 +121,7 @@ router.get('/profile', verifyToken, async (req, res) => {
   try {
     const { id } = req.user;
     const [rows] = await pool.query(
-      `SELECT c.*, u.name, u.email, u.phone_number, ca.address, ca.city, ca.state, ca.country, ca.pin_code, ca.location_lat, ca.location_lng FROM customers c
+      `SELECT c.*, u.name, u.email, u.phone_number, u.gender, ca.address, ca.city, ca.state, ca.country, ca.pin_code, ca.location_lat, ca.location_lng FROM customers c
        JOIN users u ON c.id = u.id 
        JOIN customer_addresses ca ON c.id = ca.customer_id
        WHERE c.id = ? AND ca.is_default = 1

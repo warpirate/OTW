@@ -61,6 +61,7 @@ const AdminService = {
     role: row.role,
     status: row.is_active ? 'Active' : 'Inactive',
     createdAt: row.created_at,
+    gender: row.gender || '',
   }),
 
   // Get all admins with optional filtering
@@ -103,6 +104,7 @@ const AdminService = {
         phone: adminData.phone,
         is_active: adminData.status === 'Active',
         role: adminData.role,
+        gender: adminData.gender || '',
       };
       const response = await adminClient.post('/', payload);
       return { success: true, message: 'Admin created successfully', id: response.data.id };
@@ -114,7 +116,8 @@ const AdminService = {
   // Update existing admin
   updateAdmin: async (id, adminData) => {
     try {
-      const response = await adminClient.put(`/${id}`, adminData);
+      const payload = { ...adminData, gender: adminData.gender || '' };
+      const response = await adminClient.put(`/${id}`, payload);
       return { success: true, message: 'Admin updated successfully' };
     } catch (error) {
       throw error;

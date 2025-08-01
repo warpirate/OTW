@@ -359,11 +359,12 @@ router.put('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
       alternate_phone_number,
       emergency_contact_name,
       emergency_contact_relationship,
-      emergency_contact_phone
+      emergency_contact_phone,
+      gender // <-- add gender
     } = req.body;
 
     // Update users table
-    if (name || email || phone_number) {
+    if (name || email || phone_number || gender) {
       const userUpdates = [];
       const userValues = [];
 
@@ -378,6 +379,10 @@ router.put('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
       if (phone_number) {
         userUpdates.push('phone_number = ?');
         userValues.push(phone_number);
+      }
+      if (gender) {
+        userUpdates.push('gender = ?');
+        userValues.push(gender);
       }
 
       if (userUpdates.length > 0) {
