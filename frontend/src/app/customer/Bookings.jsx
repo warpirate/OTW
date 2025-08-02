@@ -7,7 +7,6 @@ import {
   AlertCircle, 
   Calendar, 
   MapPin, 
-  DollarSign, 
   Package, 
   Filter,
   Search,
@@ -169,7 +168,7 @@ const Bookings = () => {
 
   const canCancelBooking = (booking) => {
     const status = booking.status?.toLowerCase();
-    return status === 'pending' || status === 'confirmed';
+    return status === 'pending' || status === 'assigned';
   };
 
   if (loading) {
@@ -231,7 +230,7 @@ const Bookings = () => {
                   <div>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Active Bookings</p>
                     <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {bookings.filter(b => ['pending', 'accepted'].includes(b.status?.toLowerCase())).length}
+                      {bookings.filter(b => ['pending', 'assigned'].includes(b.status?.toLowerCase())).length}
                     </p>
                   </div>
                   <Clock className="h-8 w-8 text-blue-600" />
@@ -246,7 +245,6 @@ const Bookings = () => {
                       {formatPrice(bookings.reduce((sum, booking) => sum + (booking.total_amount || 0), 0))}
                     </p>
                   </div>
-                  <DollarSign className="h-8 w-8 text-green-600" />
                 </div>
               </div>
             </div>
@@ -287,6 +285,7 @@ const Bookings = () => {
                 >
                   <option value="all">All Bookings</option>
                   <option value="pending">Pending</option>
+                  <option value="assigned">Assigned</option>
                   <option value="confirmed">Confirmed</option>
                   <option value="in_progress">In Progress</option>
                   <option value="completed">Completed</option>
@@ -354,7 +353,6 @@ const Bookings = () => {
                         </div>
                         
                         <div className="flex items-center space-x-2">
-                          <DollarSign className="h-4 w-4 text-gray-400" />
                           <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                             {formatPrice(booking.total_amount)}
                           </span>

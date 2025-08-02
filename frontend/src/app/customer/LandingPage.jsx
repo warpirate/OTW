@@ -399,7 +399,13 @@ const LandingPage = () => {
                       Object.values(dynamicServiceCategories).map(category => (
                         <div 
                           key={category.id} 
-                          onClick={() => setActiveTab(category.id)}
+                          onClick={() => {
+                            if (category.id === 'driver') {
+                              navigate('/driver');
+                            } else {
+                              setActiveTab(category.id);
+                            }
+                          }}
                           className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600 border border-gray-600' : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}
                         >
                           <div className={`${darkMode ? 'bg-gray-600 border border-gray-500' : 'bg-white border border-gray-100'} rounded-full p-2 mb-2`}>

@@ -203,44 +203,15 @@ const WorkerSignup = () => {
     setSelectedCategories([]);
     setSelectedSubcategories([]);
     
-    // Filter categories based on selected type
+    // Filter categories based on selected type using category_type from API
     if (type && categories.length > 0) {
       let filtered = [];
       if (type === 'maintenance') {
-        filtered = categories.filter(cat => {
-          const name = (cat.name || '').toLowerCase();
-          return name.includes('repair') || 
-                 name.includes('maintenance') ||
-                 name.includes('installation') ||
-                 name.includes('plumber') ||
-                 name.includes('electrician') ||
-                 name.includes('carpenter') ||
-                 name.includes('pest') ||
-                 name.includes('ac');
-        });
+        filtered = categories.filter(cat => cat.category_type === 'maintenance');
       } else if (type === 'maid') {
-        filtered = categories.filter(cat => {
-          const name = (cat.name || '').toLowerCase();
-          return name.includes('cleaning') || 
-                 name.includes('housekeeping') ||
-                 name.includes('maid') ||
-                 name.includes('cleaner') ||
-                 name.includes('cook');
-        });
+        filtered = categories.filter(cat => cat.category_type === 'maid');
       } else if (type === 'driver') {
-        filtered = categories.filter(cat => {
-          const name = (cat.name || '').toLowerCase();
-          return name.includes('transport') || 
-                 name.includes('driver') ||
-                 name.includes('delivery') ||
-                 name.includes('vehicle') ||
-                 name.includes('car') ||
-                 name.includes('innova') ||
-                 name.includes('crysta') ||
-                 name.includes('taxi') ||
-                 name.includes('cab') ||
-                 name.includes('rental');
-        });
+        filtered = categories.filter(cat => cat.category_type === 'driver');
       }
       setFilteredCategories(filtered);
     } else {
@@ -267,33 +238,12 @@ const WorkerSignup = () => {
         if (serviceType) {
           console.log('Service type already selected, filtering categories...');
           let filtered = activeCategories.filter(cat => {
-            const name = (cat.name || '').toLowerCase();
             if (serviceType === 'maintenance') {
-              return name.includes('repair') || 
-                     name.includes('maintenance') ||
-                     name.includes('installation') ||
-                     name.includes('plumber') ||
-                     name.includes('electrician') ||
-                     name.includes('carpenter') ||
-                     name.includes('pest') ||
-                     name.includes('ac');
+              return cat.category_type === 'maintenance';
             } else if (serviceType === 'maid') {
-              return name.includes('cleaning') || 
-                     name.includes('housekeeping') ||
-                     name.includes('maid') ||
-                     name.includes('cleaner') ||
-                     name.includes('cook');
+              return cat.category_type === 'maid';
             } else if (serviceType === 'driver') {
-              return name.includes('transport') || 
-                     name.includes('driver') ||
-                     name.includes('delivery') ||
-                     name.includes('vehicle') ||
-                     name.includes('car') ||
-                     name.includes('innova') ||
-                     name.includes('crysta') ||
-                     name.includes('taxi') ||
-                     name.includes('cab') ||
-                     name.includes('rental');
+              return cat.category_type === 'driver';
             }
             return false;
           });

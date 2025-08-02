@@ -246,7 +246,7 @@ class WorkerService {
   }
   
   /**
-   * Update booking request status (accept/reject)
+   * Update booking request status
    */
   static async updateBookingRequest(requestId, status, reason = null) {
     try {
@@ -258,6 +258,43 @@ class WorkerService {
     } catch (error) {
       console.error('Error updating booking request:', error);
       throw new Error(error.response?.data?.message || 'Failed to update booking request');
+    }
+  }
+
+  /**
+   * Get assigned bookings for worker
+   */
+  static async getAssignedBookings(page = 1, limit = 10, status = null) {
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      
+      if (status) {
+        params.append('status', status);
+      }
+
+      const response = await WorkerService._client.get(`/worker/assigned-bookings?${params}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching assigned bookings:', error);
+      throw new Error(error.response?.data?.message || 'Failed to load assigned bookings');
+    }
+  }
+
+  /**
+   * Cancel assigned booking
+   */
+  static async cancelBooking(bookingId, cancellationReason = null) {
+    try {
+      const response = await WorkerService._client.put(`/worker/bookings/${bookingId}/cancel`, {
+        cancellation_reason: cancellationReason
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      throw new Error(error.response?.data?.message || 'Failed to cancel booking');
     }
   }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertCircle, UserCheck } from 'lucide-react';
 
 const BookingStatusBadge = ({ status, showIcon = true, size = 'default' }) => {
   const getStatusConfig = (status) => {
@@ -11,12 +11,30 @@ const BookingStatusBadge = ({ status, showIcon = true, size = 'default' }) => {
           colors: 'bg-yellow-100 text-yellow-800 border-yellow-200',
           text: 'PENDING'
         };
+      case 'assigned':
+        return {
+          icon: <UserCheck className="h-4 w-4 text-green-500" />,
+          colors: 'bg-green-100 text-green-800 border-green-200',
+          text: 'ASSIGNED'
+        };
       case 'accepted':
       case 'confirmed':
         return {
-          icon: <AlertCircle className="h-4 w-4 text-blue-500" />,
+          icon: <CheckCircle className="h-4 w-4 text-blue-500" />,
           colors: 'bg-blue-100 text-blue-800 border-blue-200',
           text: 'ACCEPTED'
+        };
+      case 'completed':
+        return {
+          icon: <CheckCircle className="h-4 w-4 text-green-500" />,
+          colors: 'bg-green-100 text-green-800 border-green-200',
+          text: 'COMPLETED'
+        };
+      case 'cancelled':
+        return {
+          icon: <XCircle className="h-4 w-4 text-red-500" />,
+          colors: 'bg-red-100 text-red-800 border-red-200',
+          text: 'CANCELLED'
         };
       case 'timeout':
         return {

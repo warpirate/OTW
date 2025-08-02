@@ -3,6 +3,17 @@ const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 
+// Haversine distance calculation function
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  const toRad = deg => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // Helper function to generate available time slots for a given date
 const generateTimeSlots = (date) => {
   const slots = [];
@@ -196,7 +207,58 @@ router.post('/create', verifyToken, async (req, res) => {
           ]
         );
 
-        bookingIds.push(bookingResult.insertId);
+        const bookingId = bookingResult.insertId;
+        bookingIds.push(bookingId);
+
+        // Create booking requests for available workers
+        // Get customer address coordinates (you might need to add geocoding here)
+        // For now, we'll use a default location or get from customer address
+        const customerLat = 17.23170000; // Default - you should get this from customer address
+        const customerLon = 80.18260000; // Default - you should get this from customer address
+
+        // Find providers who offer this service and are within service radius
+        const [providers] = await pool.query(`
+          SELECT 
+            p.id as provider_id,
+            p.service_radius_km,
+            p.location_lat,
+            p.location_lng
+          FROM providers p
+          INNER JOIN provider_services ps ON p.id = ps.provider_id
+          WHERE ps.subcategory_id = ? 
+            AND p.active = 1 
+            AND p.verified = 1
+            AND p.location_lat IS NOT NULL 
+            AND p.location_lng IS NOT NULL
+        `, [subcategory_id]);
+
+        const availableProviderIds = [];
+        
+        for (const provider of providers) {
+          if (provider.location_lat && provider.location_lng) {
+            const distance = haversineDistance(
+              customerLat, 
+              customerLon, 
+              provider.location_lat, 
+              provider.location_lng
+            );
+            
+            if (distance <= provider.service_radius_km) {
+              availableProviderIds.push(provider.provider_id);
+            }
+          }
+        }
+
+        // Create booking requests for available providers
+        for (const providerId of availableProviderIds) {
+          await pool.query(
+            `INSERT INTO booking_requests (booking_id, provider_id, status, requested_at)
+             VALUES (?, ?, 'pending', NOW())`,
+            [bookingId, providerId]
+          );
+        }
+
+        console.log(`Created ${availableProviderIds.length} booking requests for booking ${bookingId}`);
       }
 
       // Clear the cart after successful booking
@@ -253,7 +315,7 @@ router.get('/history', verifyToken, async (req, res) => {
               COALESCE(s.name, 'Ride Service') as service_name, 
               COALESCE(s.description, 'Driver transportation service') as service_description,
               CASE WHEN b.provider_id IS NOT NULL THEN 
-                (SELECT u.name FROM users u WHERE u.id = b.provider_id)
+                (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
               ELSE 'Not Assigned' END as provider_name,
               CASE 
                 WHEN b.booking_type = 'ride' THEN 
@@ -305,10 +367,10 @@ router.get('/:id', verifyToken, async (req, res) => {
               COALESCE(s.name, 'Ride Service') as service_name, 
               COALESCE(s.description, 'Driver transportation service') as service_description,
               CASE WHEN b.provider_id IS NOT NULL THEN 
-                (SELECT u.name FROM users u WHERE u.id = b.provider_id)
+                (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
               ELSE 'Not Assigned' END as provider_name,
               CASE WHEN b.provider_id IS NOT NULL THEN 
-                (SELECT u.phone_number FROM users u WHERE u.id = b.provider_id)
+                (SELECT u.phone_number FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
               ELSE NULL END as provider_phone,
               CASE 
                 WHEN b.booking_type = 'ride' THEN 

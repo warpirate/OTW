@@ -145,8 +145,8 @@ const WorkerJobs = () => {
   };
 
   const formatCost = (cost) => {
-    if (!cost) return '₹0';
-    return `₹${cost}`;
+    if (!cost || cost === 0) return '₹0';
+    return `₹${cost.toLocaleString('en-IN')}`;
   };
 
   const filteredRequests = bookingRequests.filter(request => {
@@ -301,6 +301,25 @@ const WorkerJobs = () => {
                         </div>
                       </div>
                       
+                      {/* Service Information */}
+                      {request.service_name && (
+                        <div className="mb-3">
+                          <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            Service: {request.service_name}
+                          </p>
+                          {request.service_description && (
+                            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              {request.service_description}
+                            </p>
+                          )}
+                          {request.category_name && (
+                            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Category: {request.category_name}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-4">
                         <div className="flex items-center space-x-2">
                           <Calendar className="w-4 h-4 text-gray-400" />
@@ -311,13 +330,12 @@ const WorkerJobs = () => {
                         <div className="flex items-center space-x-2">
                           <MapPin className="w-4 h-4 text-gray-400" />
                           <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                            {request.pickup_address || 'Pickup location not specified'}
+                            {request.pickup_address || request.address || 'Location not specified'}
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <DollarSign className="w-4 h-4 text-gray-400" />
                           <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {formatCost(request.estimated_cost)}
+                            {formatCost(request.estimated_cost || request.price || 0)}
                           </span>
                         </div>
                       </div>
@@ -356,20 +374,12 @@ const WorkerJobs = () => {
                     
                     <div className="flex items-center space-x-2">
                       {request.status === 'pending' && (
-                        <>
-                          <button 
-                            onClick={() => handleStatusUpdate(request.request_id, 'accepted')}
-                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
-                          >
-                            Accept
-                          </button>
-                          <button 
-                            onClick={() => handleStatusUpdate(request.request_id, 'rejected')}
-                            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
-                          >
-                            Reject
-                          </button>
-                        </>
+                        <button 
+                          onClick={() => handleStatusUpdate(request.request_id, 'accepted')}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
+                        >
+                          Accept
+                        </button>
                       )}
                       <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
                         <MessageCircle className="w-5 h-5" />

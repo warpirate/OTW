@@ -923,16 +923,25 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
         b.drop_address,
         b.actual_cost,
         b.price,
+        b.estimated_cost,
         b.service_status,
         b.payment_status,
         b.created_at as booking_created_at,
+        b.scheduled_time,
         b.duration,
         b.cost_type,
+        b.address,
+        b.subcategory_id,
         u.name as customer_name,
-        u.phone_number as customer_phone
+        u.phone_number as customer_phone,
+        s.name as service_name,
+        s.description as service_description,
+        sc.name as category_name
       FROM booking_requests br
       INNER JOIN bookings b ON br.booking_id = b.id
       INNER JOIN users u ON b.user_id = u.id
+      LEFT JOIN subcategories s ON b.subcategory_id = s.id
+      LEFT JOIN service_categories sc ON s.category_id = sc.id
       WHERE br.provider_id = ?
     `;
 
@@ -986,7 +995,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 });
 
 /**
- * Update booking request status (accept/reject)
+ * Update booking request status (accept only)
  */
 router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) => {
   try {
@@ -1001,9 +1010,9 @@ router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) 
       reason 
     });
 
-    // Validate status
-    if (!['accepted', 'rejected'].includes(status)) {
-      return res.status(400).json({ message: 'Invalid status. Must be "accepted" or "rejected"' });
+    // Only allow 'accepted' status initially - no reject option
+    if (status !== 'accepted') {
+      return res.status(400).json({ message: 'Invalid status. Only "accepted" is allowed initially' });
     }
 
     // Get provider_id for this worker
@@ -1041,19 +1050,17 @@ router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) 
       [status, requestId]
     );
 
-    // If accepted, update the main booking and reject other pending requests
-    if (status === 'accepted') {
-      await pool.query(
-        'UPDATE bookings SET provider_id = ?, service_status = ? WHERE id = ?',
-        [providerId, 'assigned', bookingRequest.booking_id]
-      );
+    // Update the main booking to 'assigned' status
+    await pool.query(
+      'UPDATE bookings SET provider_id = ?, service_status = ? WHERE id = ?',
+      [providerId, 'assigned', bookingRequest.booking_id]
+    );
 
-      // Reject other pending requests for the same booking
-      await pool.query(
-        'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE booking_id = ? AND id != ? AND status = ?',
-        ['rejected', bookingRequest.booking_id, requestId, 'pending']
-      );
-    }
+    // Reject other pending requests for the same booking
+    await pool.query(
+      'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE booking_id = ? AND id != ? AND status = ?',
+      ['rejected', bookingRequest.booking_id, requestId, 'pending']
+    );
 
     res.json({
       message: `Booking request ${status} successfully`,
@@ -1065,6 +1072,144 @@ router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) 
     console.error('Update booking request error:', error);
     res.status(500).json({ 
       message: 'Failed to update booking request',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Get assigned bookings for worker
+ */
+router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { page = 1, limit = 10, status } = req.query;
+    
+    const offset = (page - 1) * limit;
+    let whereClause = 'WHERE b.provider_id = (SELECT id FROM providers WHERE user_id = ?)';
+    let queryParams = [userId];
+
+    if (status) {
+      whereClause += ' AND b.service_status = ?';
+      queryParams.push(status);
+    }
+
+    const [bookings] = await pool.query(
+      `SELECT b.*, 
+              COALESCE(s.name, 'Ride Service') as service_name, 
+              COALESCE(s.description, 'Driver transportation service') as service_description,
+              (SELECT u.name FROM users u WHERE u.id = b.user_id) as customer_name,
+              (SELECT u.phone_number FROM users u WHERE u.id = b.user_id) as customer_phone,
+              CASE 
+                WHEN b.booking_type = 'ride' THEN 
+                  CONCAT(b.pickup_address, ' → ', b.drop_address)
+                ELSE b.address 
+              END as display_address,
+              CASE 
+                WHEN b.booking_type = 'ride' THEN b.estimated_cost
+                ELSE b.price 
+              END as display_price
+       FROM bookings b
+       LEFT JOIN subcategories s ON s.id = b.subcategory_id
+       ${whereClause}
+       ORDER BY b.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...queryParams, parseInt(limit), parseInt(offset)]
+    );
+
+    // Get total count
+    const [countResult] = await pool.query(
+      `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
+      queryParams
+    );
+
+    res.json({
+      bookings,
+      pagination: {
+        current_page: parseInt(page),
+        per_page: parseInt(limit),
+        total: countResult[0].total,
+        total_pages: Math.ceil(countResult[0].total / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Get assigned bookings error:', error);
+    res.status(500).json({ 
+      message: 'Failed to retrieve assigned bookings',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Cancel assigned booking (for workers)
+ */
+router.put('/worker/bookings/:bookingId/cancel', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const bookingId = req.params.bookingId;
+    const { cancellation_reason } = req.body;
+
+    // Get provider_id for this worker
+    const [providerResult] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (providerResult.length === 0) {
+      return res.status(404).json({ message: 'Provider profile not found' });
+    }
+
+    const providerId = providerResult[0].id;
+
+    // Check if booking exists and is assigned to this provider
+    const [bookings] = await pool.query(
+      'SELECT * FROM bookings WHERE id = ? AND provider_id = ? AND service_status = ?',
+      [bookingId, providerId, 'assigned']
+    );
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: 'Booking not found or not assigned to you' });
+    }
+
+    const booking = bookings[0];
+
+    // Check if booking can be cancelled
+    if (booking.service_status === 'cancelled') {
+      return res.status(400).json({ message: 'Booking is already cancelled' });
+    }
+
+    if (booking.service_status === 'completed') {
+      return res.status(400).json({ message: 'Cannot cancel completed booking' });
+    }
+
+    // Check if booking is too close to scheduled time (e.g., within 2 hours)
+    const scheduledTime = new Date(booking.scheduled_time);
+    const now = new Date();
+    const timeDiff = scheduledTime.getTime() - now.getTime();
+    const hoursDiff = timeDiff / (1000 * 3600);
+
+    if (hoursDiff < 2) {
+      return res.status(400).json({ 
+        message: 'Cannot cancel booking within 2 hours of scheduled time' 
+      });
+    }
+
+    // Cancel the booking
+    await pool.query(
+      `UPDATE bookings 
+       SET service_status = 'cancelled', payment_status = 'refunded'
+       WHERE id = ?`,
+      [bookingId]
+    );
+
+    res.json({ message: 'Booking cancelled successfully' });
+
+  } catch (error) {
+    console.error('Error cancelling booking:', error);
+    res.status(500).json({ 
+      message: 'Failed to cancel booking',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

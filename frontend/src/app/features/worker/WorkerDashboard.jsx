@@ -4,7 +4,6 @@ import {
   Briefcase, 
   Calendar, 
   Clock, 
-  DollarSign, 
   Star, 
   MapPin, 
   MessageCircle, 
@@ -207,14 +206,13 @@ const WorkerDashboard = () => {
           <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
-                <DollarSign className="w-6 h-6 text-yellow-600" />
               </div>
               <div className="ml-4">
                 <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                   Total Earnings
                 </p>
                 <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  ₹{stats.totalEarnings.toLocaleString()}
+                  {stats.totalEarnings.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -324,6 +322,21 @@ const WorkerDashboard = () => {
               </h3>
               <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 Manage your jobs
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            to="/worker/assigned-bookings"
+            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
+          >
+            <div className="text-center">
+              <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-3" />
+              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                My Bookings
+              </h3>
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                Assigned bookings
               </p>
             </div>
           </Link>

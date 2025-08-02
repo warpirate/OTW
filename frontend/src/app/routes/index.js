@@ -5,6 +5,7 @@ import WorkerLogin from '../auth/WorkerLogin';
 import WorkerSignup from '../auth/WorkerSignup';
 import WorkerDashboard from '../features/worker/WorkerDashboard';
 import WorkerJobs from '../features/worker/WorkerJobs';
+import WorkerAssignedBookings from '../features/worker/WorkerAssignedBookings';
 import WorkerSchedule from '../features/worker/WorkerSchedule';
 import WorkerProfile from '../features/worker/WorkerProfile';
 import WorkerSettings from '../features/worker/WorkerSettings';
@@ -75,6 +76,10 @@ export const workerRoutes = [
       {
         path: "earnings",
         element: <div>Worker Earnings Page (Coming Soon)</div>
+      },
+      {
+        path: "assigned-bookings",
+        element: <WorkerAssignedBookings />
       },
       {
         path: "settings",
