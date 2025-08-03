@@ -355,4 +355,19 @@
   .progress-error {
     @apply progress-bar bg-error-500;
   }
+  
+  /* Map Marker Styles */
+  .custom-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .pickup-marker div {
+    @apply bg-blue-500;
+  }
+  
+  .drop-marker div {
+    @apply bg-red-500;
+  }
 }
