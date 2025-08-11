@@ -34,7 +34,8 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     cost_type,
     duration
   } = req.body;
-
+console.log("pickup_time", pickup_time);
+console.log("body", req.body)
   if (!pickup_address || !pickup_lat || !pickup_lon || !drop_address || !drop_lat || !drop_lon || !pickup_time) {
     return res.status(400).json({ message: 'Missing required booking information.' });
   }

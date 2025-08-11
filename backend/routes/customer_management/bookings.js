@@ -404,7 +404,7 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
     const bookingId = req.params.id;
-    const { cancellation_reason } = req.body;
+    const { cancellation_reason, client_now_utc } = req.body;
 
     // Check if booking exists and belongs to customer
     const [bookings] = await pool.query(
@@ -428,14 +428,15 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
     }
 
     // Check if booking is too close to scheduled time (e.g., within 2 hours)
+    // Use client-provided UTC time if available, else fall back to server time
     const scheduledTime = new Date(booking.scheduled_time);
-    const now = new Date();
+    const now = client_now_utc ? new Date(client_now_utc) : new Date();
     const timeDiff = scheduledTime.getTime() - now.getTime();
     const hoursDiff = timeDiff / (1000 * 3600);
 
-    if (hoursDiff < 2) {
+    if (hoursDiff > 2) {
       return res.status(400).json({ 
-        message: 'Cannot cancel booking within 2 hours of scheduled time' 
+        message: 'Cannot cancel booking more than 2 hours before scheduled time' 
       });
     }
 

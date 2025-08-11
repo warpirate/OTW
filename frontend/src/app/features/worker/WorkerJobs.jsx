@@ -99,7 +99,8 @@ const WorkerJobs = () => {
 
   const handleFilterChange = (filter) => {
     setActiveFilter(filter);
-    fetchBookingRequests(1, filter === 'all' ? null : filter);
+    // No need to fetch new data since we're filtering on frontend
+    // This eliminates the double-click issue and improves performance
   };
 
   const getStatusColor = (status) => {
@@ -150,11 +151,16 @@ const WorkerJobs = () => {
   };
 
   const filteredRequests = bookingRequests.filter(request => {
+    // Filter by status first
+    const matchesStatus = activeFilter === 'all' || request.status === activeFilter;
+    
+    // Then filter by search query
     const matchesSearch = 
       request.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       request.pickup_address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       request.drop_address?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+    
+    return matchesStatus && matchesSearch;
   });
 
   const filterOptions = [

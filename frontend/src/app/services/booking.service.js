@@ -159,7 +159,8 @@ const BookingService = {
     cancel: async (bookingId, reason = '') => {
       try {
         const response = await apiClient.put(`/bookings/${bookingId}/cancel`, {
-          cancellation_reason: reason
+          cancellation_reason: reason,
+          client_now_utc: new Date().toISOString()
         });
         return response.data;
       } catch (error) {
