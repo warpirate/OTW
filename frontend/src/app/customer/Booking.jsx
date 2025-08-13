@@ -5,7 +5,7 @@ import {
   CheckCircle, Home, Briefcase, Star, User, Phone, Mail,
   CreditCard, Building
 } from 'lucide-react';
-import { isDarkMode } from '../utils/themeUtils';
+import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import BookingService from '../services/booking.service';
 import { useCart } from '../contexts/CartContext';
 import Header from '../../components/Header';
@@ -48,6 +48,12 @@ const Booking = () => {
   // Booking confirmation
   const [isProcessing, setIsProcessing] = useState(false);
   const [bookingNotes, setBookingNotes] = useState('');
+  
+  // Sync dark mode with global theme changes
+  useEffect(() => {
+    const remove = addThemeListener(() => setDarkMode(isDarkMode()));
+    return () => remove();
+  }, []);
   
   // Authentication & cart availability check
   useEffect(() => {
@@ -368,13 +374,12 @@ const handleCreateBooking = async () => {
       total: subtotal + serviceFee + tax
     };
   };
-  
   const totals = calculateTotal();
-  
+
   return (
-    <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
       <Header />
-      
+
       <div className="container-custom py-8">
         {/* Header with steps */}
         <div className="mb-8">
@@ -385,7 +390,7 @@ const handleCreateBooking = async () => {
             <ArrowLeft className="h-5 w-5 mr-2" />
             Back
           </button>
-          
+
           {/* Step indicator */}
           <div className="flex items-center space-x-4 mb-6">
             <div className={`flex items-center ${currentStep === 'datetime' ? 'text-purple-600' : darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -404,19 +409,18 @@ const handleCreateBooking = async () => {
             </div>
           </div>
         </div>
-        
+
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Main content */}
           <div className="lg:w-2/3">
             <div className={`rounded-lg shadow-md ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} border overflow-hidden`}>
-              
               {/* Date & Time Selection */}
               {currentStep === 'datetime' && (
                 <div className="p-6">
                   <h2 className={`text-2xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                     Select Date & Time
                   </h2>
-                  
+
                   {/* Date Selection */}
                   <div className="mb-8">
                     <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -443,7 +447,7 @@ const handleCreateBooking = async () => {
                       ))}
                     </div>
                   </div>
-                  
+
                   {/* Time Slot Selection */}
                   {selectedDate && (
                     <div>
@@ -487,7 +491,7 @@ const handleCreateBooking = async () => {
                   )}
                 </div>
               )}
-              
+
               {/* Address Selection */}
               {currentStep === 'address' && (
                 <div className="p-6">
@@ -503,7 +507,7 @@ const handleCreateBooking = async () => {
                       Add Address
                     </button>
                   </div>
-                  
+
                   {/* Address List */}
                   {loadingAddresses ? (
                     <div className="flex justify-center py-8">
@@ -523,7 +527,7 @@ const handleCreateBooking = async () => {
                             key={address.address_id}
                             className={`border rounded-lg p-4 cursor-pointer transition-colors ${
                               selectedAddress?.address_id === address.address_id
-                                ? 'border-purple-600 bg-purple-50'
+                                ? 'border-purple-600 bg-[var(--bg-hover)]'
                                 : darkMode
                                   ? 'border-gray-600 bg-gray-700 hover:border-purple-500'
                                   : 'border-gray-200 bg-white hover:border-purple-300'
@@ -538,7 +542,7 @@ const handleCreateBooking = async () => {
                                     {address.address_label || address.address_type}
                                   </span>
                                   {address.is_default && (
-                                    <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                                    <span className={`${darkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-800'} ml-2 px-2 py-1 text-xs rounded-full`}>
                                       Default
                                     </span>
                                   )}
@@ -576,7 +580,7 @@ const handleCreateBooking = async () => {
                       )}
                     </div>
                   )}
-                  
+
                   {/* Add Address Form */}
                   {showAddressForm && (
                     <div className={`mt-6 p-4 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
@@ -592,7 +596,7 @@ const handleCreateBooking = async () => {
                             value={newAddress.address}
                             onChange={(e) => handleAddressInput('address', e.target.value)}
                             rows={3}
-                            className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-800 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                            className={`w-full px-3 py-2 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
                             placeholder="Enter full address"
                           />
                         </div>
@@ -604,7 +608,7 @@ const handleCreateBooking = async () => {
                             type="text"
                             value={newAddress.pin_code}
                             onChange={(e) => handleAddressInput('pin_code', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-800 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                            className={`w-full px-3 py-2 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
                             placeholder="123456"
                           />
                         </div>
@@ -616,7 +620,7 @@ const handleCreateBooking = async () => {
                             type="text"
                             value={newAddress.city}
                             onChange={(e) => handleAddressInput('city', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-800 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                            className={`w-full px-3 py-2 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
                             placeholder="City name"
                           />
                         </div>
@@ -628,7 +632,7 @@ const handleCreateBooking = async () => {
                             type="text"
                             value={newAddress.state}
                             onChange={(e) => handleAddressInput('state', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-800 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                            className={`w-full px-3 py-2 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
                             placeholder="State name"
                           />
                         </div>
@@ -639,7 +643,7 @@ const handleCreateBooking = async () => {
                           <select
                             value={newAddress.address_type}
                             onChange={(e) => handleAddressInput('address_type', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-800 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode ? 'border-gray-600 bg-gray-800 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
                           >
                             <option value="home">Home</option>
                             <option value="work">Work</option>
@@ -654,7 +658,7 @@ const handleCreateBooking = async () => {
                             type="text"
                             value={newAddress.address_label}
                             onChange={(e) => handleAddressInput('address_label', e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-800 text-white' : 'border-gray-300 bg-white text-gray-900'}`}
+                            className={`w-full px-3 py-2 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
                             placeholder="e.g., Home, Office"
                           />
                         </div>
