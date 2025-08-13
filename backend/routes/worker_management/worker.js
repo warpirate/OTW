@@ -327,6 +327,72 @@ class WorkerService {
   }
 
   /**
+   * Get dashboard stats for worker
+   */
+  static async getDashboardStats(userId) {
+    try {
+      // Get provider ID
+      const [providerResult] = await pool.query(
+        'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+        [userId]
+      );
+
+      if (providerResult.length === 0) {
+        throw new Error('Provider not found');
+      }
+
+      const providerId = providerResult[0].id;
+
+      // Get total bookings count
+      const [totalBookingsResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM bookings WHERE provider_id = ?',
+        [providerId]
+      );
+
+      // Get completed bookings count
+      const [completedBookingsResult] = await pool.query(
+        "SELECT COUNT(*) as count FROM bookings WHERE provider_id = ? AND service_status = 'completed'",
+        [providerId]
+      );
+
+      // Get pending bookings count
+      const [pendingBookingsResult] = await pool.query(
+        "SELECT COUNT(*) as count FROM bookings WHERE provider_id = ? AND service_status IN ('assigned', 'accepted', 'in_progress')",
+        [providerId]
+      );
+
+      // Get total earnings (sum of completed booking prices)
+      const [earningsResult] = await pool.query(
+        "SELECT COALESCE(SUM(CASE WHEN booking_type = 'ride' THEN estimated_cost ELSE price END), 0) as total FROM bookings WHERE provider_id = ? AND service_status = 'completed'",
+        [providerId]
+      );
+
+      // Get average rating
+      const [ratingResult] = await pool.query(
+        'SELECT rating FROM providers WHERE id = ?',
+        [providerId]
+      );
+
+      // Get total reviews count
+      const [reviewsResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM provider_reviews WHERE provider_id = ?',
+        [providerId]
+      );
+
+      return {
+        total_bookings: totalBookingsResult[0].count,
+        completed_bookings: completedBookingsResult[0].count,
+        pending_bookings: pendingBookingsResult[0].count,
+        total_earnings: parseFloat(earningsResult[0].total),
+        average_rating: ratingResult[0] ? parseFloat(ratingResult[0].rating) : 0,
+        total_reviews: reviewsResult[0].count
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Update worker verification status (admin only)
    */
   static async updateVerificationStatus(userId, verified) {
@@ -553,6 +619,7 @@ router.put('/worker/settings', verifyToken, async (req, res) => {
     notify_on_payments,
     notify_by_sms,
     notify_by_push,
+    notify_by_email,
     auto_accept_jobs,
     max_jobs_per_day,
     allow_weekend_work,
@@ -564,9 +631,9 @@ router.put('/worker/settings', verifyToken, async (req, res) => {
     preferred_language,
     preferred_currency,
     distance_unit,
-    time_format
-  , working_hours_start,
-  working_hours_end
+    time_format,
+    working_hours_start,
+    working_hours_end
   } = req.body;
   
   try {
@@ -580,84 +647,65 @@ router.put('/worker/settings', verifyToken, async (req, res) => {
     if (existing.length > 0) {
       // Update existing settings
       await pool.query(
-        `UPDATE provider_settings SET
-          notify_on_job_alerts = ?,
-          notify_on_messages = ?,
-          notify_on_payments = ?,
-          notify_by_sms = ?,
-          notify_by_push = ?,
-          auto_accept_jobs = ?,
-          max_jobs_per_day = ?,
-          allow_weekend_work = ?,
-          allow_holiday_work = ?,
-          profile_visibility = ?,
-          display_rating = ?,
-          allow_direct_contact = ?,
-          location_sharing_mode = ?,
-          preferred_language = ?,
-          preferred_currency = ?,
-          distance_unit = ?,
-          time_format = ?,
-          working_hours_start = ?,
-          working_hours_end = ?,
+        `UPDATE provider_settings SET 
+          notify_on_job_alerts = ?, notify_on_messages = ?, notify_on_payments = ?,
+          notify_by_sms = ?, notify_by_push = ?, notify_by_email = ?,
+          auto_accept_jobs = ?, max_jobs_per_day = ?,
+          allow_weekend_work = ?, allow_holiday_work = ?,
+          profile_visibility = ?, display_rating = ?,
+          allow_direct_contact = ?, location_sharing_mode = ?,
+          preferred_language = ?, preferred_currency = ?,
+          distance_unit = ?, time_format = ?,
+          working_hours_start = ?, working_hours_end = ?,
           updated_at = NOW()
-        WHERE provider_id = (SELECT id FROM providers WHERE user_id = ?)`,
+         WHERE provider_id = (SELECT id FROM providers WHERE user_id = ?)`,
         [
-          notify_on_job_alerts,
-          notify_on_messages,
-          notify_on_payments,
-          notify_by_sms,
-          notify_by_push,
-          auto_accept_jobs,
-          max_jobs_per_day,
-          allow_weekend_work,
-          allow_holiday_work,
-          profile_visibility,
-          display_rating,
-          allow_direct_contact,
-          location_sharing_mode,
-          preferred_language,
-          preferred_currency,
-          distance_unit,
-          time_format,
-          working_hours_start,
-          working_hours_end,
+          notify_on_job_alerts, notify_on_messages, notify_on_payments,
+          notify_by_sms, notify_by_push, notify_by_email,
+          auto_accept_jobs, max_jobs_per_day,
+          allow_weekend_work, allow_holiday_work,
+          profile_visibility, display_rating,
+          allow_direct_contact, location_sharing_mode,
+          preferred_language, preferred_currency,
+          distance_unit, time_format,
+          working_hours_start, working_hours_end,
           req.user.id
         ]
       );
     } else {
-      // Create new settings
+      // Insert new settings
       await pool.query(
         `INSERT INTO provider_settings (
           provider_id, notify_on_job_alerts, notify_on_messages, notify_on_payments,
-          notify_by_sms, notify_by_push, auto_accept_jobs, max_jobs_per_day,
-          allow_weekend_work, allow_holiday_work, profile_visibility, display_rating,
-          allow_direct_contact, location_sharing_mode, preferred_language,
-          preferred_currency, distance_unit, time_format, working_hours_start, working_hours_end, created_at, updated_at
+          notify_by_sms, notify_by_push, notify_by_email,
+          auto_accept_jobs, max_jobs_per_day,
+          allow_weekend_work, allow_holiday_work,
+          profile_visibility, display_rating,
+          allow_direct_contact, location_sharing_mode,
+          preferred_language, preferred_currency,
+          distance_unit, time_format,
+          working_hours_start, working_hours_end
         ) VALUES (
-          (SELECT id FROM providers WHERE user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW()
+          (SELECT id FROM providers WHERE user_id = ?),
+          ?, ?, ?,
+          ?, ?, ?,
+          ?, ?,
+          ?, ?,
+          ?, ?,
+          ?, ?,
+          ?, ?
         )`,
         [
           req.user.id,
-          notify_on_job_alerts,
-          notify_on_messages,
-          notify_on_payments,
-          notify_by_sms,
-          notify_by_push,
-          auto_accept_jobs,
-          max_jobs_per_day,
-          allow_weekend_work,
-          allow_holiday_work,
-          profile_visibility,
-          display_rating,
-          allow_direct_contact,
-          location_sharing_mode,
-          preferred_language,
-          preferred_currency,
-          distance_unit,
-          time_format,
-          working_hours_start,
-          working_hours_end
+          notify_on_job_alerts, notify_on_messages, notify_on_payments,
+          notify_by_sms, notify_by_push, notify_by_email,
+          auto_accept_jobs, max_jobs_per_day,
+          allow_weekend_work, allow_holiday_work,
+          profile_visibility, display_rating,
+          allow_direct_contact, location_sharing_mode,
+          preferred_language, preferred_currency,
+          distance_unit, time_format,
+          working_hours_start, working_hours_end
         ]
       );
     }
@@ -666,6 +714,37 @@ router.put('/worker/settings', verifyToken, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ------------------------
+// Get Worker Dashboard Stats
+// ------------------------
+router.get('/worker/dashboard/stats', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Update last active timestamp
+    await WorkerService.updateLastActive(userId);
+    
+    const stats = await WorkerService.getDashboardStats(userId);
+    
+    res.json({
+      message: 'Dashboard stats retrieved successfully',
+      ...stats
+    });
+    
+  } catch (error) {
+    console.error('Get dashboard stats error:', error);
+    
+    if (error.message === 'Provider not found') {
+      return res.status(404).json({ message: error.message });
+    }
+    
+    res.status(500).json({ 
+      message: 'Failed to retrieve dashboard stats',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
   }
 });
 // // ------------------------
@@ -909,7 +988,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
     const providerId = providerResult[0].id;
 
-    // Build query with filters
+    // Build query with filters - exclude cancelled bookings
     let query = `
       SELECT 
         br.id as request_id,
@@ -942,7 +1021,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
       INNER JOIN users u ON b.user_id = u.id
       LEFT JOIN subcategories s ON b.subcategory_id = s.id
       LEFT JOIN service_categories sc ON s.category_id = sc.id
-      WHERE br.provider_id = ?
+      WHERE br.provider_id = ? AND b.service_status != 'cancelled'
     `;
 
     const queryParams = [providerId];
@@ -958,11 +1037,12 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
     // Get booking requests
     const [bookingRequests] = await pool.query(query, queryParams);
 
-    // Get total count for pagination
+    // Get total count for pagination - exclude cancelled bookings
     let countQuery = `
       SELECT COUNT(*) as total
       FROM booking_requests br
-      WHERE br.provider_id = ?
+      INNER JOIN bookings b ON br.booking_id = b.id
+      WHERE br.provider_id = ? AND b.service_status != 'cancelled'
     `;
     const countParams = [providerId];
 
@@ -1086,7 +1166,7 @@ router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
     const { page = 1, limit = 10, status } = req.query;
     
     const offset = (page - 1) * limit;
-    let whereClause = 'WHERE b.provider_id = (SELECT id FROM providers WHERE user_id = ?)';
+    let whereClause = 'WHERE b.provider_id = (SELECT id FROM providers WHERE user_id = ?) AND b.service_status != \'cancelled\'';
     let queryParams = [userId];
 
     if (status) {
@@ -1117,7 +1197,7 @@ router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
       [...queryParams, parseInt(limit), parseInt(offset)]
     );
 
-    // Get total count
+    // Get total count - exclude cancelled bookings
     const [countResult] = await pool.query(
       `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
       queryParams

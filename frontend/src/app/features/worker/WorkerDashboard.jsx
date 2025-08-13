@@ -15,52 +15,23 @@ import {
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
+import WorkerService from '../../services/worker.service';
 
 const WorkerDashboard = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(isDarkMode());
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState({
-    totalJobs: 12,
-    completedJobs: 10,
-    pendingJobs: 2,
-    totalEarnings: 15600,
-    rating: 4.8,
-    totalReviews: 45
+    totalJobs: 0,
+    completedJobs: 0,
+    pendingJobs: 0,
+    totalEarnings: 0,
+    rating: 0,
+    totalReviews: 0
   });
 
-  const [recentJobs, setRecentJobs] = useState([
-    {
-      id: 1,
-      title: 'Home Cleaning',
-      customer: 'Priya Sharma',
-      date: '2024-01-15',
-      time: '10:00 AM',
-      status: 'completed',
-      amount: 1200,
-      address: 'Sector 21, Gurgaon'
-    },
-    {
-      id: 2,
-      title: 'Plumbing Repair',
-      customer: 'Rahul Kumar',
-      date: '2024-01-16',
-      time: '2:00 PM',
-      status: 'pending',
-      amount: 800,
-      address: 'DLF Phase 2, Gurgaon'
-    },
-    {
-      id: 3,
-      title: 'Electrical Work',
-      customer: 'Amit Singh',
-      date: '2024-01-14',
-      time: '11:30 AM',
-      status: 'completed',
-      amount: 1500,
-      address: 'Cyber City, Gurgaon'
-    }
-  ]);
+  const [recentJobs, setRecentJobs] = useState([]);
 
   useEffect(() => {
     setDarkMode(isDarkMode());
@@ -71,12 +42,77 @@ const WorkerDashboard = () => {
     const userRole = userInfo?.role?.toLowerCase();
     if (userInfo && (userRole === 'worker' || userRole === 'provider')) {
       setUser(userInfo);
+      fetchData();
+      fetchProfile();
     } else {
       navigate('/worker/login');
     }
     
     return cleanup;
   }, [navigate]);
+
+  // Refresh data every 30 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchData();
+    }, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const profileData = await WorkerService.getProfile();
+      console.log('Fetched worker profile:', profileData);
+      setProfile(profileData?.profile || null);
+    } catch (error) {
+      console.error('Failed to fetch worker profile:', error);
+      setProfile(null);
+    }
+  };
+
+  // Helper to get the display name for the greeting and avatar
+  const getWorkerDisplayName = () => {
+    if (profile && (profile.firstName || profile.lastName)) {
+      return `${profile.firstName || ''} ${profile.lastName || ''}`.trim();
+    }
+    if (user && (user.firstName || user.lastName)) {
+      return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    }
+    return 'Worker';
+  };
+
+  const fetchData = async () => {
+    try {
+      // Fetch dashboard stats
+      const statsResponse = await WorkerService.getDashboardStats();
+      setStats({
+        totalJobs: statsResponse.total_bookings || 0,
+        completedJobs: statsResponse.completed_bookings || 0,
+        pendingJobs: statsResponse.pending_bookings || 0,
+        totalEarnings: statsResponse.total_earnings || 0,
+        rating: statsResponse.average_rating || 0,
+        totalReviews: statsResponse.total_reviews || 0
+      });
+
+      // Fetch recent jobs
+      const jobsResponse = await WorkerService.getRecentJobs(5);
+      const formattedJobs = jobsResponse.bookings?.map(booking => ({
+        id: booking.id,
+        title: booking.service_name || booking.subcategory_name || 'Service',
+        customer: booking.customer_name || 'Customer',
+        date: booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleDateString() : 'N/A',
+        time: booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A',
+        status: booking.service_status || 'pending',
+        amount: booking.display_price || booking.estimated_cost || 0,
+        address: booking.display_address || booking.address || 'Address not available'
+      })) || [];
+      
+      setRecentJobs(formattedJobs);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    }
+  };
 
   const handleLogout = () => {
     AuthService.logout(navigate, 'worker');
@@ -123,12 +159,18 @@ const WorkerDashboard = () => {
 
             {/* User Menu */}
             <div className="flex items-center space-x-4">
-              <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <button 
+                className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                aria-label="Notifications"
+                title="Notifications"
+              >
                 <Bell className="w-5 h-5" />
               </button>
               <button 
                 onClick={() => navigate('/worker/settings')}
                 className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                aria-label="Settings"
+                title="Settings"
               >
                 <Settings className="w-5 h-5" />
               </button>
@@ -136,20 +178,24 @@ const WorkerDashboard = () => {
                 <button 
                   onClick={() => navigate('/worker/profile')}
                   className="flex items-center space-x-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors"
+                  aria-label="Profile"
+                  title="Profile"
                 >
                   <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
-                      {user?.firstName?.[0]}{user?.lastName?.[0]}
+                      {(profile?.firstName?.[0] || user?.firstName?.[0] || '').toUpperCase()}{(profile?.lastName?.[0] || user?.lastName?.[0] || '').toUpperCase()}
                     </span>
                   </div>
                   <span className={`hidden sm:block ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {user?.firstName} {user?.lastName}
+                    {profile?.firstName || user?.firstName} {profile?.lastName || user?.lastName}
                   </span>
                 </button>
               </div>
               <button
                 onClick={handleLogout}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                aria-label="Logout"
+                title="Logout"
               >
                 Logout
               </button>
@@ -162,7 +208,7 @@ const WorkerDashboard = () => {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'} mb-2`}>
-            Welcome back, {user?.firstName}!
+            Welcome back, {getWorkerDisplayName() || 'Worker'}!
           </h2>
           <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
             Here's your work summary for today

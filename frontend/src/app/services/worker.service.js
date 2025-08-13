@@ -197,7 +197,7 @@ class WorkerService {
   }
 
   // Update specific setting category
-    static async updateCategorySettings(category, settings) {
+  static async updateCategorySettings(category, settings) {
     try {
       const response = await WorkerService._client.put(`/worker/settings/${category}`, settings);
       return response.data;
@@ -258,6 +258,19 @@ class WorkerService {
     } catch (error) {
       console.error('Error updating booking request:', error);
       throw new Error(error.response?.data?.message || 'Failed to update booking request');
+    }
+  }
+
+  /**
+   * Get dashboard stats
+   */
+  static async getDashboardStats() {
+    try {
+      const response = await WorkerService._client.get('/worker/dashboard/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      throw new Error(error.response?.data?.message || 'Failed to load dashboard stats');
     }
   }
 
