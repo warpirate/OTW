@@ -108,35 +108,38 @@ router.get('/available-slots', verifyToken, async (req, res) => {
 });
 
 // POST /create - Create a new booking
+// POST /create - Create a new booking
 router.post('/create', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
     const {
-      cart_items, // Array of items from cart
-      scheduled_time,
-      address_id, // Customer address ID
+      cart_items,          // Array of items from cart
+      scheduled_time,      // Client local datetime string (e.g. 2025-08-13T18:00:00)
+      timezone_offset,     // Client timezone offset in minutes (e.g. -330 for IST)
+      address_id,          // Customer address ID
       notes,
       payment_method = 'online'
     } = req.body;
-
+    console.log(req.body);
     // Validate required fields
     if (!cart_items || !Array.isArray(cart_items) || cart_items.length === 0) {
       return res.status(400).json({ message: 'Cart items are required' });
     }
-
     if (!scheduled_time) {
       return res.status(400).json({ message: 'Scheduled time is required' });
     }
-
     if (!address_id) {
       return res.status(400).json({ message: 'Address is required' });
     }
 
-    // Validate scheduled time is not in the past
-    const scheduledDateTime = new Date(scheduled_time);
-    const now = new Date();
-    
-    if (scheduledDateTime <= now) {
+    // Convert client local datetime to UTC using provided offset
+    // let scheduledDateTime = new Date(scheduled_time);
+    // if (timezone_offset !== undefined && !Number.isNaN(Number(timezone_offset))) {
+    //   scheduledDateTime = new Date(scheduledDateTime.getTime() - (timezone_offset * 60000));
+    // }
+
+    const nowUTC = new Date(); // Current UTC
+    if (scheduled_time <= nowUTC) {
       return res.status(400).json({ message: 'Cannot book for past time' });
     }
 
@@ -145,12 +148,13 @@ router.post('/create', verifyToken, async (req, res) => {
       'SELECT * FROM customer_addresses WHERE address_id = ? AND customer_id = ? AND is_active = 1',
       [address_id, customerId]
     );
-
     if (addressResult.length === 0) {
       return res.status(400).json({ message: 'Invalid address' });
     }
-
     const customerAddress = addressResult[0];
+
+    // UTC timestamp for created_at in MySQL format
+    const createdAtUTC = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Start transaction
     await pool.query('START TRANSACTION');
@@ -162,7 +166,6 @@ router.post('/create', verifyToken, async (req, res) => {
       // Create a booking for each cart item
       for (const item of cart_items) {
         const { subcategory_id, quantity = 1, price } = item;
-
         if (!subcategory_id || !price) {
           throw new Error('Invalid cart item: subcategory_id and price are required');
         }
@@ -172,30 +175,25 @@ router.post('/create', verifyToken, async (req, res) => {
           'SELECT * FROM subcategories WHERE id = ?',
           [subcategory_id]
         );
-
         if (subcategoryResult.length === 0) {
           throw new Error(`Subcategory not found: ${subcategory_id}`);
         }
 
-        const subcategory = subcategoryResult[0];
-
-        // Find an available provider for this subcategory
-        // For now, we'll leave provider_id as null and assign later
+        // For now, provider_id is null
         const provider_id = null;
 
         // Calculate prices
         const itemPrice = price * quantity;
         const gst = Math.round(itemPrice * 0.18); // 18% GST
         const totalPrice = itemPrice + gst;
-
         totalAmount += totalPrice;
 
-        // Create booking
+        // Create booking with explicit UTC created_at
         const [bookingResult] = await pool.query(
           `INSERT INTO bookings 
            (user_id, provider_id, subcategory_id, scheduled_time, address, gst, price, 
             service_status, payment_status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', NOW())`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?)`,
           [
             customerId,
             provider_id,
@@ -203,26 +201,24 @@ router.post('/create', verifyToken, async (req, res) => {
             scheduled_time,
             `${customerAddress.address}, ${customerAddress.city}, ${customerAddress.state} - ${customerAddress.pin_code}, ${customerAddress.country}`,
             gst,
-            totalPrice
+            totalPrice,
+            createdAtUTC
           ]
         );
 
         const bookingId = bookingResult.insertId;
         bookingIds.push(bookingId);
 
-        // Create booking requests for available workers
-        // Get customer address coordinates (you might need to add geocoding here)
-        // For now, we'll use a default location or get from customer address
-        const customerLat = 17.23170000; // Default - you should get this from customer address
-        const customerLon = 80.18260000; // Default - you should get this from customer address
-
-        // Find providers who offer this service and are within service radius
+        // Find available providers (simplified — same as your original code)
+        const customerLat = customerAddress.location_lat || null;
+        const customerLon = customerAddress.location_lng || null;
+        console.log("customerLat", customerLat);
+        console.log("customerLon", customerLon);
+        console.log("subcategory_id", subcategory_id);
+        console.log("bookingId", bookingId);
+        console.log("scheduled_time", scheduled_time);
         const [providers] = await pool.query(`
-          SELECT 
-            p.id as provider_id,
-            p.service_radius_km,
-            p.location_lat,
-            p.location_lng
+          SELECT p.id as provider_id, p.service_radius_km, p.location_lat, p.location_lng
           FROM providers p
           INNER JOIN provider_services ps ON p.id = ps.provider_id
           WHERE ps.subcategory_id = ? 
@@ -231,9 +227,8 @@ router.post('/create', verifyToken, async (req, res) => {
             AND p.location_lat IS NOT NULL 
             AND p.location_lng IS NOT NULL
         `, [subcategory_id]);
-
+        console.log("providers", providers);
         const availableProviderIds = [];
-        
         for (const provider of providers) {
           if (provider.location_lat && provider.location_lng) {
             const distance = haversineDistance(
@@ -242,32 +237,30 @@ router.post('/create', verifyToken, async (req, res) => {
               provider.location_lat, 
               provider.location_lng
             );
-            
             if (distance <= provider.service_radius_km) {
               availableProviderIds.push(provider.provider_id);
             }
           }
         }
-
-        // Create booking requests for available providers
+        console.log("availableProviderIds", availableProviderIds);
+        console.log("bookingId", bookingId);
+        // Create booking requests
         for (const providerId of availableProviderIds) {
           await pool.query(
             `INSERT INTO booking_requests (booking_id, provider_id, status, requested_at)
-             VALUES (?, ?, 'pending', NOW())`,
-            [bookingId, providerId]
+             VALUES (?, ?, 'pending', ?)`,
+            [bookingId, providerId, createdAtUTC]
           );
         }
-
-        console.log(`Created ${availableProviderIds.length} booking requests for booking ${bookingId}`);
       }
 
-      // Clear the cart after successful booking
+      // Clear the cart
       await pool.query('DELETE FROM carts WHERE customer_id = ?', [customerId]);
 
       // Commit transaction
       await pool.query('COMMIT');
 
-      // Fetch created bookings with subcategory details
+      // Fetch created bookings
       const [bookings] = await pool.query(
         `SELECT b.*, s.name as service_name, s.description as service_description
          FROM bookings b
@@ -278,13 +271,12 @@ router.post('/create', verifyToken, async (req, res) => {
 
       res.status(201).json({
         message: 'Booking created successfully',
-        bookings: bookings,
+        bookings,
         total_amount: totalAmount,
         booking_ids: bookingIds
       });
 
     } catch (error) {
-      // Rollback transaction
       await pool.query('ROLLBACK');
       throw error;
     }
@@ -294,6 +286,7 @@ router.post('/create', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
+
 
 // GET /history - Get booking history for customer
 router.get('/history', verifyToken, async (req, res) => {
@@ -405,7 +398,7 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
     const customerId = req.user.id;
     const bookingId = req.params.id;
     const { cancellation_reason, client_now_utc } = req.body;
-
+    console.log("booking cancel " , req.body);
     // Check if booking exists and belongs to customer
     const [bookings] = await pool.query(
       'SELECT * FROM bookings WHERE id = ? AND user_id = ?',

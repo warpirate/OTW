@@ -172,12 +172,11 @@ const BookingService = {
 
   // Utility methods
   utils: {
-    // Format date for API calls (YYYY-MM-DD)
+    // Format date for API calls or display (YYYY-MM-DD) converted from UTC to local
     formatDate: (date) => {
-      if (typeof date === 'string') {
-        return date.split('T')[0];
-      }
-      return date.toISOString().split('T')[0];
+      const d = typeof date === 'string' ? new Date(date) : new Date(date);
+      // Use en-CA locale which returns ISO style YYYY-MM-DD in local timezone
+      return d.toLocaleDateString('en-CA');
     },
 
     // Format time for display
@@ -254,7 +253,8 @@ const BookingService = {
         subcategory_name: backendBooking.service_description,
         status: backendBooking.service_status,
         payment_status: backendBooking.payment_status,
-        booking_date: backendBooking.scheduled_time,
+        // Convert scheduled_time (UTC) to a local date string
+        booking_date: backendBooking.scheduled_time ? BookingService.utils.formatDate(backendBooking.scheduled_time) : null,
         time_slot: backendBooking.scheduled_time ? 
           new Date(backendBooking.scheduled_time).toLocaleTimeString('en-US', {
             hour: 'numeric',
@@ -266,7 +266,13 @@ const BookingService = {
         gst_amount: backendBooking.gst,
         provider_name: backendBooking.provider_name || 'Not Assigned',
         provider_phone: backendBooking.provider_phone,
-        created_at: backendBooking.created_at,
+        created_at: backendBooking.created_at ? new Date(backendBooking.created_at).toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }) : null,
         notes: backendBooking.notes
       };
     },

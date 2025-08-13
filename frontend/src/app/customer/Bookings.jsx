@@ -63,8 +63,8 @@ const Bookings = () => {
           navigate('/login');
           return;
         }
-
         const response = await BookingService.bookings.getHistory();
+        console.log("response",response);
         const mappedData = BookingService.utils.mapBookingList(response);
         setBookings(mappedData.bookings || []);
         setFilteredBookings(mappedData.bookings || []);

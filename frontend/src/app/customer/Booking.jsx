@@ -298,42 +298,54 @@ const Booking = () => {
   };
   
   // Create booking
-  const handleCreateBooking = async () => {
-    setIsProcessing(true);
-    try {
-      const bookingData = {
-        cart_items: cart.items.map(item => ({
-          subcategory_id: item.subcategory_id || item.id,
-          quantity: item.quantity,
-          price: item.price
-        })),
-        scheduled_time: `${selectedDate} ${selectedTimeSlot.time}:00`,
-        address_id: selectedAddress.address_id,
-        notes: bookingNotes,
-        payment_method: 'online'
-      };
-      
-      const result = await BookingService.bookings.create(bookingData);
-      
-      // Clear cart
-      await clearCart();
-      
-      // Show success and redirect
-      toast.success('Booking created successfully!');
-      navigate('/booking-success', { 
-        state: { 
-          bookingIds: result.booking_ids,
-          totalAmount: result.total_amount 
-        } 
-      });
-      
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      toast.error('Failed to create booking. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+// Create booking
+const handleCreateBooking = async () => {
+  setIsProcessing(true);
+
+  try {
+    // Convert local date & time to UTC string
+    const localDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
+    const scheduledUTC = localDate
+      .toISOString() // Gives UTC automatically
+      .slice(0, 19)  // Keep YYYY-MM-DD HH:mm:ss format
+      .replace('T', ' ');
+
+    // Prepare booking data
+    const bookingData = {
+      cart_items: cart.items.map(item => ({
+        subcategory_id: item.subcategory_id || item.id,
+        quantity: item.quantity,
+        price: item.price
+      })),
+      scheduled_time: scheduledUTC,  // UTC datetime
+      address_id: selectedAddress.address_id,
+      notes: bookingNotes,
+      payment_method: 'online'
+    };
+
+    // Send to backend
+    const result = await BookingService.bookings.create(bookingData);
+
+    // Clear cart
+    await clearCart();
+
+    // Show success and redirect
+    toast.success('Booking created successfully!');
+    navigate('/booking-success', { 
+      state: { 
+        bookingIds: result.booking_ids,
+        totalAmount: result.total_amount 
+      } 
+    });
+
+  } catch (error) {
+    console.error('Error creating booking:', error);
+    toast.error('Failed to create booking. Please try again.');
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
   
   // Get address type icon
   const getAddressTypeIcon = (type) => {

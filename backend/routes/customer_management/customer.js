@@ -66,7 +66,7 @@ router.put('/:id', verifyToken, async (req, res) => {
     phone_number,
     gender // <-- add gender
   } = req.body;
-
+  console.log("updated customer", req.body);
   try {
     // Update customer address fields
     const customerFields = [];
@@ -121,14 +121,22 @@ router.get('/profile', verifyToken, async (req, res) => {
   try {
     const { id } = req.user;
     const [rows] = await pool.query(
-      `SELECT c.*, u.name, u.email, u.phone_number, u.gender, ca.address, ca.city, ca.state, ca.country, ca.pin_code, ca.location_lat, ca.location_lng FROM customers c
-       JOIN users u ON c.id = u.id 
-       JOIN customer_addresses ca ON c.id = ca.customer_id
-       WHERE c.id = ? AND ca.is_default = 1
+      `SELECT 
+          c.*, 
+          u.name, u.email, u.phone_number, u.gender, 
+          ca.address, ca.city, ca.state, ca.country, ca.pin_code, 
+          ca.location_lat, ca.location_lng
+       FROM customers c
+       LEFT JOIN users u 
+         ON c.id = u.id 
+       LEFT JOIN customer_addresses ca 
+         ON c.id = ca.customer_id 
+         AND ca.is_default = 1
+       WHERE c.id = ?
        LIMIT 1`,
       [id]
     );
-     
+    console.log("rows",rows);
     res.json(rows[0]);
   } catch (err) {
     console.error(err);

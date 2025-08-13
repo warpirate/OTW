@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
-const fetch = require('node-fetch');
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
   const toRad = deg => (deg * Math.PI) / 180;

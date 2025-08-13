@@ -329,68 +329,68 @@ class WorkerService {
   /**
    * Get dashboard stats for worker
    */
-  static async getDashboardStats(userId) {
-    try {
-      // Get provider ID
-      const [providerResult] = await pool.query(
-        'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
-        [userId]
-      );
+  // static async getDashboardStats(userId) {
+  //   try {
+  //     // Get provider ID
+  //     const [providerResult] = await pool.query(
+  //       'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+  //       [userId]
+  //     );
 
-      if (providerResult.length === 0) {
-        throw new Error('Provider not found');
-      }
+  //     if (providerResult.length === 0) {
+  //       throw new Error('Provider not found');
+  //     }
 
-      const providerId = providerResult[0].id;
+  //     const providerId = providerResult[0].id;
 
-      // Get total bookings count
-      const [totalBookingsResult] = await pool.query(
-        'SELECT COUNT(*) as count FROM bookings WHERE provider_id = ?',
-        [providerId]
-      );
+  //     // Get total bookings count
+  //     const [totalBookingsResult] = await pool.query(
+  //       'SELECT COUNT(*) as count FROM bookings WHERE provider_id = ?',
+  //       [providerId]
+  //     );
 
-      // Get completed bookings count
-      const [completedBookingsResult] = await pool.query(
-        "SELECT COUNT(*) as count FROM bookings WHERE provider_id = ? AND service_status = 'completed'",
-        [providerId]
-      );
+  //     // Get completed bookings count
+  //     const [completedBookingsResult] = await pool.query(
+  //       "SELECT COUNT(*) as count FROM bookings WHERE provider_id = ? AND service_status = 'completed'",
+  //       [providerId]
+  //     );
 
-      // Get pending bookings count
-      const [pendingBookingsResult] = await pool.query(
-        "SELECT COUNT(*) as count FROM bookings WHERE provider_id = ? AND service_status IN ('assigned', 'accepted', 'in_progress')",
-        [providerId]
-      );
+  //     // Get pending bookings count
+  //     const [pendingBookingsResult] = await pool.query(
+  //       "SELECT COUNT(*) as count FROM bookings WHERE provider_id = ? AND service_status IN ('assigned', 'accepted', 'in_progress')",
+  //       [providerId]
+  //     );
 
-      // Get total earnings (sum of completed booking prices)
-      const [earningsResult] = await pool.query(
-        "SELECT COALESCE(SUM(CASE WHEN booking_type = 'ride' THEN estimated_cost ELSE price END), 0) as total FROM bookings WHERE provider_id = ? AND service_status = 'completed'",
-        [providerId]
-      );
+  //     // Get total earnings (sum of completed booking prices)
+  //     const [earningsResult] = await pool.query(
+  //       "SELECT COALESCE(SUM(CASE WHEN booking_type = 'ride' THEN estimated_cost ELSE price END), 0) as total FROM bookings WHERE provider_id = ? AND service_status = 'completed'",
+  //       [providerId]
+  //     );
 
-      // Get average rating
-      const [ratingResult] = await pool.query(
-        'SELECT rating FROM providers WHERE id = ?',
-        [providerId]
-      );
+  //     // Get average rating
+  //     const [ratingResult] = await pool.query(
+  //       'SELECT rating FROM providers WHERE id = ?',
+  //       [providerId]
+  //     );
 
-      // Get total reviews count
-      const [reviewsResult] = await pool.query(
-        'SELECT COUNT(*) as count FROM provider_reviews WHERE provider_id = ?',
-        [providerId]
-      );
+  //     // Get total reviews count
+  //     const [reviewsResult] = await pool.query(
+  //       'SELECT COUNT(*) as count FROM provider_reviews WHERE provider_id = ?',
+  //       [providerId]
+  //     );
 
-      return {
-        total_bookings: totalBookingsResult[0].count,
-        completed_bookings: completedBookingsResult[0].count,
-        pending_bookings: pendingBookingsResult[0].count,
-        total_earnings: parseFloat(earningsResult[0].total),
-        average_rating: ratingResult[0] ? parseFloat(ratingResult[0].rating) : 0,
-        total_reviews: reviewsResult[0].count
-      };
-    } catch (error) {
-      throw error;
-    }
-  }
+  //     return {
+  //       total_bookings: totalBookingsResult[0].count,
+  //       completed_bookings: completedBookingsResult[0].count,
+  //       pending_bookings: pendingBookingsResult[0].count,
+  //       total_earnings: parseFloat(earningsResult[0].total),
+  //       average_rating: ratingResult[0] ? parseFloat(ratingResult[0].rating) : 0,
+  //       total_reviews: reviewsResult[0].count
+  //     };
+  //   } catch (error) {
+  //     throw error;
+  //   }
+  // }
 
   /**
    * Update worker verification status (admin only)
@@ -720,33 +720,33 @@ router.put('/worker/settings', verifyToken, async (req, res) => {
 // ------------------------
 // Get Worker Dashboard Stats
 // ------------------------
-router.get('/worker/dashboard/stats', verifyToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
+// router.get('/worker/dashboard/stats', verifyToken, async (req, res) => {
+//   try {
+//     const userId = req.user.id;
     
-    // Update last active timestamp
-    await WorkerService.updateLastActive(userId);
+//     // Update last active timestamp
+//     await WorkerService.updateLastActive(userId);
     
-    const stats = await WorkerService.getDashboardStats(userId);
+//     const stats = await WorkerService.getDashboardStats(userId);
     
-    res.json({
-      message: 'Dashboard stats retrieved successfully',
-      ...stats
-    });
+//     res.json({
+//       message: 'Dashboard stats retrieved successfully',
+//       ...stats
+//     });
     
-  } catch (error) {
-    console.error('Get dashboard stats error:', error);
+//   } catch (error) {
+//     console.error('Get dashboard stats error:', error);
     
-    if (error.message === 'Provider not found') {
-      return res.status(404).json({ message: error.message });
-    }
+//     if (error.message === 'Provider not found') {
+//       return res.status(404).json({ message: error.message });
+//     }
     
-    res.status(500).json({ 
-      message: 'Failed to retrieve dashboard stats',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
+//     res.status(500).json({ 
+//       message: 'Failed to retrieve dashboard stats',
+//       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//     });
+//   }
+// });
 // // ------------------------
 // // Get All Workers (Admin Only)
 // // ------------------------
