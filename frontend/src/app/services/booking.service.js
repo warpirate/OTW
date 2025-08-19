@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import AuthService from './auth.service';
+import { formatUTCDate, formatUTCTime } from '../utils/datetime';
 
 const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api/customer`,
@@ -174,18 +175,12 @@ const BookingService = {
   utils: {
     // Format date for API calls or display (YYYY-MM-DD) converted from UTC to local
     formatDate: (date) => {
-      const d = typeof date === 'string' ? new Date(date) : new Date(date);
-      // Use en-CA locale which returns ISO style YYYY-MM-DD in local timezone
-      return d.toLocaleDateString('en-CA');
+      return formatUTCDate(date, { year: 'numeric', month: '2-digit', day: '2-digit' });
     },
 
     // Format time for display
     formatTime: (time) => {
-      return new Date(`2000-01-01T${time}:00`).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
+      return formatUTCTime(time, { hour: '2-digit', minute: '2-digit', hour12: true });
     },
 
     // Validate address data
@@ -255,12 +250,7 @@ const BookingService = {
         payment_status: backendBooking.payment_status,
         // Convert scheduled_time (UTC) to a local date string
         booking_date: backendBooking.scheduled_time ? BookingService.utils.formatDate(backendBooking.scheduled_time) : null,
-        time_slot: backendBooking.scheduled_time ? 
-          new Date(backendBooking.scheduled_time).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          }) : null,
+        time_slot: backendBooking.scheduled_time ? BookingService.utils.formatTime(backendBooking.scheduled_time) : null,
         address: backendBooking.display_address || backendBooking.address,
         total_amount: backendBooking.display_price || backendBooking.price,
         gst_amount: backendBooking.gst,

@@ -18,6 +18,7 @@ import {
   Bell
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
+import { formatUTCToLocal } from '../../utils/datetime';
 import AuthService from '../../services/auth.service';
 import WorkerService from '../../services/worker.service';
 
@@ -135,14 +136,8 @@ const WorkerJobs = () => {
 
   const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'Not scheduled';
-    const date = new Date(dateTimeString);
-    return date.toLocaleString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Backend sends UTC; convert to local for display
+    return formatUTCToLocal(dateTimeString);
   };
 
   const formatCost = (cost) => {
