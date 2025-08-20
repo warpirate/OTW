@@ -647,4 +647,371 @@ router.patch('/providers/:id/toggle-active', verifyToken, authorizeRole(['admin'
   }
 });
 
+/**
+ * Get provider banking details
+ * GET /api/admin/providers/:id/banking-details
+ */
+router.get('/providers/:id/banking-details', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // First verify the provider exists
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    const providerId = provider[0].id;
+
+    // Get banking details
+    const query = `
+      SELECT 
+        id,
+        bank_name,
+        branch_name,
+        account_holder_name,
+        account_number,
+        ifsc_code,
+        account_type,
+        is_primary,
+        status,
+        verification_remarks,
+        created_at,
+        updated_at
+      FROM provider_banking_details 
+      WHERE provider_id = ?
+      ORDER BY is_primary DESC, created_at DESC
+    `;
+
+    const [bankingDetails] = await pool.query(query, [providerId]);
+
+    res.json({
+      success: true,
+      data: bankingDetails.map(detail => ({
+        id: detail.id,
+        bank_name: detail.bank_name,
+        branch_name: detail.branch_name,
+        account_holder_name: detail.account_holder_name,
+        account_number: detail.account_number,
+        ifsc_code: detail.ifsc_code,
+        account_type: detail.account_type,
+        is_primary: Boolean(detail.is_primary),
+        status: detail.status,
+        verification_remarks: detail.verification_remarks,
+        created_at: detail.created_at,
+        updated_at: detail.updated_at
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error fetching provider banking details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch banking details',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Get provider documents
+ * GET /api/admin/providers/:id/documents
+ */
+router.get('/providers/:id/documents', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // First verify the provider exists
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    const providerId = provider[0].id;
+
+    // Get documents
+    const query = `
+      SELECT 
+        id,
+        document_type,
+        document_url,
+        status,
+        remarks,
+        uploaded_at,
+        verified_at
+      FROM provider_documents 
+      WHERE provider_id = ?
+      ORDER BY uploaded_at DESC
+    `;
+
+    const [documents] = await pool.query(query, [providerId]);
+
+    res.json({
+      success: true,
+      data: documents.map(doc => ({
+        id: doc.id,
+        document_type: doc.document_type,
+        document_url: doc.document_url,
+        status: doc.status,
+        remarks: doc.remarks,
+        uploaded_at: doc.uploaded_at,
+        verified_at: doc.verified_at,
+        // Extract filename from URL for display
+        file_name: doc.document_url ? doc.document_url.split('/').pop() : 'Unknown'
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error fetching provider documents:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch documents',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Get provider qualifications
+ * GET /api/admin/providers/:id/qualifications
+ */
+router.get('/providers/:id/qualifications', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // First verify the provider exists
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    const providerId = provider[0].id;
+
+    // Get qualifications
+    const query = `
+      SELECT 
+        id,
+        qualification_name,
+        issuing_institution,
+        issue_date,
+        certificate_number
+      FROM provider_qualifications 
+      WHERE provider_id = ?
+      ORDER BY issue_date DESC
+    `;
+
+    const [qualifications] = await pool.query(query, [providerId]);
+
+    res.json({
+      success: true,
+      data: qualifications.map(qual => ({
+        id: qual.id,
+        qualification_name: qual.qualification_name,
+        institution: qual.issuing_institution,
+        issue_date: qual.issue_date,
+        certificate_number: qual.certificate_number,
+        status: 'verified' // Default status since schema doesn't have status column
+      }))
+    });
+
+  } catch (error) {
+    console.error('Error fetching provider qualifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch qualifications',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Get provider driver details
+ * GET /api/admin/providers/:id/driver-details
+ */
+router.get('/providers/:id/driver-details', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // First verify the provider exists
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    const providerId = provider[0].id;
+
+    // Get driver details
+    const query = `
+      SELECT 
+        provider_id,
+        license_number,
+        license_expiry_date,
+        license_issuing_authority,
+        vehicle_type,
+        driving_experience_years,
+        years_of_commercial_driving_exp,
+        vehicle_registration_number
+      FROM drivers 
+      WHERE provider_id = ?
+    `;
+
+    const [driverDetails] = await pool.query(query, [providerId]);
+
+    if (driverDetails.length === 0) {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'No driver details found for this provider'
+      });
+    }
+
+    const details = driverDetails[0];
+
+    res.json({
+      success: true,
+      data: {
+        provider_id: details.provider_id,
+        license_number: details.license_number,
+        license_expiry_date: details.license_expiry_date,
+        license_issuing_authority: details.license_issuing_authority,
+        vehicle_type: details.vehicle_type,
+        driving_experience_years: details.driving_experience_years,
+        years_of_commercial_driving_exp: details.years_of_commercial_driving_exp,
+        vehicle_registration_number: details.vehicle_registration_number
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching provider driver details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch driver details',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// Verify provider document
+router.patch('/providers/documents/:documentId/verify', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    const { status, remarks } = req.body;
+
+    // Validate input and map frontend status to database enum values
+    let dbStatus;
+    if (status === 'verified') {
+      dbStatus = 'approved';
+    } else if (status === 'rejected') {
+      dbStatus = 'rejected';
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be "verified" or "rejected"'
+      });
+    }
+
+    // Update document verification status
+    const updateQuery = `
+      UPDATE provider_documents 
+      SET status = ?, remarks = ?, verified_at = NOW()
+      WHERE id = ?
+    `;
+
+    const [result] = await pool.query(updateQuery, [dbStatus, remarks || null, documentId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Document ${status} successfully`
+    });
+
+  } catch (error) {
+    console.error('Error verifying document:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify document',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// Verify banking details
+router.patch('/providers/banking/:bankingId/verify', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const { bankingId } = req.params;
+    const { status, remarks } = req.body;
+
+    // Validate input
+    if (!status || !['verified', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be "verified" or "rejected"'
+      });
+    }
+
+    // Update banking verification status
+    const updateQuery = `
+      UPDATE provider_banking_details 
+      SET status = ?, verification_remarks = ?, updated_at = NOW()
+      WHERE id = ?
+    `;
+
+    const [result] = await pool.query(updateQuery, [status, remarks || null, bankingId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Banking details not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Banking details ${status} successfully`
+    });
+
+  } catch (error) {
+    console.error('Error verifying banking details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify banking details',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;

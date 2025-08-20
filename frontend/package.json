@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",
+    "@heroicons/react": "^2.2.0",
     "@radix-ui/react-slot": "^1.0.2",
     "axios": "^1.6.7",
     "clsx": "^2.1.1",

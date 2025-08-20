@@ -35,6 +35,7 @@ import AdminLayout from './app/layouts/AdminLayout';
 import AdminLogin from './app/auth/AdminLogin';
 import AdminDashboard from './app/features/admin/Dashboard';
 import UserManagement from './app/features/admin/UserManagement';
+import ProviderDetailsPage from './app/features/admin/ProviderDetailsPage';
 import CategoryManagement from './app/features/admin/CategoryManagement';
 import DisputeManagement from './app/features/admin/DisputeManagement';
 
@@ -56,6 +57,7 @@ import WorkerJobs from './app/features/worker/WorkerJobs';
 import WorkerSchedule from './app/features/worker/WorkerSchedule';
 import WorkerProfile from './app/features/worker/WorkerProfile';
 import WorkerSettings from './app/features/worker/WorkerSettings';
+import WorkerDocuments from './app/features/worker/WorkerDocuments';
 
 // Protected Route Components
 const CustomerProtectedRoute = ({ children }) => {
@@ -323,7 +325,7 @@ function App() {
   }, []);
 
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <CartProvider>
         <div className="App">
           <Routes>
@@ -382,6 +384,7 @@ function App() {
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
               <Route path="users" element={<UserManagement />} />
+              <Route path="provider/:providerId" element={<ProviderDetailsPage />} />
               <Route path="categories" element={<CategoryManagement />} />
               <Route path="disputes" element={<DisputeManagement />} />
             </Route>
@@ -417,6 +420,7 @@ function App() {
               <Route path="schedule" element={<WorkerSchedule />} />
               <Route path="earnings" element={<div className="p-8 text-center">Worker Earnings Page (Coming Soon)</div>} />
               <Route path="profile" element={<WorkerProfile />} />
+              <Route path="documents" element={<WorkerDocuments />} />
               <Route path="settings" element={<WorkerSettings />} />
             </Route>
 

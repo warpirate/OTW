@@ -301,6 +301,16 @@ const WorkerProfile = () => {
             </div>
             <div className="flex items-center space-x-2">
               <button
+                onClick={() => navigate('/worker/documents')}
+                className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                title="Documents & Banking"
+              >
+                <span className="flex items-center space-x-2">
+                  <Shield className="w-4 h-4" />
+                  <span>Documents & Banking</span>
+                </span>
+              </button>
+              <button
                 onClick={() => navigate('/worker/settings')}
                 className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 title="Settings"

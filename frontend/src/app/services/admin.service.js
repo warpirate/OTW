@@ -134,6 +134,90 @@ class AdminService {
   static async rejectProvider(id) {
     return this.updateProviderVerification(id, false);
   }
+
+  /**
+   * Get provider banking details
+   */
+  static async getProviderBankingDetails(id) {
+    try {
+      const response = await apiClient.get(`/providers/${id}/banking-details`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get provider documents
+   */
+  static async getProviderDocuments(id) {
+    try {
+      const response = await apiClient.get(`/providers/${id}/documents`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get provider qualifications
+   */
+  static async getProviderQualifications(id) {
+    try {
+      const response = await apiClient.get(`/providers/${id}/qualifications`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get provider driver details
+   */
+  static async getProviderDriverDetails(id) {
+    try {
+      const response = await apiClient.get(`/providers/${id}/driver-details`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Verify provider document
+   */
+  static async verifyProviderDocument(documentId, data) {
+    try {
+      const response = await apiClient.patch(`/providers/documents/${documentId}/verify`, data);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Verify banking details
+   */
+  static async verifyBankingDetails(bankingId, data) {
+    try {
+      const response = await apiClient.patch(`/providers/banking/${bankingId}/verify`, data);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get provider services
+   */
+  static async getProviderServices(id) {
+    try {
+      const response = await apiClient.get(`/providers/${id}/services`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 export default AdminService;

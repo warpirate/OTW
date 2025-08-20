@@ -132,12 +132,7 @@ router.post('/create', verifyToken, async (req, res) => {
       return res.status(400).json({ message: 'Address is required' });
     }
 
-    // Convert client local datetime to UTC using provided offset
-    // let scheduledDateTime = new Date(scheduled_time);
-    // if (timezone_offset !== undefined && !Number.isNaN(Number(timezone_offset))) {
-    //   scheduledDateTime = new Date(scheduledDateTime.getTime() - (timezone_offset * 60000));
-    // }
-
+ 
     const nowUTC = new Date(); // Current UTC
     if (scheduled_time <= nowUTC) {
       return res.status(400).json({ message: 'Cannot book for past time' });
@@ -172,12 +167,16 @@ router.post('/create', verifyToken, async (req, res) => {
 
         // Get subcategory details
         const [subcategoryResult] = await pool.query(
-          'SELECT * FROM subcategories WHERE id = ?',
+          'SELECT s.*, c.name as category_name FROM subcategories s JOIN service_categories c ON s.category_id = c.id WHERE s.id = ?',
           [subcategory_id]
         );
         if (subcategoryResult.length === 0) {
           throw new Error(`Subcategory not found: ${subcategory_id}`);
         }
+        
+        const subcategory = subcategoryResult[0];
+        // Determine booking type based on category (assuming ride category has specific name/id)
+        const booking_type = subcategory.category_name?.toLowerCase().includes('ride') || subcategory.category_name?.toLowerCase().includes('driver') ? 'ride' : 'service';
 
         // For now, provider_id is null
         const provider_id = null;
@@ -191,23 +190,44 @@ router.post('/create', verifyToken, async (req, res) => {
         // Create booking with explicit UTC created_at
         const [bookingResult] = await pool.query(
           `INSERT INTO bookings 
-           (user_id, provider_id, subcategory_id, scheduled_time, address, gst, price, 
-            service_status, payment_status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?)`,
+           (user_id, provider_id, booking_type, subcategory_id, scheduled_time, gst, 
+            estimated_cost, price, service_status, payment_status, created_at, duration, cost_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
           [
             customerId,
             provider_id,
+            booking_type,
             subcategory_id,
             scheduled_time,
-            `${customerAddress.address}, ${customerAddress.city}, ${customerAddress.state} - ${customerAddress.pin_code}, ${customerAddress.country}`,
             gst,
-            totalPrice,
-            createdAtUTC
+            totalPrice, // estimated_cost
+            totalPrice, // price
+            createdAtUTC,
+            1, // duration - default 1 hour/day
+            'per_hour' // cost_type - default per hour
           ]
         );
 
         const bookingId = bookingResult.insertId;
         bookingIds.push(bookingId);
+
+        // Insert into appropriate booking type table
+        if (booking_type === 'service') {
+          // Insert into service_bookings table
+          await pool.query(
+            `INSERT INTO service_bookings (booking_id, address)
+             VALUES (?, ?)`,
+            [
+              bookingId,
+              `${customerAddress.address}, ${customerAddress.city}, ${customerAddress.state} - ${customerAddress.pin_code}, ${customerAddress.country}`
+            ]
+          );
+        } else if (booking_type === 'ride') {
+          // For ride bookings, you would insert into ride_bookings table
+          // This would need pickup_address, pickup_lat, pickup_lon, drop_address, drop_lat, drop_lon
+          // For now, we'll skip this as it requires additional data from the frontend
+          console.log('Ride booking created, but ride_bookings table insertion not implemented yet');
+        }
 
         // Find available providers (simplified — same as your original code)
         const customerLat = customerAddress.location_lat || null;
@@ -312,15 +332,17 @@ router.get('/history', verifyToken, async (req, res) => {
               ELSE 'Not Assigned' END as provider_name,
               CASE 
                 WHEN b.booking_type = 'ride' THEN 
-                  CONCAT(b.pickup_address, ' → ', b.drop_address)
-                ELSE b.address 
+                  CONCAT(rb.pickup_address, ' → ', rb.drop_address)
+                ELSE sb.address 
               END as display_address,
               CASE 
                 WHEN b.booking_type = 'ride' THEN b.estimated_cost
                 ELSE b.price 
               END as display_price
        FROM bookings b
+       LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
        LEFT JOIN subcategories s ON s.id = b.subcategory_id
+       LEFT JOIN service_bookings sb ON sb.booking_id = b.id
        ${whereClause}
        ORDER BY b.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -367,14 +389,16 @@ router.get('/:id', verifyToken, async (req, res) => {
               ELSE NULL END as provider_phone,
               CASE 
                 WHEN b.booking_type = 'ride' THEN 
-                  CONCAT(b.pickup_address, ' → ', b.drop_address)
-                ELSE b.address 
+                  CONCAT(rb.pickup_address, ' → ', rb.drop_address)
+                ELSE sb.address 
               END as display_address,
               CASE 
                 WHEN b.booking_type = 'ride' THEN b.estimated_cost
                 ELSE b.price 
               END as display_price
        FROM bookings b
+       LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
+       LEFT JOIN service_bookings sb ON sb.booking_id = b.id
        LEFT JOIN subcategories s ON s.id = b.subcategory_id
        WHERE b.id = ? AND b.user_id = ?`,
       [bookingId, customerId]
