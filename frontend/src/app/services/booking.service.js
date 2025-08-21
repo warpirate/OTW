@@ -1,8 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import AuthService from './auth.service';
-import { formatUTCDate, formatUTCTime } from '../utils/datetime';
-import { formatToLocalDateTime, formatToLocalTime } from '../utils/timezone';
 
 const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api/customer`,
@@ -161,8 +159,7 @@ const BookingService = {
     cancel: async (bookingId, reason = '') => {
       try {
         const response = await apiClient.put(`/bookings/${bookingId}/cancel`, {
-          cancellation_reason: reason,
-          client_now_utc: new Date().toISOString()
+          cancellation_reason: reason
         });
         return response.data;
       } catch (error) {
@@ -174,14 +171,12 @@ const BookingService = {
 
   // Utility methods
   utils: {
-    // Format date for API calls or display (YYYY-MM-DD) converted from UTC to local
-    formatDate: (date) => {
-      return formatUTCDate(date, { year: 'numeric', month: '2-digit', day: '2-digit' });
-    },
-
-    // Format time for display
-    formatTime: (time) => {
-      return formatUTCTime(time, { hour: '2-digit', minute: '2-digit', hour12: true });
+    // Simple local date builder (YYYY-MM-DD) without timezone conversion
+    buildLocalDateString: (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     },
 
     // Validate address data
@@ -221,7 +216,7 @@ const BookingService = {
         }
         
         dates.push({
-          date: BookingService.utils.formatDate(date),
+          date: BookingService.utils.buildLocalDateString(date),
           displayDate: date.toLocaleDateString('en-US', {
             weekday: 'long',
             year: 'numeric',
@@ -243,26 +238,21 @@ const BookingService = {
 
     // Map backend booking data to frontend format
     mapBookingData: (backendBooking) => {
-      // Use the timezone utility for proper UTC to local conversion
-      const scheduledDate = formatToLocalDateTime(backendBooking.scheduled_time);
-      const createdDate = formatToLocalDateTime(backendBooking.created_at);
-      const timeSlot = formatToLocalTime(backendBooking.scheduled_time);
-
       return {
         booking_id: backendBooking.id,
         service_name: backendBooking.service_name,
         subcategory_name: backendBooking.service_description,
         status: backendBooking.service_status,
         payment_status: backendBooking.payment_status,
-        // Store the already converted timezone data
-        booking_date: scheduledDate || 'Invalid Date',
-        time_slot: timeSlot || 'Invalid Time',
+        // scheduled_time is stored in UTC (YYYY-MM-DD HH:mm:ss). Parse to local for UI.
+        booking_date: backendBooking.scheduled_time ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T')) : null,
+        time_slot: backendBooking.scheduled_time ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T')).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '',
         address: backendBooking.display_address || backendBooking.address,
         total_amount: backendBooking.display_price || backendBooking.price,
         gst_amount: backendBooking.gst,
         provider_name: backendBooking.provider_name || 'Not Assigned',
         provider_phone: backendBooking.provider_phone,
-        created_at: createdDate || 'Invalid Date',
+        created_at: backendBooking.created_at,
         notes: backendBooking.notes
       };
     },

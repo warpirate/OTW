@@ -6,7 +6,9 @@ const db = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASS || '',
   database: process.env.DB_NAME,
-  connectionLimit: 15, 
+  connectionLimit: 15,
+  // Return DATE/DATETIME as strings to avoid timezone conversion to UTC
+  dateStrings: true,
 });
  
 db.getConnection((err, connection) => {

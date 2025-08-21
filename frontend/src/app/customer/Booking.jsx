@@ -368,18 +368,12 @@ const Booking = () => {
     return `${displayHour}:${minutes} ${ampm}`;
   };
 
-  // Convert local time to UTC with proper timezone handling
-  const convertToUTC = (date, time) => {
-    // Create a date object in local timezone
+  // Convert local date+time to UTC MySQL DATETIME (YYYY-MM-DD HH:mm:ss)
+  const buildUTCMySQLDateTime = (date, time) => {
     const localDateTime = new Date(`${date}T${time}:00`);
-    
-    // Check if the date is valid
     if (isNaN(localDateTime.getTime())) {
-      console.error('Invalid date/time:', date, time);
       throw new Error('Invalid date or time format');
     }
-    
-    // Convert to UTC and format as YYYY-MM-DD HH:mm:ss
     return localDateTime.toISOString().slice(0, 19).replace('T', ' ');
   };
 
@@ -419,10 +413,7 @@ const Booking = () => {
         return;
       }
 
-      // Convert local date & time to UTC string using proper timezone conversion
-      console.log('Converting to UTC:', selectedDate, selectedTimeSlot.time);
-      const scheduledUTC = convertToUTC(selectedDate, selectedTimeSlot.time);
-      console.log('UTC result:', scheduledUTC);
+      const scheduledAt = buildUTCMySQLDateTime(selectedDate, selectedTimeSlot.time);
 
       // Prepare booking data
       const bookingData = {
@@ -431,7 +422,7 @@ const Booking = () => {
           quantity: item.quantity,
           price: item.price
         })),
-        scheduled_time: scheduledUTC,  // UTC datetime
+        scheduled_time: scheduledAt,
         address_id: selectedAddress.address_id,
         notes: bookingNotes,
         payment_method: 'online'
@@ -445,10 +436,15 @@ const Booking = () => {
 
       // Show success and redirect
       toast.success('Booking created successfully!');
+      
+      // Create local date object for display in success page
+      const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
+      
       navigate('/booking-success', { 
         state: { 
           bookingIds: result.booking_ids,
-          totalAmount: result.total_amount 
+          totalAmount: result.total_amount,
+          scheduledDate: scheduledLocalDate.toISOString()
         } 
       });
 

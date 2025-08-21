@@ -113,10 +113,9 @@ router.post('/create', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
     const {
-      cart_items,          // Array of items from cart
-      scheduled_time,      // Client local datetime string (e.g. 2025-08-13T18:00:00)
-      timezone_offset,     // Client timezone offset in minutes (e.g. -330 for IST)
-      address_id,          // Customer address ID
+      cart_items,
+      scheduled_time,
+      address_id,
       notes,
       payment_method = 'online'
     } = req.body;
@@ -133,8 +132,10 @@ router.post('/create', verifyToken, async (req, res) => {
     }
 
  
-    const nowUTC = new Date(); // Current UTC
-    if (scheduled_time <= nowUTC) {
+    const nowUTC = new Date();
+    // Treat incoming scheduled_time (YYYY-MM-DD HH:mm:ss) as UTC
+    const scheduledUtcDate = new Date((scheduled_time + 'Z').replace(' ', 'T'));
+    if (scheduledUtcDate <= nowUTC) {
       return res.status(400).json({ message: 'Cannot book for past time' });
     }
 
@@ -421,7 +422,7 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
     const bookingId = req.params.id;
-    const { cancellation_reason, client_now_utc } = req.body;
+    const { cancellation_reason } = req.body;
     console.log("booking cancel " , req.body);
     // Check if booking exists and belongs to customer
     const [bookings] = await pool.query(
@@ -447,7 +448,7 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
     // Check if booking is too close to scheduled time (e.g., within 2 hours)
     // Use client-provided UTC time if available, else fall back to server time
     const scheduledTime = new Date(booking.scheduled_time);
-    const now = client_now_utc ? new Date(client_now_utc) : new Date();
+    const now = new Date();
     const timeDiff = scheduledTime.getTime() - now.getTime();
     const hoursDiff = timeDiff / (1000 * 3600);
 

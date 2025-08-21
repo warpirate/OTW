@@ -28,8 +28,6 @@ import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
 import BookingStatusBadge from '../../components/BookingStatusBadge';
-import { smartFormatDate } from '../utils/timezone';
-import debugTimezoneConversion from '../utils/debug-timezone';
 
 const Bookings = () => {
   const navigate = useNavigate();
@@ -104,15 +102,7 @@ const Bookings = () => {
     setFilteredBookings(filtered);
   }, [bookings, selectedStatus, searchQuery]);
 
-  // Since dates are already converted in mapBookingData, just return them as-is
-  const formatDate = (dateString) => {
-    // If the date is already formatted (from mapBookingData), return it directly
-    if (dateString && typeof dateString === 'string' && dateString !== 'Invalid Date') {
-      return dateString;
-    }
-    // Fallback for any unconverted dates
-    return smartFormatDate(dateString);
-  };
+
 
   const formatPrice = (price) => {
     if (!price) return '₹0.00';
@@ -120,6 +110,20 @@ const Bookings = () => {
       style: 'currency',
       currency: 'INR'
     }).format(price);
+  };
+
+  // created_at comes from DB as UTC without timezone; render in local time
+  const formatCreatedAt = (dateTimeString) => {
+    if (!dateTimeString) return 'Loading...';
+    try {
+      const iso = dateTimeString.includes('T') ? dateTimeString : dateTimeString.replace(' ', 'T');
+      const utc = iso.endsWith('Z') ? iso : `${iso}Z`;
+      const d = new Date(utc);
+      if (isNaN(d.getTime())) return 'Loading...';
+      return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (_) {
+      return 'Loading...';
+    }
   };
 
   const handleCancelBooking = async (bookingId) => {
@@ -337,11 +341,11 @@ const Bookings = () => {
                         <BookingStatusBadge status={booking.status} />
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div className="flex items-center space-x-2">
                           <Calendar className="h-4 w-4 text-gray-400" />
                           <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                            {formatDate(booking.booking_date)}
+                            {booking.booking_date ? new Date(booking.booking_date).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Loading...'}
                           </span>
                         </div>
                         
@@ -448,15 +452,20 @@ const Bookings = () => {
                         </span>
                       </div>
                       <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
-                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Date:</span>
+                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Scheduled Date & Time:</span>
                         <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {formatDate(selectedBooking.booking_date)}
+                          {selectedBooking.booking_date 
+                            ? new Date(selectedBooking.booking_date).toLocaleString('en-US', { 
+                                year: 'numeric', month: 'short', day: 'numeric', 
+                                hour: '2-digit', minute: '2-digit' 
+                              }) 
+                            : 'Loading...'}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center py-2">
-                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Time:</span>
+                      <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Booking Created:</span>
                         <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {selectedBooking.time_slot || 'N/A'}
+                          {formatCreatedAt(selectedBooking.created_at)}
                         </span>
                       </div>
                     </div>

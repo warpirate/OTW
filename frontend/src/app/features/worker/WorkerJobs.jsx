@@ -18,7 +18,6 @@ import {
   Bell
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
-import { formatUTCToLocal } from '../../utils/datetime';
 import AuthService from '../../services/auth.service';
 import WorkerService from '../../services/worker.service';
 
@@ -137,41 +136,9 @@ const WorkerJobs = () => {
 
   const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'Not scheduled';
-    try {
-      // Handle different date formats from backend
-      let dateStr = dateTimeString;
-      
-      // Remove milliseconds and timezone if present (e.g., .000Z)
-      dateStr = dateStr.replace(/\.\d{3}Z?$/, '');
-      
-      // If it's MySQL format (YYYY-MM-DD HH:mm:ss), convert to ISO
-      if (dateStr.includes(' ') && !dateStr.includes('T')) {
-        dateStr = dateStr.replace(' ', 'T');
-      }
-      
-      // Always append Z to indicate UTC (backend stores in UTC)
-      if (!dateStr.endsWith('Z')) {
-        dateStr += 'Z';
-      }
-      
-      // Parse as UTC and convert to local
-      const date = new Date(dateStr);
-      
-      // Format in local timezone
-      const options = {
-        year: 'numeric',
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      };
-      
-      return date.toLocaleString('en-IN', options);
-    } catch (error) {
-      console.error('Error formatting date:', error, dateTimeString);
-      return dateTimeString;
-    }
+    const date = new Date(dateTimeString);
+    if (isNaN(date.getTime())) return 'Invalid date';
+    return date.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const formatCost = (cost) => {

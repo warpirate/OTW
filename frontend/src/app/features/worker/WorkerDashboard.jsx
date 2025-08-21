@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
-import { formatUTCDate, formatUTCTime } from '../../utils/datetime';
 import WorkerService from '../../services/worker.service';
 
 const WorkerDashboard = () => {
@@ -102,9 +101,8 @@ const WorkerDashboard = () => {
         id: booking.id,
         title: booking.service_name || booking.subcategory_name || 'Service',
         customer: booking.customer_name || 'Customer',
-        // Backend sends UTC; render in local timezone
-        date: booking.scheduled_time ? formatUTCDate(booking.scheduled_time) : 'N/A',
-        time: booking.scheduled_time ? formatUTCTime(booking.scheduled_time, { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        date: booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A',
+        time: booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A',
         status: booking.service_status || 'pending',
         amount: booking.display_price || booking.estimated_cost || 0,
         address: booking.display_address || booking.address || 'Address not available'

@@ -302,8 +302,7 @@ class WorkerService {
   static async cancelBooking(bookingId, cancellationReason = null) {
     try {
       const response = await WorkerService._client.put(`/worker/bookings/${bookingId}/cancel`, {
-        cancellation_reason: cancellationReason,
-        client_now_utc: new Date().toISOString()
+        cancellation_reason: cancellationReason
       });
       return response.data;
     } catch (error) {

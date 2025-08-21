@@ -11,7 +11,7 @@ const BookingSuccess = () => {
   const [darkMode, setDarkMode] = useState(isDarkMode());
   
   // Get booking data from navigation state
-  const { bookingIds, totalAmount } = location.state || {};
+  const { bookingIds, totalAmount, scheduledDate } = location.state || {};
   
   // Generate order number from booking IDs
   const orderNumber = bookingIds && bookingIds.length > 0 
@@ -69,12 +69,15 @@ const BookingSuccess = () => {
                   Date & Time:
                 </span>
                 <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {new Date().toLocaleDateString('en-US', {
+                  {scheduledDate ? new Date(scheduledDate).toLocaleString('en-US', {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
-                    day: 'numeric'
-                  })}
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  }) : 'To be confirmed'}
                 </span>
               </div>
               
