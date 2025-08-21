@@ -32,5 +32,5 @@ app.use(`${baseURL}/superadmin`, superAdminRoute);
 app.use(`${baseURL}/admin`, providerAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker`, workerDocsRoute);
-const PORT = process.env.PORT || 5050;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

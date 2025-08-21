@@ -2,12 +2,12 @@ const environment = {
   development: {
     frontend: {
       url: 'http://localhost:3000',
-      apiUrl: 'http://localhost:5000/api'
+      apiUrl: 'http://localhost:5001/api'
     },
     backend: {
-      url: 'http://localhost:5000',
-      apiUrl: 'http://localhost:5000/api',
-      uploadsUrl: 'http://localhost:5000/uploads'
+      url: 'http://localhost:5001',
+      apiUrl: 'http://localhost:5001/api',
+      uploadsUrl: 'http://localhost:5001/uploads'
     }
   },
   production: {
