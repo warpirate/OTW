@@ -753,9 +753,11 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
         br.requested_at,
         br.responded_at,
         b.user_id,
-        b.with_vehicle,
-        b.pickup_address,
-        b.drop_address,
+        b.booking_type,
+        rb.with_vehicle,
+        rb.pickup_address,
+        rb.drop_address,
+        sb.address as service_address,
         b.actual_cost,
         b.price,
         b.estimated_cost,
@@ -765,7 +767,6 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
         b.scheduled_time,
         b.duration,
         b.cost_type,
-        b.address,
         b.subcategory_id,
         u.name as customer_name,
         u.phone_number as customer_phone,
@@ -775,6 +776,8 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
       FROM booking_requests br
       INNER JOIN bookings b ON br.booking_id = b.id
       INNER JOIN users u ON b.user_id = u.id
+      LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
+      LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
       LEFT JOIN subcategories s ON b.subcategory_id = s.id
       LEFT JOIN service_categories sc ON s.category_id = sc.id
       WHERE br.provider_id = ? AND b.service_status != 'cancelled'

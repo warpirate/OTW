@@ -28,6 +28,8 @@ import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
 import BookingStatusBadge from '../../components/BookingStatusBadge';
+import { smartFormatDate } from '../utils/timezone';
+import debugTimezoneConversion from '../utils/debug-timezone';
 
 const Bookings = () => {
   const navigate = useNavigate();
@@ -64,8 +66,8 @@ const Bookings = () => {
           return;
         }
         const response = await BookingService.bookings.getHistory();
-        console.log("response",response);
         const mappedData = BookingService.utils.mapBookingList(response);
+        
         setBookings(mappedData.bookings || []);
         setFilteredBookings(mappedData.bookings || []);
         setLoading(false);
@@ -102,16 +104,14 @@ const Bookings = () => {
     setFilteredBookings(filtered);
   }, [bookings, selectedStatus, searchQuery]);
 
+  // Since dates are already converted in mapBookingData, just return them as-is
   const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // If the date is already formatted (from mapBookingData), return it directly
+    if (dateString && typeof dateString === 'string' && dateString !== 'Invalid Date') {
+      return dateString;
+    }
+    // Fallback for any unconverted dates
+    return smartFormatDate(dateString);
   };
 
   const formatPrice = (price) => {

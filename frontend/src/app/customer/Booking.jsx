@@ -76,7 +76,7 @@ const Booking = () => {
 
     // Initialize available dates (only once)
     if (availableDates.length === 0) {
-      const dates = BookingService.utils.getAvailableDates(14, false);
+      const dates = generateAvailableDates(14);
       setAvailableDates(dates);
     }
 
@@ -104,23 +104,79 @@ const Booking = () => {
     }
   };
   
-  // Load time slots for selected date
-  const loadTimeSlots = async (date) => {
-    setLoadingSlots(true);
-    try {
-      // Get first subcategory for slot availability check
-      const firstItem = cart.items[0];
-      const subcategoryId = firstItem?.subcategory_id || firstItem?.id;
+  // Generate available dates for booking
+  const generateAvailableDates = (daysCount = 14) => {
+    const dates = [];
+    const today = new Date();
+    
+    for (let i = 0; i < daysCount; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
       
-      const data = await BookingService.timeSlots.getAvailable(date, subcategoryId);
-      setTimeSlots(data.slots || []);
-    } catch (error) {
-      console.error('Error loading time slots:', error);
-      toast.error('Failed to load time slots');
-      setTimeSlots([]);
-    } finally {
-      setLoadingSlots(false);
+      // Format date as YYYY-MM-DD for consistent usage
+      const dateString = date.toISOString().split('T')[0];
+      
+      dates.push({
+        date: dateString,
+        displayDate: date.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        shortDate: date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        }),
+        isToday: i === 0,
+        isTomorrow: i === 1
+      });
     }
+    
+    return dates;
+  };
+
+  // Generate time slots with frontend calculations
+  const generateTimeSlots = (date) => {
+    const slots = [];
+    const now = new Date();
+    const selectedDateObj = new Date(`${date}T00:00:00`);
+    const isToday = selectedDateObj.toDateString() === now.toDateString();
+    
+    // Generate slots from 9 AM to 6 PM (every 30 minutes)
+    for (let hour = 9; hour <= 18; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        // Skip 6:30 PM slot
+        if (hour === 18 && minute === 30) break;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        const slotDateTime = new Date(`${date}T${timeString}:00`);
+        
+        // Check if slot is in the past (for today only) - add 30 minute buffer
+        const isPast = isToday && slotDateTime <= new Date(now.getTime() + 30 * 60000);
+        
+        slots.push({
+          time: timeString,
+          available: !isPast,
+          isPast: isPast
+        });
+      }
+    }
+    
+    return slots;
+  };
+
+  // Load time slots for selected date (frontend calculation)
+  const loadTimeSlots = (date) => {
+    setLoadingSlots(true);
+    
+    // Simulate brief loading for better UX
+    setTimeout(() => {
+      const slots = generateTimeSlots(date);
+      setTimeSlots(slots);
+      setLoadingSlots(false);
+    }, 300);
   };
   
   // Handle date selection
@@ -303,56 +359,107 @@ const Booking = () => {
     }
   };
   
+  // Format time slot for display (24-hour to 12-hour format)
+  const formatTimeSlot = (time24) => {
+    const [hours, minutes] = time24.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  // Convert local time to UTC with proper timezone handling
+  const convertToUTC = (date, time) => {
+    // Create a date object in local timezone
+    const localDateTime = new Date(`${date}T${time}:00`);
+    
+    // Check if the date is valid
+    if (isNaN(localDateTime.getTime())) {
+      console.error('Invalid date/time:', date, time);
+      throw new Error('Invalid date or time format');
+    }
+    
+    // Convert to UTC and format as YYYY-MM-DD HH:mm:ss
+    return localDateTime.toISOString().slice(0, 19).replace('T', ' ');
+  };
+
+  // Validate selected time is not in the past
+  const validateSelectedTime = () => {
+    if (!selectedDate || !selectedTimeSlot) {
+      toast.error('Please select date and time');
+      return false;
+    }
+    
+    const now = new Date();
+    const selectedDateTime = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
+    
+    // Check if the constructed date is valid
+    if (isNaN(selectedDateTime.getTime())) {
+      console.error('Invalid selected date/time:', selectedDate, selectedTimeSlot.time);
+      toast.error('Invalid date or time selected. Please try again.');
+      return false;
+    }
+    
+    if (selectedDateTime <= now) {
+      toast.error('Selected time is in the past. Please choose a future time slot.');
+      return false;
+    }
+    
+    return true;
+  };
+
   // Create booking
-// Create booking
-const handleCreateBooking = async () => {
-  setIsProcessing(true);
+  const handleCreateBooking = async () => {
+    setIsProcessing(true);
 
-  try {
-    // Convert local date & time to UTC string
-    const localDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
-    const scheduledUTC = localDate
-      .toISOString() // Gives UTC automatically
-      .slice(0, 19)  // Keep YYYY-MM-DD HH:mm:ss format
-      .replace('T', ' ');
+    try {
+      // Validate time is not in the past
+      if (!validateSelectedTime()) {
+        setIsProcessing(false);
+        return;
+      }
 
-    // Prepare booking data
-    const bookingData = {
-      cart_items: cart.items.map(item => ({
-        subcategory_id: item.subcategory_id || item.id,
-        quantity: item.quantity,
-        price: item.price
-      })),
-      scheduled_time: scheduledUTC,  // UTC datetime
-      address_id: selectedAddress.address_id,
-      notes: bookingNotes,
-      payment_method: 'online'
-    };
+      // Convert local date & time to UTC string using proper timezone conversion
+      console.log('Converting to UTC:', selectedDate, selectedTimeSlot.time);
+      const scheduledUTC = convertToUTC(selectedDate, selectedTimeSlot.time);
+      console.log('UTC result:', scheduledUTC);
 
-    // Send to backend
-    const result = await BookingService.bookings.create(bookingData);
+      // Prepare booking data
+      const bookingData = {
+        cart_items: cart.items.map(item => ({
+          subcategory_id: item.subcategory_id || item.id,
+          quantity: item.quantity,
+          price: item.price
+        })),
+        scheduled_time: scheduledUTC,  // UTC datetime
+        address_id: selectedAddress.address_id,
+        notes: bookingNotes,
+        payment_method: 'online'
+      };
 
-    // Clear cart
-    await clearCart();
+      // Send to backend
+      const result = await BookingService.bookings.create(bookingData);
 
-    // Show success and redirect
-    toast.success('Booking created successfully!');
-    navigate('/booking-success', { 
-      state: { 
-        bookingIds: result.booking_ids,
-        totalAmount: result.total_amount 
-      } 
-    });
+      // Clear cart
+      await clearCart();
 
-  } catch (error) {
-    console.error('Error creating booking:', error);
-    toast.error('Failed to create booking. Please try again.');
-  } finally {
-    setIsProcessing(false);
-  }
-};
+      // Show success and redirect
+      toast.success('Booking created successfully!');
+      navigate('/booking-success', { 
+        state: { 
+          bookingIds: result.booking_ids,
+          totalAmount: result.total_amount 
+        } 
+      });
 
-  
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      toast.error('Failed to create booking. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Get address type icon
   const getAddressTypeIcon = (type) => {
     switch (type) {
@@ -478,10 +585,12 @@ const handleCreateBooking = async () => {
                               }`}
                             >
                               <div className="font-medium">
-                                {BookingService.utils.formatTime(slot.time)}
+                                {formatTimeSlot(slot.time)}
                               </div>
                               {!slot.available && (
-                                <div className="text-xs mt-1">Booked</div>
+                                <div className="text-xs mt-1">
+                                  {slot.isPast ? 'Past' : 'Booked'}
+                                </div>
                               )}
                             </button>
                           ))}
@@ -718,7 +827,7 @@ const handleCreateBooking = async () => {
                       <div className="flex items-center">
                         <Clock className="h-5 w-5 text-purple-600 mr-3" />
                         <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                          {selectedTimeSlot && BookingService.utils.formatTime(selectedTimeSlot.time)}
+                          {selectedTimeSlot && formatTimeSlot(selectedTimeSlot.time)}
                         </span>
                       </div>
                       

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import AuthService from './auth.service';
 import { formatUTCDate, formatUTCTime } from '../utils/datetime';
+import { formatToLocalDateTime, formatToLocalTime } from '../utils/timezone';
 
 const apiClient = axios.create({
   baseURL: `${API_BASE_URL}/api/customer`,
@@ -242,27 +243,26 @@ const BookingService = {
 
     // Map backend booking data to frontend format
     mapBookingData: (backendBooking) => {
+      // Use the timezone utility for proper UTC to local conversion
+      const scheduledDate = formatToLocalDateTime(backendBooking.scheduled_time);
+      const createdDate = formatToLocalDateTime(backendBooking.created_at);
+      const timeSlot = formatToLocalTime(backendBooking.scheduled_time);
+
       return {
         booking_id: backendBooking.id,
         service_name: backendBooking.service_name,
         subcategory_name: backendBooking.service_description,
         status: backendBooking.service_status,
         payment_status: backendBooking.payment_status,
-        // Convert scheduled_time (UTC) to a local date string
-        booking_date: backendBooking.scheduled_time ? BookingService.utils.formatDate(backendBooking.scheduled_time) : null,
-        time_slot: backendBooking.scheduled_time ? BookingService.utils.formatTime(backendBooking.scheduled_time) : null,
+        // Store the already converted timezone data
+        booking_date: scheduledDate || 'Invalid Date',
+        time_slot: timeSlot || 'Invalid Time',
         address: backendBooking.display_address || backendBooking.address,
         total_amount: backendBooking.display_price || backendBooking.price,
         gst_amount: backendBooking.gst,
         provider_name: backendBooking.provider_name || 'Not Assigned',
         provider_phone: backendBooking.provider_phone,
-        created_at: backendBooking.created_at ? new Date(backendBooking.created_at).toLocaleString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }) : null,
+        created_at: createdDate || 'Invalid Date',
         notes: backendBooking.notes
       };
     },
