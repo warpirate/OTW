@@ -59,7 +59,7 @@ const WorkerJobs = () => {
   // Poll for new booking requests every 10 seconds
   useEffect(() => {
     const intervalId = setInterval(() => {
-      fetchBookingRequests(pagination.page);
+      fetchBookingRequests(pagination.page, activeFilter === 'all' ? null : activeFilter);
     }, 10000);
     return () => clearInterval(intervalId);
   }, [activeFilter, pagination.page]);
@@ -69,7 +69,8 @@ const WorkerJobs = () => {
       setLoading(true);
       setError('');
       
-      const statusFilter = activeFilter === 'all' ? null : activeFilter;
+      // Use the status parameter if provided, otherwise use activeFilter
+      const statusFilter = status !== null ? (status === 'all' ? null : status) : (activeFilter === 'all' ? null : activeFilter);
       const response = await WorkerService.getBookingRequests(statusFilter, page, 20);
       
       setBookingRequests(response.booking_requests || []);
@@ -100,8 +101,8 @@ const WorkerJobs = () => {
 
   const handleFilterChange = (filter) => {
     setActiveFilter(filter);
-    // No need to fetch new data since we're filtering on frontend
-    // This eliminates the double-click issue and improves performance
+    // Fetch data with the new filter from backend
+    fetchBookingRequests(1, filter === 'all' ? null : filter);
   };
 
   const getStatusColor = (status) => {
@@ -136,8 +137,41 @@ const WorkerJobs = () => {
 
   const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'Not scheduled';
-    // Backend sends UTC; convert to local for display
-    return formatUTCToLocal(dateTimeString);
+    try {
+      // Handle different date formats from backend
+      let dateStr = dateTimeString;
+      
+      // Remove milliseconds and timezone if present (e.g., .000Z)
+      dateStr = dateStr.replace(/\.\d{3}Z?$/, '');
+      
+      // If it's MySQL format (YYYY-MM-DD HH:mm:ss), convert to ISO
+      if (dateStr.includes(' ') && !dateStr.includes('T')) {
+        dateStr = dateStr.replace(' ', 'T');
+      }
+      
+      // Always append Z to indicate UTC (backend stores in UTC)
+      if (!dateStr.endsWith('Z')) {
+        dateStr += 'Z';
+      }
+      
+      // Parse as UTC and convert to local
+      const date = new Date(dateStr);
+      
+      // Format in local timezone
+      const options = {
+        year: 'numeric',
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      };
+      
+      return date.toLocaleString('en-IN', options);
+    } catch (error) {
+      console.error('Error formatting date:', error, dateTimeString);
+      return dateTimeString;
+    }
   };
 
   const formatCost = (cost) => {
@@ -158,11 +192,45 @@ const WorkerJobs = () => {
     return matchesStatus && matchesSearch;
   });
 
+  // Calculate counts for each status
+  const [statusCounts, setStatusCounts] = useState({
+    all: 0,
+    pending: 0,
+    accepted: 0,
+    rejected: 0
+  });
+
+  // Fetch counts for all statuses on component mount and when data changes
+  useEffect(() => {
+    const fetchAllCounts = async () => {
+      try {
+        // Fetch counts for each status
+        const [allResponse, pendingResponse, acceptedResponse, rejectedResponse] = await Promise.all([
+          WorkerService.getBookingRequests(null, 1, 1), // Get total count
+          WorkerService.getBookingRequests('pending', 1, 1),
+          WorkerService.getBookingRequests('accepted', 1, 1),
+          WorkerService.getBookingRequests('rejected', 1, 1)
+        ]);
+        
+        setStatusCounts({
+          all: allResponse.pagination?.total || 0,
+          pending: pendingResponse.pagination?.total || 0,
+          accepted: acceptedResponse.pagination?.total || 0,
+          rejected: rejectedResponse.pagination?.total || 0
+        });
+      } catch (error) {
+        console.error('Error fetching status counts:', error);
+      }
+    };
+    
+    fetchAllCounts();
+  }, []);
+
   const filterOptions = [
-    { value: 'all', label: 'All Requests', count: bookingRequests.length },
-    { value: 'pending', label: 'Pending', count: bookingRequests.filter(r => r.status === 'pending').length },
-    { value: 'accepted', label: 'Accepted', count: bookingRequests.filter(r => r.status === 'accepted').length },
-    { value: 'rejected', label: 'Rejected', count: bookingRequests.filter(r => r.status === 'rejected').length }
+    { value: 'all', label: 'All Requests', count: statusCounts.all },
+    { value: 'pending', label: 'Pending', count: statusCounts.pending },
+    { value: 'accepted', label: 'Accepted', count: statusCounts.accepted },
+    { value: 'rejected', label: 'Rejected', count: statusCounts.rejected }
   ];
 
   return (
@@ -331,7 +399,7 @@ const WorkerJobs = () => {
                         <div className="flex items-center space-x-2">
                           <MapPin className="w-4 h-4 text-gray-400" />
                           <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                            {request.pickup_address || request.address || 'Location not specified'}
+                            {request.pickup_address || request.service_address || 'Location not specified'}
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">

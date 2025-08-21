@@ -79,7 +79,7 @@ const Bookings = () => {
     };
 
     loadBookings();
-  }, [navigate]);
+  }, []);
 
   // Filter bookings based on status and search query
   useEffect(() => {

@@ -31,10 +31,13 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     booking_type, // 'with_car' or 'without_car'
     estimated_cost,
     cost_type,
-    duration
+    duration,
+    vehicle_id // Optional: if booking with a specific vehicle
   } = req.body;
-console.log("pickup_time", pickup_time);
-console.log("body", req.body)
+
+  console.log("pickup_time", pickup_time);
+  console.log("body", req.body);
+
   if (!pickup_address || !pickup_lat || !pickup_lon || !drop_address || !drop_lat || !drop_lon || !pickup_time) {
     return res.status(400).json({ message: 'Missing required booking information.' });
   }
@@ -45,33 +48,46 @@ console.log("body", req.body)
   try {
     await connection.beginTransaction();
 
-    // 1. Insert booking
-    const [result] = await connection.query(
+    // 1. Insert into bookings table (main booking record)
+    const [mainBookingResult] = await connection.query(
       `INSERT INTO bookings (
-          user_id, with_vehicle, pickup_address, pickup_lat, pickup_lon,
-          drop_address, drop_lat, drop_lon, booking_type, scheduled_time,
-          estimated_cost, service_status, payment_status, created_at, cost_type,duration
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', NOW(), ?, ?)`,
+          user_id, booking_type, scheduled_time, estimated_cost, 
+          service_status, payment_status, created_at, cost_type, duration
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?)`,
       [
         user_id,
-        with_vehicle,
-        pickup_address,
-        pickup_lat,
-        pickup_lon,
-        drop_address,
-        drop_lat,
-        drop_lon,
         'ride',
         pickup_time,
         estimated_cost || 0,
+        'pending',
+        'pending',
         cost_type,
         duration
       ]
     );
 
-    const bookingId = result.insertId;
+    const bookingId = mainBookingResult.insertId;
 
-    // 2. Get ride category id
+    // 2. Insert into ride_bookings table (ride-specific data)
+    await connection.query(
+      `INSERT INTO ride_bookings (
+          booking_id, with_vehicle, vehicle_id, pickup_address, pickup_lat, pickup_lon,
+          drop_address, drop_lat, drop_lon
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bookingId,
+        with_vehicle,
+        vehicle_id || null,
+        pickup_address,
+        pickup_lat,
+        pickup_lon,
+        drop_address,
+        drop_lat,
+        drop_lon
+      ]
+    );
+
+    // 3. Get ride category id
     const [rideCategory] = await connection.query(
       `SELECT id FROM service_categories WHERE category_type = 'driver' AND is_active = 1`
     );
@@ -83,7 +99,7 @@ console.log("body", req.body)
 
     const rideCategoryId = rideCategory[0].id;
 
-    // 3. Fetch provider permanent addresses and convert to coordinates
+    // 4. Fetch provider permanent addresses and convert to coordinates
     const [providers] = await connection.query(`
       SELECT 
         p.id as provider_id,
@@ -140,6 +156,8 @@ console.log("body", req.body)
 
     const driverIds = [];
     console.log("locations", locations);
+    
+    // 5. Find drivers within service radius
     for (const row of locations) {
       const distance = haversineDistance(pickup_lat, pickup_lon, row.latitude, row.longitude);
       if (distance <= row.service_radius_km) {
@@ -155,8 +173,10 @@ console.log("body", req.body)
         }
       }
     }
-    console.log("driver iDs", driverIds);
-    // 4. Insert booking requests
+    
+    console.log("driver IDs", driverIds);
+
+    // 6. Insert booking requests
     for (const providerId of driverIds) {
       await connection.query(
         `INSERT INTO booking_requests (booking_id, provider_id, status, requested_at)
