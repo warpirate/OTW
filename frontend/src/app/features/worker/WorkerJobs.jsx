@@ -42,6 +42,8 @@ const WorkerJobs = () => {
     setDarkMode(isDarkMode());
     const cleanup = addThemeListener((isDark) => setDarkMode(isDark));
     
+
+    
     // Get user data using AuthService for worker role
     const userInfo = AuthService.getCurrentUser('worker');
     const userRole = userInfo?.role?.toLowerCase();
