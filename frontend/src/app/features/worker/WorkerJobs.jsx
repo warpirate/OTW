@@ -138,9 +138,15 @@ const WorkerJobs = () => {
 
   const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'Not scheduled';
-    const date = new Date(dateTimeString);
-    if (isNaN(date.getTime())) return 'Invalid date';
-    return date.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    try {
+      const iso = dateTimeString.includes('T') ? dateTimeString : dateTimeString.replace(' ', 'T');
+      const utc = iso.endsWith('Z') ? iso : `${iso}Z`;
+      const d = new Date(utc);
+      if (isNaN(d.getTime())) return 'Not scheduled';
+      return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return 'Not scheduled';
+    }
   };
 
   const formatCost = (cost) => {
