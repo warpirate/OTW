@@ -187,6 +187,26 @@ router.post('/book-ride', verifyToken, async (req, res) => {
 
     await connection.commit();
 
+    // Emit Socket.IO events to notify providers and customer about new ride booking requests
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        for (const providerId of driverIds) {
+          io.to(`provider:${providerId}`).emit('booking_requests:new', {
+            booking_id: bookingId,
+            booking_type: 'ride',
+            status: 'pending'
+          });
+        }
+        // Notify the customer that their booking was created
+        io.to(`user:${user_id}`).emit('bookings:created', {
+          booking_ids: [bookingId]
+        });
+      }
+    } catch (emitErr) {
+      console.error('Socket emit error (driver book-ride):', emitErr.message);
+    }
+
     res.status(201).json({
       message: 'Driver booking created successfully',
       booking_id: bookingId,

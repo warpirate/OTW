@@ -40,6 +40,11 @@ const Bookings = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showBookingDetails, setShowBookingDetails] = useState(false);
   const [cancellingBooking, setCancellingBooking] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [lastId, setLastId] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [summary, setSummary] = useState({ totalBookings: 0, activeBookings: 0, totalSpent: 0 });
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
   // Listen for theme changes
   useEffect(() => {
@@ -54,30 +59,64 @@ const Bookings = () => {
     };
   }, []);
 
-  // Check authentication and load bookings
+  // Check authentication and load bookings and summary (cursor-based initial fetch)
   useEffect(() => {
-    const loadBookings = async () => {
+    const loadInitialBookings = async () => {
       try {
-        // Check if user is authenticated
         if (!AuthService.isLoggedIn('customer')) {
           navigate('/login');
           return;
         }
-        const response = await BookingService.bookings.getHistory();
-        const mappedData = BookingService.utils.mapBookingList(response);
-        
+        const [historyRes, summaryRes] = await Promise.all([
+          BookingService.bookings.getHistory({ limit: 10 }),
+          BookingService.bookings.getSummary()
+        ]);
+
+        const mappedData = BookingService.utils.mapBookingList(historyRes);
         setBookings(mappedData.bookings || []);
         setFilteredBookings(mappedData.bookings || []);
+        setHasMore(!!mappedData.hasMore);
+        setLastId(mappedData.lastId ?? null);
+
+        if (summaryRes && typeof summaryRes === 'object') {
+          setSummary({
+            totalBookings: summaryRes.totalBookings ?? 0,
+            activeBookings: summaryRes.activeBookings ?? 0,
+            totalSpent: summaryRes.totalSpent ?? 0
+          });
+        }
+        setSummaryLoading(false);
         setLoading(false);
       } catch (error) {
         console.error('Error loading bookings:', error);
         toast.error('Failed to load bookings');
+        setSummaryLoading(false);
         setLoading(false);
       }
     };
 
-    loadBookings();
+    loadInitialBookings();
   }, []);
+
+  // Load next page using cursor
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const response = await BookingService.bookings.getHistory({ limit: 10, lastId });
+      const mappedData = BookingService.utils.mapBookingList(response);
+      const newItems = mappedData.bookings || [];
+
+      setBookings(prev => [...prev, ...newItems]);
+      setHasMore(!!mappedData.hasMore);
+      setLastId(mappedData.lastId ?? null);
+    } catch (error) {
+      console.error('Error loading more bookings:', error);
+      toast.error('Failed to load more bookings');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // Filter bookings based on status and search query
   useEffect(() => {
@@ -101,8 +140,6 @@ const Bookings = () => {
 
     setFilteredBookings(filtered);
   }, [bookings, selectedStatus, searchQuery]);
-
-
 
   const formatPrice = (price) => {
     if (!price) return '₹0.00';
@@ -144,6 +181,23 @@ const Bookings = () => {
             : booking
         )
       );
+
+      // Refresh summary counts after cancellation
+      try {
+        setSummaryLoading(true);
+        const summaryRes = await BookingService.bookings.getSummary();
+        if (summaryRes && typeof summaryRes === 'object') {
+          setSummary({
+            totalBookings: summaryRes.totalBookings ?? 0,
+            activeBookings: summaryRes.activeBookings ?? 0,
+            totalSpent: summaryRes.totalSpent ?? 0
+          });
+        }
+      } catch (e) {
+        console.error('Error refreshing booking summary:', e);
+      } finally {
+        setSummaryLoading(false);
+      }
     } catch (error) {
       console.error('Error cancelling booking:', error);
       toast.error('Failed to cancel booking');
@@ -222,7 +276,7 @@ const Bookings = () => {
                   <div>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Total Bookings</p>
                     <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {bookings.length}
+                      {summaryLoading ? '...' : summary.totalBookings}
                     </p>
                   </div>
                   <Package className="h-8 w-8 text-purple-600" />
@@ -234,7 +288,7 @@ const Bookings = () => {
                   <div>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Active Bookings</p>
                     <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {bookings.filter(b => ['pending', 'assigned'].includes(b.status?.toLowerCase())).length}
+                      {summaryLoading ? '...' : summary.activeBookings}
                     </p>
                   </div>
                   <Clock className="h-8 w-8 text-blue-600" />
@@ -246,7 +300,7 @@ const Bookings = () => {
                   <div>
                     <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Total Spent</p>
                     <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {formatPrice(bookings.reduce((sum, booking) => sum + (booking.total_amount || 0), 0))}
+                      {summaryLoading ? '...' : formatPrice(summary.totalSpent || 0)}
                     </p>
                   </div>
                 </div>
@@ -396,6 +450,24 @@ const Bookings = () => {
               ))
             )}
           </div>
+          {hasMore && (
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="btn-outline flex items-center space-x-2 px-6"
+              >
+                {loadingMore ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  <span>Load More</span>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
