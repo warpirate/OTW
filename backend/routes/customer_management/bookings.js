@@ -158,6 +158,8 @@ router.post('/create', verifyToken, async (req, res) => {
     try {
       const bookingIds = [];
       let totalAmount = 0;
+      // Collect provider notifications to emit after COMMIT
+      const emitsToProviders = [];
 
       // Create a booking for each cart item
       for (const item of cart_items) {
@@ -272,6 +274,8 @@ router.post('/create', verifyToken, async (req, res) => {
              VALUES (?, ?, 'pending', ?)`,
             [bookingId, providerId, createdAtUTC]
           );
+          // Queue socket emission to provider room after commit
+          emitsToProviders.push({ providerId, bookingId, booking_type });
         }
       }
 
@@ -280,6 +284,26 @@ router.post('/create', verifyToken, async (req, res) => {
 
       // Commit transaction
       await pool.query('COMMIT');
+
+      // Emit Socket.IO events to notify providers of new booking requests
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          for (const item of emitsToProviders) {
+            io.to(`provider:${item.providerId}`).emit('booking_requests:new', {
+              booking_id: item.bookingId,
+              booking_type: item.booking_type || 'service',
+              status: 'pending'
+            });
+          }
+          // Optionally notify the customer their bookings were created
+          io.to(`user:${customerId}`).emit('bookings:created', {
+            booking_ids: bookingIds
+          });
+        }
+      } catch (emitErr) {
+        console.error('Socket emit error (create booking):', emitErr.message);
+      }
 
       // Fetch created bookings
       const [bookings] = await pool.query(
@@ -308,23 +332,79 @@ router.post('/create', verifyToken, async (req, res) => {
   }
 });
 
-
-// GET /history - Get booking history for customer
 router.get('/history', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
-    const { page = 1, limit = 10, status } = req.query;
-    
-    const offset = (page - 1) * limit;
-    let whereClause = 'WHERE b.user_id = ?';
-    let queryParams = [customerId];
+    const { page, limit = 10, status, lastId } = req.query;
 
+    // Common WHERE clause
+    let whereClause = 'WHERE b.user_id = ?';
+    const baseParams = [customerId];
     if (status) {
       whereClause += ' AND b.service_status = ?';
-      queryParams.push(status);
+      baseParams.push(status);
     }
 
-    const [bookings] = await pool.query(
+    // If page is provided, keep backward compatibility with offset pagination
+    if (page !== undefined) {
+      const pageNum = parseInt(page);
+      const perPage = parseInt(limit);
+      const offset = (pageNum - 1) * perPage;
+
+      const [bookings] = await pool.query(
+        `SELECT b.*, 
+                COALESCE(s.name, 'Ride Service') as service_name, 
+                COALESCE(s.description, 'Driver transportation service') as service_description,
+                CASE WHEN b.provider_id IS NOT NULL THEN 
+                  (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
+                ELSE 'Not Assigned' END as provider_name,
+                CASE 
+                  WHEN b.booking_type = 'ride' THEN 
+                    CONCAT(rb.pickup_address, ' → ', rb.drop_address)
+                  ELSE sb.address 
+                END as display_address,
+                CASE 
+                  WHEN b.booking_type = 'ride' THEN b.estimated_cost
+                  ELSE b.price 
+                END as display_price
+         FROM bookings b
+         LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
+         LEFT JOIN subcategories s ON s.id = b.subcategory_id
+         LEFT JOIN service_bookings sb ON sb.booking_id = b.id
+         ${whereClause}
+         ORDER BY b.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...baseParams, perPage, offset]
+      );
+
+      const [countResult] = await pool.query(
+        `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
+        baseParams
+      );
+
+      return res.json({
+        bookings,
+        pagination: {
+          current_page: pageNum,
+          per_page: perPage,
+          total: countResult[0].total,
+          total_pages: Math.ceil(countResult[0].total / perPage)
+        }
+      });
+    }
+
+    // Cursor-based pagination (default): order by id DESC and use lastId cursor
+    const perPage = parseInt(limit);
+    const fetchLimit = perPage + 1; // fetch one extra to know if there's more
+
+    let cursorWhere = whereClause;
+    const params = [...baseParams];
+    if (lastId) {
+      cursorWhere += ' AND b.id < ?';
+      params.push(parseInt(lastId));
+    }
+
+    const [rows] = await pool.query(
       `SELECT b.*, 
               COALESCE(s.name, 'Ride Service') as service_name, 
               COALESCE(s.description, 'Driver transportation service') as service_description,
@@ -344,66 +424,81 @@ router.get('/history', verifyToken, async (req, res) => {
        LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
        LEFT JOIN subcategories s ON s.id = b.subcategory_id
        LEFT JOIN service_bookings sb ON sb.booking_id = b.id
-       ${whereClause}
-       ORDER BY b.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [...queryParams, parseInt(limit), parseInt(offset)]
+       ${cursorWhere}
+       ORDER BY b.id DESC
+       LIMIT ?`,
+      [...params, fetchLimit]
     );
 
-    // Get total count
-    const [countResult] = await pool.query(
-      `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
-      queryParams
-    );
+    const hasMore = rows.length > perPage;
+    const bookings = hasMore ? rows.slice(0, perPage) : rows;
+    const nextLastId = bookings.length ? bookings[bookings.length - 1].id : null;
 
-    res.json({
+    return res.json({
       bookings,
-      pagination: {
-        current_page: parseInt(page),
-        per_page: parseInt(limit),
-        total: countResult[0].total,
-        total_pages: Math.ceil(countResult[0].total / limit)
-      }
+      hasMore,
+      lastId: nextLastId
     });
-
   } catch (err) {
     console.error('Error fetching booking history:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
-// GET /:id - Get specific booking details
-router.get('/:id', verifyToken, async (req, res) => {
-  try {
-    const customerId = req.user.id;
-    const bookingId = req.params.id;
+// GET /summary - Get aggregate stats for customer's bookings (independent of pagination)
+router.get('/summary', verifyToken, async (req, res) => {
+try {
+  const customerId = req.user.id;
 
-    const [bookings] = await pool.query(
-      `SELECT b.*, 
-              COALESCE(s.name, 'Ride Service') as service_name, 
-              COALESCE(s.description, 'Driver transportation service') as service_description,
-              CASE WHEN b.provider_id IS NOT NULL THEN 
-                (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
-              ELSE 'Not Assigned' END as provider_name,
-              CASE WHEN b.provider_id IS NOT NULL THEN 
-                (SELECT u.phone_number FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
-              ELSE NULL END as provider_phone,
-              CASE 
-                WHEN b.booking_type = 'ride' THEN 
-                  CONCAT(rb.pickup_address, ' → ', rb.drop_address)
-                ELSE sb.address 
-              END as display_address,
-              CASE 
-                WHEN b.booking_type = 'ride' THEN b.estimated_cost
-                ELSE b.price 
-              END as display_price
-       FROM bookings b
-       LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
-       LEFT JOIN service_bookings sb ON sb.booking_id = b.id
-       LEFT JOIN subcategories s ON s.id = b.subcategory_id
-       WHERE b.id = ? AND b.user_id = ?`,
-      [bookingId, customerId]
-    );
+  const [rows] = await pool.query(
+    `SELECT 
+       COUNT(*) AS totalBookings,
+       SUM(CASE WHEN service_status IN ('pending','assigned') THEN 1 ELSE 0 END) AS activeBookings,
+       COALESCE(SUM(CASE WHEN service_status = 'completed' THEN 
+         (CASE WHEN booking_type = 'ride' THEN estimated_cost ELSE price END)
+       ELSE 0 END), 0) AS totalSpent
+     FROM bookings
+     WHERE user_id = ?`,
+    [customerId]
+  );
+
+  const { totalBookings = 0, activeBookings = 0, totalSpent = 0 } = rows[0] || {};
+  return res.json({ totalBookings, activeBookings, totalSpent });
+} catch (err) {
+  console.error('Error fetching booking summary:', err);
+  res.status(500).json({ message: 'Server error', error: err.message });
+}
+});
+
+// GET /:id - Get booking details
+router.get('/:id', verifyToken, async (req, res) => {
+try {
+  const customerId = req.user.id;
+  const bookingId = req.params.id;
+
+  const [bookings] = await pool.query(
+    `SELECT b.*, 
+            COALESCE(s.name, 'Ride Service') as service_name, 
+            COALESCE(s.description, 'Driver transportation service') as service_description,
+            CASE WHEN b.provider_id IS NOT NULL THEN 
+              (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
+            ELSE 'Not Assigned' END as provider_name,
+            CASE 
+              WHEN b.booking_type = 'ride' THEN 
+                CONCAT(rb.pickup_address, ' → ', rb.drop_address)
+              ELSE sb.address 
+            END as display_address,
+            CASE 
+              WHEN b.booking_type = 'ride' THEN b.estimated_cost
+              ELSE b.price 
+            END as display_price
+     FROM bookings b
+     LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
+     LEFT JOIN service_bookings sb ON sb.booking_id = b.id
+     LEFT JOIN subcategories s ON s.id = b.subcategory_id
+     WHERE b.id = ? AND b.user_id = ?`,
+    [bookingId, customerId]
+  );
 
     if (bookings.length === 0) {
       return res.status(404).json({ message: 'Booking not found' });
@@ -465,6 +560,29 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
        WHERE id = ?`,
       [bookingId]
     );
+
+    // Emit Socket.IO events to notify providers and customer
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        // Notify all providers who received a request for this booking
+        const [reqProviders] = await pool.query(
+          'SELECT provider_id FROM booking_requests WHERE booking_id = ?',
+          [bookingId]
+        );
+        for (const row of reqProviders) {
+          io.to(`provider:${row.provider_id}`).emit('bookings:cancelled', {
+            booking_id: parseInt(bookingId)
+          });
+        }
+        // Notify the customer as well
+        io.to(`user:${booking.user_id}`).emit('bookings:cancelled', {
+          booking_id: parseInt(bookingId)
+        });
+      }
+    } catch (emitErr) {
+      console.error('Socket emit error (cancel booking):', emitErr.message);
+    }
 
     res.json({ message: 'Booking cancelled successfully' });
 

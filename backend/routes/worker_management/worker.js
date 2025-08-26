@@ -723,13 +723,15 @@ router.put('/worker/settings', verifyToken, async (req, res) => {
 router.get('/worker/booking-requests', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, page = 1, limit = 20, cursor, mode } = req.query;
     
     console.log('Worker fetching booking requests:', { 
       userId, 
       status, 
       page, 
-      limit 
+      limit,
+      cursor,
+      mode
     });
 
     // Get provider_id for this worker
@@ -744,85 +746,168 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
     const providerId = providerResult[0].id;
 
-    // Build query with filters - exclude cancelled bookings
-    let query = `
-      SELECT 
-        br.id as request_id,
-        br.booking_id,
-        br.status,
-        br.requested_at,
-        br.responded_at,
-        b.user_id,
-        b.booking_type,
-        rb.with_vehicle,
-        rb.pickup_address,
-        rb.drop_address,
-        sb.address as service_address,
-        b.actual_cost,
-        b.price,
-        b.estimated_cost,
-        b.service_status,
-        b.payment_status,
-        b.created_at as booking_created_at,
-        b.scheduled_time,
-        b.duration,
-        b.cost_type,
-        b.subcategory_id,
-        u.name as customer_name,
-        u.phone_number as customer_phone,
-        s.name as service_name,
-        s.description as service_description,
-        sc.name as category_name
-      FROM booking_requests br
-      INNER JOIN bookings b ON br.booking_id = b.id
-      INNER JOIN users u ON b.user_id = u.id
-      LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
-      LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
-      LEFT JOIN subcategories s ON b.subcategory_id = s.id
-      LEFT JOIN service_categories sc ON s.category_id = sc.id
-      WHERE br.provider_id = ? AND b.service_status != 'cancelled'
-    `;
+    // Determine if we should use cursor-based pagination
+    const useCursor = typeof cursor !== 'undefined' || (mode && mode === 'cursor');
 
-    const queryParams = [providerId];
+    if (useCursor) {
+      // Cursor-based pagination using br.id for keyset
+      let query = `
+        SELECT 
+          br.id as request_id,
+          br.booking_id,
+          br.status as status,
+          br.requested_at,
+          br.responded_at,
+          b.user_id,
+          b.booking_type,
+          rb.with_vehicle,
+          rb.pickup_address,
+          rb.drop_address,
+          sb.address as service_address,
+          b.actual_cost,
+          b.price,
+          b.estimated_cost,
+          b.service_status,
+          b.payment_status,
+          b.created_at as booking_created_at,
+          b.scheduled_time,
+          b.duration,
+          b.cost_type,
+          b.subcategory_id,
+          u.name as customer_name,
+          u.phone_number as customer_phone,
+          s.name as service_name,
+          s.description as service_description,
+          sc.name as category_name
+        FROM booking_requests br
+        INNER JOIN bookings b ON br.booking_id = b.id
+        INNER JOIN users u ON b.user_id = u.id
+        LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
+        LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
+        LEFT JOIN subcategories s ON b.subcategory_id = s.id
+        LEFT JOIN service_categories sc ON s.category_id = sc.id
+        WHERE br.provider_id = ?
+      `;
 
-    if (status && status !== 'all') {
-      query += ' AND br.status = ?';
-      queryParams.push(status);
-    }
+      const params = [providerId];
 
-    query += ' ORDER BY br.requested_at DESC LIMIT ? OFFSET ?';
-    queryParams.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
-
-    // Get booking requests
-    const [bookingRequests] = await pool.query(query, queryParams);
-
-    // Get total count for pagination - exclude cancelled bookings
-    let countQuery = `
-      SELECT COUNT(*) as total
-      FROM booking_requests br
-      INNER JOIN bookings b ON br.booking_id = b.id
-      WHERE br.provider_id = ? AND b.service_status != 'cancelled'
-    `;
-    const countParams = [providerId];
-
-    if (status && status !== 'all') {
-      countQuery += ' AND br.status = ?';
-      countParams.push(status);
-    }
-
-    const [countResult] = await pool.query(countQuery, countParams);
-    const total = countResult[0].total;
-
-    res.json({
-      message: 'Booking requests retrieved successfully',
-      booking_requests: bookingRequests,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
+      // Exclude cancelled bookings from general lists
+      query += " AND b.service_status != 'cancelled'";
+      // Filter by specific booking_request status if provided (pending, accepted, rejected)
+      if (status && status !== 'all') {
+        query += ' AND br.status = ?';
+        params.push(status);
       }
-    });
+
+      if (cursor) {
+        query += ' AND br.id < ?';
+        params.push(parseInt(cursor));
+      }
+
+      query += ' ORDER BY br.id DESC LIMIT ?';
+      params.push(parseInt(limit));
+
+      const [bookingRequests] = await pool.query(query, params);
+
+      const hasMore = bookingRequests.length === parseInt(limit);
+      const nextCursor = hasMore ? bookingRequests[bookingRequests.length - 1].request_id : null;
+
+      return res.json({
+        message: 'Booking requests retrieved successfully',
+        booking_requests: bookingRequests,
+        pagination: {
+          limit: parseInt(limit),
+          nextCursor,
+          hasMore
+        }
+      });
+    } else {
+      // Legacy offset-based pagination
+      let query = `
+        SELECT 
+          br.id as request_id,
+          br.booking_id,
+          br.status,
+          br.requested_at,
+          br.responded_at,
+          b.user_id,
+          b.booking_type,
+          rb.with_vehicle,
+          rb.pickup_address,
+          rb.drop_address,
+          sb.address as service_address,
+          b.actual_cost,
+          b.price,
+          b.estimated_cost,
+          b.service_status,
+          b.payment_status,
+          b.created_at as booking_created_at,
+          b.scheduled_time,
+          b.duration,
+          b.cost_type,
+          b.subcategory_id,
+          u.name as customer_name,
+          u.phone_number as customer_phone,
+          s.name as service_name,
+          s.description as service_description,
+          sc.name as category_name
+        FROM booking_requests br
+        INNER JOIN bookings b ON br.booking_id = b.id
+        INNER JOIN users u ON b.user_id = u.id
+        LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
+        LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
+        LEFT JOIN subcategories s ON b.subcategory_id = s.id
+        LEFT JOIN service_categories sc ON s.category_id = sc.id
+        WHERE br.provider_id = ?
+      `;
+
+      const queryParams = [providerId];
+
+      // Exclude cancelled bookings from general lists
+      query += " AND b.service_status != 'cancelled'";
+      // Filter by specific booking_request status if provided (pending, accepted, rejected)
+      if (status && status !== 'all') {
+        query += ' AND br.status = ?';
+        queryParams.push(status);
+      }
+
+      query += ' ORDER BY br.requested_at DESC LIMIT ? OFFSET ?';
+      queryParams.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+      // Get booking requests
+      const [bookingRequests] = await pool.query(query, queryParams);
+
+      // Get total count for pagination
+      let countQuery = `
+        SELECT COUNT(*) as total
+        FROM booking_requests br
+        INNER JOIN bookings b ON br.booking_id = b.id
+        WHERE br.provider_id = ?
+      `;
+      const countParams = [providerId];
+
+      // Exclude cancelled bookings from general lists
+      countQuery += " AND b.service_status != 'cancelled'";
+      // Apply status filter if provided
+      if (status && status !== 'all') {
+        countQuery += ' AND br.status = ?';
+        countParams.push(status);
+      }
+
+      const [countResult] = await pool.query(countQuery, countParams);
+      const total = countResult[0].total;
+
+      return res.json({
+        message: 'Booking requests retrieved successfully',
+        booking_requests: bookingRequests,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      });
+    }
 
   } catch (error) {
     console.error('Get booking requests error:', error);
@@ -833,6 +918,64 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
   }
 });
 
+// Counts endpoint for booking requests per status
+router.get('/worker/booking-requests/counts', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get provider_id for this worker
+    const [providerResult] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (providerResult.length === 0) {
+      return res.status(404).json({ message: 'Provider profile not found' });
+    }
+
+    const providerId = providerResult[0].id;
+
+    const baseJoin = `
+      FROM booking_requests br
+      INNER JOIN bookings b ON br.booking_id = b.id
+      WHERE br.provider_id = ?
+    `;
+
+    // All (non-cancelled bookings)
+    const [allRows] = await pool.query(
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled'`,
+      [providerId]
+    );
+    // Pending (non-cancelled bookings)
+    const [pendingRows] = await pool.query(
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'pending'`,
+      [providerId]
+    );
+    // Accepted (non-cancelled bookings)
+    const [acceptedRows] = await pool.query(
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'accepted'`,
+      [providerId]
+    );
+    // Rejected (from booking_requests)
+    const [rejectedRows] = await pool.query(
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'rejected'`,
+      [providerId]
+    );
+
+    res.json({
+      all: allRows[0]?.total || 0,
+      pending: pendingRows[0]?.total || 0,
+      accepted: acceptedRows[0]?.total || 0,
+      rejected: rejectedRows[0]?.total || 0
+    });
+  } catch (error) {
+    console.error('Get booking request counts error:', error);
+    res.status(500).json({ 
+      message: 'Failed to retrieve booking request counts',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
 /**
  * Update booking request status (accept only)
  */
@@ -849,9 +992,9 @@ router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) 
       reason 
     });
 
-    // Only allow 'accepted' status initially - no reject option
-    if (status !== 'accepted') {
-      return res.status(400).json({ message: 'Invalid status. Only "accepted" is allowed initially' });
+    // Allow accepted (from pending) and rejected (cancel accepted) transitions
+    if (!['accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Allowed values: "accepted", "rejected"' });
     }
 
     // Get provider_id for this worker
@@ -878,33 +1021,132 @@ router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) 
 
     const bookingRequest = requestResult[0];
 
-    // Check if request is already processed
-    if (bookingRequest.status !== 'pending') {
-      return res.status(400).json({ message: 'Booking request has already been processed' });
+
+    const bookingId = bookingRequest.booking_id;
+
+    if (status === 'accepted') {
+      // Accept flow: only if currently pending
+      if (bookingRequest.status !== 'pending') {
+        return res.status(400).json({ message: 'Booking request has already been processed' });
+      }
+
+      // Update the booking request to accepted
+      await pool.query(
+        'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE id = ?',
+        ['accepted', requestId]
+      );
+
+      // Update the main booking to 'assigned' status
+      await pool.query(
+        'UPDATE bookings SET provider_id = ?, service_status = ? WHERE id = ?',
+        [providerId, 'assigned', bookingId]
+      );
+
+      // Reject other pending requests for the same booking
+      await pool.query(
+        'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE booking_id = ? AND id != ? AND status = ?',
+        ['rejected', bookingId, requestId, 'pending']
+      );
+
+      // Emit Socket.IO events for real-time updates
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          // Notify accepted provider
+          io.to(`provider:${providerId}`).emit('booking_requests:updated', {
+            request_id: parseInt(requestId),
+            booking_id: bookingId,
+            status: 'accepted'
+          });
+
+          // Notify the customer that booking was assigned
+          const [bookingRows] = await pool.query('SELECT user_id FROM bookings WHERE id = ? LIMIT 1', [bookingId]);
+          const customerId = bookingRows?.[0]?.user_id;
+          if (customerId) {
+            io.to(`user:${customerId}`).emit('bookings:assigned', {
+              booking_id: bookingId,
+              provider_id: providerId
+            });
+          }
+
+          // Notify other providers their requests were rejected
+          const [otherProviders] = await pool.query(
+            'SELECT provider_id FROM booking_requests WHERE booking_id = ? AND id != ?',
+            [bookingId, requestId]
+          );
+          for (const row of otherProviders) {
+            io.to(`provider:${row.provider_id}`).emit('booking_requests:updated', {
+              booking_id: bookingId,
+              status: 'rejected'
+            });
+          }
+        }
+      } catch (emitErr) {
+        console.error('Socket emit error (accept booking request):', emitErr.message);
+      }
+
+      return res.json({
+        message: 'Booking request accepted successfully',
+        request_id: requestId,
+        status: 'accepted'
+      });
     }
 
-    // Update the booking request
+    // status === 'rejected' (cancel providing service)
+    // Only allow cancel if this request was previously accepted by this provider
+    if (bookingRequest.status !== 'accepted') {
+      return res.status(400).json({ message: 'Only accepted requests can be cancelled' });
+    }
+
+    // Mark this request as rejected
     await pool.query(
       'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE id = ?',
-      [status, requestId]
+      ['rejected', requestId]
     );
 
-    // Update the main booking to 'assigned' status
+    // Unassign the booking if currently assigned to this provider
     await pool.query(
-      'UPDATE bookings SET provider_id = ?, service_status = ? WHERE id = ?',
-      [providerId, 'assigned', bookingRequest.booking_id]
+      'UPDATE bookings SET provider_id = NULL, service_status = ? WHERE id = ? AND provider_id = ? AND service_status = ?',
+      ['pending', bookingId, providerId, 'assigned']
     );
 
-    // Reject other pending requests for the same booking
+    // Re-open other providers' requests that were auto-rejected when this was accepted
     await pool.query(
-      'UPDATE booking_requests SET status = ?, responded_at = NOW() WHERE booking_id = ? AND id != ? AND status = ?',
-      ['rejected', bookingRequest.booking_id, requestId, 'pending']
+      'UPDATE booking_requests SET status = ? WHERE booking_id = ? AND id != ? AND status = ?',
+      ['pending', bookingId, requestId, 'rejected']
     );
 
-    res.json({
-      message: `Booking request ${status} successfully`,
+    // Emit Socket.IO events
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        // Notify this provider of update
+        io.to(`provider:${providerId}`).emit('booking_requests:updated', {
+          request_id: parseInt(requestId),
+          booking_id: bookingId,
+          status: 'rejected'
+        });
+
+        // Notify other providers their request is active again
+        const [pendingProviders] = await pool.query(
+          'SELECT provider_id FROM booking_requests WHERE booking_id = ? AND status = ? AND id != ?',
+          [bookingId, 'pending', requestId]
+        );
+        for (const row of pendingProviders) {
+          io.to(`provider:${row.provider_id}`).emit('booking_requests:new', {
+            booking_id: bookingId,
+            status: 'pending'
+          });
+        }
+      }
+    } catch (emitErr) {
+      console.error('Socket emit error (cancel booking request):', emitErr.message);
+    }
+
+    return res.json({
+      message: 'Booking request cancelled successfully',
       request_id: requestId,
-      status
+      status: 'rejected'
     });
 
   } catch (error) {

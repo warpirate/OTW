@@ -246,6 +246,38 @@ class WorkerService {
   }
   
   /**
+   * Get booking requests using cursor-based pagination
+   */
+  static async getBookingRequestsCursor({ status = null, cursor = null, limit = 20 } = {}) {
+    try {
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        mode: 'cursor'
+      });
+      if (status) params.append('status', status);
+      if (cursor) params.append('cursor', String(cursor));
+      const { data } = await WorkerService._client.get(`/worker/booking-requests?${params}`);
+      return data;
+    } catch (error) {
+      console.error('Error fetching booking requests (cursor):', error);
+      throw new Error(error.response?.data?.message || 'Failed to load booking requests');
+    }
+  }
+
+  /**
+   * Get counts for booking requests by status
+   */
+  static async getBookingRequestCounts() {
+    try {
+      const { data } = await WorkerService._client.get('/worker/booking-requests/counts');
+      return data;
+    } catch (error) {
+      console.error('Error fetching booking request counts:', error);
+      throw new Error(error.response?.data?.message || 'Failed to load counts');
+    }
+  }
+  
+  /**
    * Update booking request status
    */
   static async updateBookingRequest(requestId, status, reason = null) {
