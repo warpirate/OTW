@@ -67,8 +67,14 @@ const Bookings = () => {
           navigate('/login');
           return;
         }
+
         // 1) Load booking history first; this is critical for page render
         const historyRes = await BookingService.bookings.getHistory({ limit: 10 });
+
+        const [historyRes, summaryRes] = await Promise.all([
+          BookingService.bookings.getHistory({ limit: 10 }),
+          BookingService.bookings.getSummary()
+        ]);
 
         const mappedData = BookingService.utils.mapBookingList(historyRes);
         setBookings(mappedData.bookings || []);
@@ -101,6 +107,15 @@ const Bookings = () => {
         } finally {
           setSummaryLoading(false);
         }
+
+        if (summaryRes && typeof summaryRes === 'object') {
+          setSummary({
+            totalBookings: summaryRes.totalBookings ?? 0,
+            activeBookings: summaryRes.activeBookings ?? 0,
+            totalSpent: summaryRes.totalSpent ?? 0
+          });
+        }
+        setSummaryLoading(false);
 
         setLoading(false);
       } catch (error) {

@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const http = require('http');
+const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 app.use(cors());
@@ -32,5 +35,64 @@ app.use(`${baseURL}/superadmin`, superAdminRoute);
 app.use(`${baseURL}/admin`, providerAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker`, workerDocsRoute);
+// Create HTTP server and attach Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.SOCKET_CORS_ORIGIN || '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true
+  }
+});
+
+// Make io accessible in routes via req.app.get('io')
+app.set('io', io);
+
+// Socket.IO authentication and room joins
+io.use(async (socket, next) => {
+  try {
+    const authHeader = socket.handshake.headers['authorization'];
+    const tokenFromHeader = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.split(' ')[1]
+      : null;
+    const token = socket.handshake.auth?.token || tokenFromHeader;
+    if (!token) {
+      return next(new Error('Authentication token missing'));
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = decoded; // { id, email, role, role_id }
+
+    // Join a per-user room for direct notifications
+    socket.join(`user:${decoded.id}`);
+
+    // If worker, attempt to join provider room as well
+    if (decoded.role === 'worker') {
+      try {
+        const [rows] = await pool.query('SELECT id FROM providers WHERE user_id = ? LIMIT 1', [decoded.id]);
+        if (rows.length) {
+          const providerId = rows[0].id;
+          socket.join(`provider:${providerId}`);
+          socket.providerId = providerId;
+        }
+      } catch (e) {
+        // Do not fail connection on provider room join failure
+      }
+    }
+
+    next();
+  } catch (err) {
+    next(new Error('Invalid or expired token'));
+  }
+});
+
+io.on('connection', (socket) => {
+  const { id: userId, role } = socket.user || {};
+  console.log(`🔌 Socket connected: user=${userId} role=${role} socket=${socket.id}`);
+
+  socket.on('disconnect', (reason) => {
+    console.log(`🔌 Socket disconnected: user=${userId} reason=${reason}`);
+  });
+});
+
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (with Socket.IO)`));

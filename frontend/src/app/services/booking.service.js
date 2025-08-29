@@ -128,18 +128,39 @@ const BookingService = {
       }
     },
 
-    // Get booking history
-    getHistory: async (page = 1, limit = 10, status = null) => {
+    // Get booking history (supports both legacy page/limit and cursor-based with lastId)
+    getHistory: async (...args) => {
       try {
-        const params = { page, limit };
-        if (status) {
-          params.status = status;
+        let params = {};
+        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
+          // New signature: getHistory({ limit, lastId, status, page })
+          const { limit = 10, lastId = null, status = null, page } = args[0];
+          if (typeof page !== 'undefined') params.page = page; // allow forcing legacy mode
+          if (typeof limit !== 'undefined') params.limit = limit;
+          if (lastId !== null && typeof lastId !== 'undefined') params.lastId = lastId;
+          if (status) params.status = status;
+        } else {
+          // Legacy signature: getHistory(page = 1, limit = 10, status = null)
+          const [page = 1, limit = 10, status = null] = args;
+          params = { page, limit };
+          if (status) params.status = status;
         }
-        
+
         const response = await apiClient.get('/bookings/history', { params });
         return response.data;
       } catch (error) {
         console.error('Error fetching booking history:', error);
+        throw error;
+      }
+    },
+
+    // Get booking summary (totals independent of pagination)
+    getSummary: async () => {
+      try {
+        const response = await apiClient.get('/bookings/summary');
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching booking summary:', error);
         throw error;
       }
     },
@@ -257,11 +278,13 @@ const BookingService = {
       };
     },
 
-    // Map backend booking list to frontend format
+    // Map backend booking list to frontend format (supports cursor fields)
     mapBookingList: (backendResponse) => {
       const bookings = backendResponse.bookings || [];
       return {
         bookings: bookings.map(BookingService.utils.mapBookingData),
+        hasMore: typeof backendResponse.hasMore === 'boolean' ? backendResponse.hasMore : false,
+        lastId: typeof backendResponse.lastId !== 'undefined' ? backendResponse.lastId : null,
         pagination: backendResponse.pagination || {
           current_page: 1,
           per_page: 10,
@@ -273,4 +296,4 @@ const BookingService = {
   }
 };
 
-export default BookingService; 
+export default BookingService;
