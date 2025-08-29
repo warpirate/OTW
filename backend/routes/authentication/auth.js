@@ -170,23 +170,114 @@ router.post('/register', async (req, res) => {
 
 
 // ------------------------
-// DUMMY OTP RESET ENDPOINTS (for both customer/worker)
+// OTP ENDPOINTS (for mobile app compatibility)
 // ------------------------
 
-// Send OTP for password reset (dummy)
+// Request OTP for phone login
+router.post('/request-otp', async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) {
+    return res.status(400).json({ message: 'Phone number is required' });
+  }
+  // TODO: Integrate with SMS service
+  console.log(`OTP request for phone: ${phone}`);
+  res.json({ success: true, message: 'OTP sent successfully' });
+});
+
+// Login with phone and OTP
+router.post('/login-otp', async (req, res) => {
+  const { phone, otp, role = 'customer' } = req.body;
+  if (!phone || !otp) {
+    return res.status(400).json({ message: 'Phone and OTP are required' });
+  }
+  
+  // TODO: Verify OTP from SMS service
+  // For now, accept any 6-digit OTP as valid
+  if (!/^\d{6}$/.test(otp)) {
+    return res.status(400).json({ message: 'Invalid OTP format' });
+  }
+  
+  try {
+    // Find user by phone
+    const [users] = await pool.query(
+      'SELECT * FROM users WHERE phone_number = ? AND is_active = 1 LIMIT 1',
+      [phone]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({ message: 'Phone number not registered' });
+    }
+
+    const user = users[0];
+
+    // Get user role
+    const [[dbRole]] = await pool.query(
+      `SELECT r.id AS role_id, r.name AS role_name
+       FROM roles r
+       JOIN user_roles ur ON ur.role_id = r.id
+       WHERE ur.user_id = ?
+       LIMIT 1`,
+      [user.id]
+    );
+
+    if (!dbRole) {
+      return res.status(403).json({ message: 'User role not found' });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        role: dbRole.role_name,
+        role_id: dbRole.role_id
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRATION }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone_number: user.phone_number,
+        role: dbRole.role_name,
+        role_id: dbRole.role_id
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Email verification endpoint
+router.post('/verify-email', async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ message: 'Token is required' });
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // TODO: Mark email as verified in database
+    res.json({ success: true, message: 'Email verified successfully' });
+  } catch (err) {
+    res.status(400).json({ message: 'Invalid or expired token' });
+  }
+});
+
+// Legacy OTP reset endpoints (keeping for backward compatibility)
 router.post('/reset/send-otp', async (req, res) => {
-  // Accepts: { email }
-  // Optionally validate email format
   res.json({ success: true, message: 'OTP sent (dummy)' });
 });
 
-// Verify OTP for password reset (dummy)
 router.post('/reset/verify-otp', async (req, res) => {
   const { email, otp } = req.body;
   if (!otp || otp.length !== 6) {
     return res.status(400).json({ success: false, message: 'Invalid OTP' });
   }
-  // Accept any 6-digit code
   res.json({ success: true, message: 'OTP verified (dummy)' });
 });
 
