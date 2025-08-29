@@ -13,6 +13,110 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// POST /search - Search for nearby available drivers
+router.post('/search', async (req, res) => {
+  try {
+    const { pickup } = req.body;
+    
+    if (!pickup?.lat || !pickup?.lng) {
+      return res.status(400).json({ message: 'Pickup location with lat and lng is required' });
+    }
+
+    // Get ride category id
+    const [rideCategory] = await pool.query(
+      `SELECT id FROM service_categories WHERE category_type = 'driver' AND is_active = 1 LIMIT 1`
+    );
+
+    if (!rideCategory.length) {
+      return res.status(404).json({ message: 'Driver category not found' });
+    }
+
+    const rideCategoryId = rideCategory[0].id;
+
+    // Find active, verified providers with driver services
+    const [providers] = await pool.query(`
+      SELECT DISTINCT
+        p.id as provider_id,
+        p.service_radius_km,
+        p.location_lat,
+        p.location_lng,
+        u.name as provider_name,
+        pa.street_address,
+        pa.city,
+        pa.state,
+        pa.zip_code
+      FROM providers p
+      INNER JOIN provider_services ps ON p.id = ps.provider_id
+      INNER JOIN subcategories s ON ps.subcategory_id = s.id
+      INNER JOIN users u ON p.user_id = u.id
+      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
+      WHERE p.active = 1 
+        AND p.verified = 1 
+        AND s.category_id = ?
+        AND p.service_radius_km IS NOT NULL
+    `, [rideCategoryId]);
+
+    const nearbyDrivers = [];
+    
+    for (const provider of providers) {
+      let latitude = provider.location_lat;
+      let longitude = provider.location_lng;
+      
+      // If no coordinates, try to geocode the address
+      if (!latitude || !longitude) {
+        const address = `${provider.street_address}, ${provider.city}, ${provider.state}, ${provider.zip_code}, India`;
+        try {
+          const geocodeUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+          const geocodeResponse = await fetch(geocodeUrl);
+          const geocodeData = await geocodeResponse.json();
+          
+          if (geocodeData && geocodeData.length > 0) {
+            latitude = parseFloat(geocodeData[0].lat);
+            longitude = parseFloat(geocodeData[0].lon);
+            
+            // Update provider's location in database for future use
+            await pool.query(
+              'UPDATE providers SET location_lat = ?, location_lng = ? WHERE id = ?',
+              [latitude, longitude, provider.provider_id]
+            );
+          }
+        } catch (error) {
+          console.error(`Error geocoding address for provider ${provider.provider_id}:`, error);
+          continue;
+        }
+      }
+      
+      if (latitude && longitude) {
+        const distance = haversineDistance(pickup.lat, pickup.lng, latitude, longitude);
+        
+        if (distance <= provider.service_radius_km) {
+          nearbyDrivers.push({
+            provider_id: provider.provider_id,
+            provider_name: provider.provider_name,
+            lat: latitude,
+            lng: longitude,
+            distance_km: Math.round(distance * 100) / 100,
+            eta_minutes: Math.ceil(distance / 0.5) // Rough estimate: 30 km/h average speed
+          });
+        }
+      }
+    }
+
+    // Sort by distance
+    nearbyDrivers.sort((a, b) => a.distance_km - b.distance_km);
+
+    res.json({
+      drivers: nearbyDrivers,
+      total_found: nearbyDrivers.length,
+      message: nearbyDrivers.length > 0 ? 'Drivers found nearby' : 'No drivers available in your area'
+    });
+
+  } catch (error) {
+    console.error('Error searching drivers:', error);
+    res.status(500).json({ message: 'Server error while searching drivers' });
+  }
+});
+
 router.post('/book-ride', verifyToken, async (req, res) => {
   const { id: user_id, role } = req.user;
 
