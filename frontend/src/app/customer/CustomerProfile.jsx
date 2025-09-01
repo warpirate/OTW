@@ -231,7 +231,7 @@ const CustomerProfile = () => {
                 <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Personal Information
                 </h3>
-                
+
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     Full Name
@@ -241,7 +241,7 @@ const CustomerProfile = () => {
                     name="name"
                     value={profile.name || ''}
                     onChange={handleInputChange}
-                    disabled={!isEditing}
+                    disabled
                     className={`w-full px-3 py-2 border rounded-lg ${
                       isEditing
                         ? darkMode
@@ -263,7 +263,7 @@ const CustomerProfile = () => {
                     name="email"
                     value={profile.email || ''}
                     onChange={handleInputChange}
-                    disabled={!isEditing}
+                    disabled
                     className={`w-full px-3 py-2 border rounded-lg ${
                       isEditing
                         ? darkMode
@@ -307,6 +307,7 @@ const CustomerProfile = () => {
                       name="gender"
                       value={profile.gender || ''}
                       onChange={handleInputChange}
+                      disabled
                       className={`w-full px-3 py-2 border rounded-lg ${
                         darkMode
                           ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
