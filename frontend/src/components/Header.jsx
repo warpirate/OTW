@@ -49,7 +49,7 @@ const Header = () => {
       // Update booking count if authenticated
       if (isAuthenticated && user) {
         try {
-          const response = await BookingService.bookings.getHistory(1, 1);
+          const response = await BookingService.bookings.getHistory({ limit: 1 });
           const activeBookings = (response.bookings || []).filter(booking =>
             ['pending', 'confirmed', 'in_progress'].includes(booking.status?.toLowerCase())
           );

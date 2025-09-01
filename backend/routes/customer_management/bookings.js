@@ -335,7 +335,7 @@ router.post('/create', verifyToken, async (req, res) => {
 router.get('/history', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
-    const { page, limit = 10, status, lastId } = req.query;
+    const { limit = 10, status, lastId } = req.query;
 
     // Common WHERE clause
     let whereClause = 'WHERE b.user_id = ?';
@@ -345,55 +345,7 @@ router.get('/history', verifyToken, async (req, res) => {
       baseParams.push(status);
     }
 
-    // If page is provided, keep backward compatibility with offset pagination
-    if (page !== undefined) {
-      const pageNum = parseInt(page);
-      const perPage = parseInt(limit);
-      const offset = (pageNum - 1) * perPage;
-
-      const [bookings] = await pool.query(
-        `SELECT b.*, 
-                COALESCE(s.name, 'Ride Service') as service_name, 
-                COALESCE(s.description, 'Driver transportation service') as service_description,
-                CASE WHEN b.provider_id IS NOT NULL THEN 
-                  (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
-                ELSE 'Not Assigned' END as provider_name,
-                CASE 
-                  WHEN b.booking_type = 'ride' THEN 
-                    CONCAT(rb.pickup_address, ' → ', rb.drop_address)
-                  ELSE sb.address 
-                END as display_address,
-                CASE 
-                  WHEN b.booking_type = 'ride' THEN b.estimated_cost
-                  ELSE b.price 
-                END as display_price
-         FROM bookings b
-         LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
-         LEFT JOIN subcategories s ON s.id = b.subcategory_id
-         LEFT JOIN service_bookings sb ON sb.booking_id = b.id
-         ${whereClause}
-         ORDER BY b.created_at DESC
-         LIMIT ? OFFSET ?`,
-        [...baseParams, perPage, offset]
-      );
-
-      const [countResult] = await pool.query(
-        `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
-        baseParams
-      );
-
-      return res.json({
-        bookings,
-        pagination: {
-          current_page: pageNum,
-          per_page: perPage,
-          total: countResult[0].total,
-          total_pages: Math.ceil(countResult[0].total / perPage)
-        }
-      });
-    }
-
-    // Cursor-based pagination (default): order by id DESC and use lastId cursor
+    // Cursor-based pagination only: order by id DESC and use lastId cursor
     const perPage = parseInt(limit);
     const fetchLimit = perPage + 1; // fetch one extra to know if there's more
 

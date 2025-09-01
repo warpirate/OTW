@@ -103,7 +103,13 @@ const Bookings = () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
+      if (!lastId) {
+        // Nothing more to load
+        setHasMore(false);
+        return;
+      }
       const response = await BookingService.bookings.getHistory({ limit: 10, lastId });
+
       const mappedData = BookingService.utils.mapBookingList(response);
       const newItems = mappedData.bookings || [];
 
