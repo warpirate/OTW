@@ -67,6 +67,10 @@ const Bookings = () => {
           navigate('/login');
           return;
         }
+
+        // 1) Load booking history first; this is critical for page render
+        const historyRes = await BookingService.bookings.getHistory({ limit: 10 });
+
         const [historyRes, summaryRes] = await Promise.all([
           BookingService.bookings.getHistory({ limit: 10 }),
           BookingService.bookings.getSummary()
@@ -78,6 +82,32 @@ const Bookings = () => {
         setHasMore(!!mappedData.hasMore);
         setLastId(mappedData.lastId ?? null);
 
+        // 2) Try to load summary; if it fails (e.g., 404), fall back gracefully
+        try {
+          const summaryRes = await BookingService.bookings.getSummary();
+          if (summaryRes && typeof summaryRes === 'object') {
+            setSummary({
+              totalBookings: summaryRes.totalBookings ?? 0,
+              activeBookings: summaryRes.activeBookings ?? 0,
+              totalSpent: summaryRes.totalSpent ?? 0
+            });
+          } else {
+            // Fallback: at least show total from pagination if available
+            setSummary(prev => ({
+              ...prev,
+              totalBookings: historyRes?.pagination?.total ?? prev.totalBookings
+            }));
+          }
+        } catch (e) {
+          // If summary is unavailable, do not block the page; set reasonable defaults
+          setSummary(prev => ({
+            ...prev,
+            totalBookings: historyRes?.pagination?.total ?? prev.totalBookings
+          }));
+        } finally {
+          setSummaryLoading(false);
+        }
+
         if (summaryRes && typeof summaryRes === 'object') {
           setSummary({
             totalBookings: summaryRes.totalBookings ?? 0,
@@ -86,6 +116,7 @@ const Bookings = () => {
           });
         }
         setSummaryLoading(false);
+
         setLoading(false);
       } catch (error) {
         console.error('Error loading bookings:', error);
