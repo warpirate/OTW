@@ -1296,4 +1296,93 @@ router.put('/worker/bookings/:bookingId/cancel', verifyToken, async (req, res) =
   }
 });
 
+// Dashboard Stats endpoint
+router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get provider_id for this worker
+    const [providerResult] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (providerResult.length === 0) {
+      return res.status(404).json({ message: 'Provider profile not found' });
+    }
+
+    const providerId = providerResult[0].id;
+
+    // Get today's stats
+    const [todayStats] = await pool.query(
+      `SELECT 
+        COUNT(*) as today_jobs,
+        COALESCE(SUM(CASE WHEN b.booking_type = 'ride' THEN b.estimated_cost ELSE b.price END), 0) as today_earnings
+       FROM bookings b
+       WHERE b.provider_id = ? 
+       AND b.service_status = 'completed'
+       AND DATE(b.created_at) = CURDATE()`,
+      [providerId]
+    );
+
+    // Get this week's stats
+    const [weekStats] = await pool.query(
+      `SELECT 
+        COUNT(*) as this_week_jobs,
+        COALESCE(SUM(CASE WHEN b.booking_type = 'ride' THEN b.estimated_cost ELSE b.price END), 0) as this_week_earnings
+       FROM bookings b
+       WHERE b.provider_id = ? 
+       AND b.service_status = 'completed'
+       AND YEARWEEK(b.created_at, 1) = YEARWEEK(CURDATE(), 1)`,
+      [providerId]
+    );
+
+    // Get total stats
+    const [totalStats] = await pool.query(
+      `SELECT 
+        COUNT(*) as total_jobs,
+        COALESCE(SUM(CASE WHEN b.booking_type = 'ride' THEN b.estimated_cost ELSE b.price END), 0) as total_earnings
+       FROM bookings b
+       WHERE b.provider_id = ? 
+       AND b.service_status = 'completed'`,
+      [providerId]
+    );
+
+    // Get rating
+    const [ratingResult] = await pool.query(
+      'SELECT rating FROM providers WHERE id = ?',
+      [providerId]
+    );
+
+    // Get active jobs count
+    const [activeJobsResult] = await pool.query(
+      `SELECT COUNT(*) as active_jobs
+       FROM bookings b
+       WHERE b.provider_id = ? 
+       AND b.service_status IN ('assigned', 'in_progress')`,
+      [providerId]
+    );
+
+    const stats = {
+      today_earnings: parseFloat(todayStats[0].today_earnings || 0),
+      today_jobs: parseInt(todayStats[0].today_jobs || 0),
+      this_week_earnings: parseFloat(weekStats[0].this_week_earnings || 0),
+      this_week_jobs: parseInt(weekStats[0].this_week_jobs || 0),
+      total_earnings: parseFloat(totalStats[0].total_earnings || 0),
+      total_jobs: parseInt(totalStats[0].total_jobs || 0),
+      rating: parseFloat(ratingResult[0]?.rating || 0),
+      active_jobs: parseInt(activeJobsResult[0].active_jobs || 0)
+    };
+
+    res.json(stats);
+
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch dashboard stats',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;
