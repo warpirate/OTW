@@ -87,16 +87,16 @@ const WorkerDashboard = () => {
       // Fetch dashboard stats
       const statsResponse = await WorkerService.getDashboardStats();
       setStats({
-        totalJobs: statsResponse.total_bookings || 0,
-        completedJobs: statsResponse.completed_bookings || 0,
-        pendingJobs: statsResponse.pending_bookings || 0,
+        totalJobs: statsResponse.total_jobs || 0,
+        completedJobs: statsResponse.total_jobs || 0,
+        pendingJobs: statsResponse.active_jobs || 0,
         totalEarnings: statsResponse.total_earnings || 0,
-        rating: statsResponse.average_rating || 0,
+        rating: statsResponse.rating || 0,
         totalReviews: statsResponse.total_reviews || 0
       });
 
-      // Fetch recent jobs
-      const jobsResponse = await WorkerService.getRecentJobs(5);
+      // Fetch recent jobs (provider categories)
+      const jobsResponse = await WorkerService.getRecentBookings(5);
       const formattedJobs = jobsResponse.bookings?.map(booking => ({
         id: booking.id,
         title: booking.service_name || booking.subcategory_name || 'Service',
