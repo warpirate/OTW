@@ -430,11 +430,15 @@ try {
 
   const [bookings] = await pool.query(
     `SELECT b.*, 
+          
             COALESCE(s.name, 'Ride Service') as service_name, 
             COALESCE(s.description, 'Driver transportation service') as service_description,
             CASE WHEN b.provider_id IS NOT NULL THEN 
               (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
             ELSE 'Not Assigned' END as provider_name,
+            CASE WHEN b.provider_id IS NOT NULL THEN 
+              (SELECT u.phone_number FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
+            ELSE NULL END as provider_phone,
             CASE 
               WHEN b.booking_type = 'ride' THEN 
                 CONCAT(rb.pickup_address, ' → ', rb.drop_address)
@@ -445,6 +449,7 @@ try {
               ELSE b.price 
             END as display_price
      FROM bookings b
+     
      LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
      LEFT JOIN service_bookings sb ON sb.booking_id = b.id
      LEFT JOIN subcategories s ON s.id = b.subcategory_id
