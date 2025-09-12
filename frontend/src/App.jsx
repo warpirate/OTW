@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AuthService from './app/services/auth.service';
 // jwtDecode import removed as we're using AuthService now
@@ -7,57 +7,57 @@ import 'react-toastify/dist/ReactToastify.css';
 import { CartProvider } from './app/contexts/CartContext';
 import { initializeTheme } from './app/utils/themeUtils';
 
-// Customer Components
-import CustomerLayout from './app/layouts/CustomerLayout';
-import LandingPage from './app/customer/LandingPage';
-import CustomerLogin from './app/auth/CustomerLogin';
-import CustomerSignup from './app/auth/CustomerSignup';
-import ForgotPassword from './app/auth/ForgotPassword';
-import ResetPassword from './app/auth/ResetPassword';
-import CategoryServices from './app/customer/CategoryServices';
-import Cart from './app/customer/Cart';
-import CheckoutSuccess from './app/customer/CheckoutSuccess';
-import Booking from './app/customer/Booking';
-import BookingSuccess from './app/customer/BookingSuccess';
-import CustomerProfile from './app/customer/CustomerProfile';
-import Bookings from './app/customer/Bookings';
-import SearchResults from './app/customer/SearchResults';
-import AboutUs from './app/customer/AboutUs';
-import Careers from './app/customer/Careers';
-import Blog from './app/customer/Blog';
-import Contact from './app/customer/Contact';
-import Terms from './app/customer/Terms';
-import Privacy from './app/customer/Privacy';
-import DriverBooking from './app/customer/DriverBooking';
+// Lazy-loaded components (route-level code splitting)
+const CustomerLayout = lazy(() => import('./app/layouts/CustomerLayout'));
+const LandingPage = lazy(() => import('./app/customer/LandingPage'));
+const CustomerLogin = lazy(() => import('./app/auth/CustomerLogin'));
+const CustomerSignup = lazy(() => import('./app/auth/CustomerSignup'));
+const ForgotPassword = lazy(() => import('./app/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./app/auth/ResetPassword'));
+const CategoryServices = lazy(() => import('./app/customer/CategoryServices'));
+const Cart = lazy(() => import('./app/customer/Cart'));
+const CheckoutSuccess = lazy(() => import('./app/customer/CheckoutSuccess'));
+const Booking = lazy(() => import('./app/customer/Booking'));
+const BookingSuccess = lazy(() => import('./app/customer/BookingSuccess'));
+const CustomerProfile = lazy(() => import('./app/customer/CustomerProfile'));
+const Bookings = lazy(() => import('./app/customer/Bookings'));
+const SearchResults = lazy(() => import('./app/customer/SearchResults'));
+const AboutUs = lazy(() => import('./app/customer/AboutUs'));
+const Careers = lazy(() => import('./app/customer/Careers'));
+const Blog = lazy(() => import('./app/customer/Blog'));
+const Contact = lazy(() => import('./app/customer/Contact'));
+const Terms = lazy(() => import('./app/customer/Terms'));
+const Privacy = lazy(() => import('./app/customer/Privacy'));
+const DriverBooking = lazy(() => import('./app/customer/DriverBooking'));
 
-// Admin Components
-import AdminLayout from './app/layouts/AdminLayout';
-import AdminLogin from './app/auth/AdminLogin';
-import AdminDashboard from './app/features/admin/Dashboard';
-import UserManagement from './app/features/admin/UserManagement';
-import ProviderDetailsPage from './app/features/admin/ProviderDetailsPage';
-import CategoryManagement from './app/features/admin/CategoryManagement';
-import DisputeManagement from './app/features/admin/DisputeManagement';
+// Admin
+const AdminLayout = lazy(() => import('./app/layouts/AdminLayout'));
+const AdminLogin = lazy(() => import('./app/auth/AdminLogin'));
+const AdminDashboard = lazy(() => import('./app/features/admin/Dashboard'));
+const UserManagement = lazy(() => import('./app/features/admin/UserManagement'));
+const ProviderDetailsPage = lazy(() => import('./app/features/admin/ProviderDetailsPage'));
+const CategoryManagement = lazy(() => import('./app/features/admin/CategoryManagement'));
+const DisputeManagement = lazy(() => import('./app/features/admin/DisputeManagement'));
 
-// SuperAdmin Components
-import SuperAdminLayout from './app/layouts/SuperAdminLayout';
-import SuperAdminLogin from './app/auth/SuperAdminLogin';
-import SuperAdminDashboard from './app/features/superadmin/Dashboard';
-import AdminManagement from './app/features/superadmin/AdminManagement';
-import SystemSettings from './app/features/superadmin/SystemSettings';
-import AuditLogs from './app/features/superadmin/AuditLogs';
-import Reports from './app/features/superadmin/Reports';
+// SuperAdmin
+const SuperAdminLayout = lazy(() => import('./app/layouts/SuperAdminLayout'));
+const SuperAdminLogin = lazy(() => import('./app/auth/SuperAdminLogin'));
+const SuperAdminDashboard = lazy(() => import('./app/features/superadmin/Dashboard'));
+const AdminManagement = lazy(() => import('./app/features/superadmin/AdminManagement'));
+const SystemSettings = lazy(() => import('./app/features/superadmin/SystemSettings'));
+const AuditLogs = lazy(() => import('./app/features/superadmin/AuditLogs'));
+const Reports = lazy(() => import('./app/features/superadmin/Reports'));
 
-// Worker Components
-import WorkerLayout from './app/layouts/WorkerLayout';
-import WorkerLogin from './app/auth/WorkerLogin';
-import WorkerSignup from './app/auth/WorkerSignup';
-import WorkerDashboard from './app/features/worker/WorkerDashboard';
-import WorkerJobs from './app/features/worker/WorkerJobs';
-import WorkerSchedule from './app/features/worker/WorkerSchedule';
-import WorkerProfile from './app/features/worker/WorkerProfile';
-import WorkerSettings from './app/features/worker/WorkerSettings';
-import WorkerDocuments from './app/features/worker/WorkerDocuments';
+// Worker
+const WorkerLayout = lazy(() => import('./app/layouts/WorkerLayout'));
+const WorkerLogin = lazy(() => import('./app/auth/WorkerLogin'));
+const WorkerSignup = lazy(() => import('./app/auth/WorkerSignup'));
+const WorkerDashboard = lazy(() => import('./app/features/worker/WorkerDashboard'));
+const WorkerJobs = lazy(() => import('./app/features/worker/WorkerJobs'));
+const WorkerSchedule = lazy(() => import('./app/features/worker/WorkerSchedule'));
+const WorkerProfile = lazy(() => import('./app/features/worker/WorkerProfile'));
+const WorkerSettings = lazy(() => import('./app/features/worker/WorkerSettings'));
+const WorkerDocuments = lazy(() => import('./app/features/worker/WorkerDocuments'));
 
 // Protected Route Components
 const CustomerProtectedRoute = ({ children }) => {
@@ -324,10 +324,30 @@ function App() {
     }
   }, []);
 
+  // Idle-time prefetch for a few high-traffic routes to improve subsequent navigation
+  useEffect(() => {
+    const id = setTimeout(() => {
+      Promise.all([
+        import('./app/auth/CustomerLogin'),
+        import('./app/auth/CustomerSignup'),
+        import('./app/customer/CategoryServices'),
+        import('./app/customer/Cart'),
+      ]).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(id);
+  }, []);
+
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <CartProvider>
         <div className="App">
+          <Suspense
+            fallback={
+              <div className="min-h-[40vh] flex items-center justify-center">
+                <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-brand border-t-transparent"></div>
+              </div>
+            }
+          >
           <Routes>
             {/* Standalone Info Pages */}
             <Route path="/about-us" element={<AboutUs />} />
@@ -430,6 +450,7 @@ function App() {
               element={isSuperAdminDomain ? <Navigate to="/superadmin/login" replace /> : isAdminDomain ? <Navigate to="/admin/login" replace /> : <Navigate to="/" replace />}
             />
           </Routes>
+          </Suspense>
         </div>
         <ToastContainer
           position="top-right"
