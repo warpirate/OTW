@@ -6,6 +6,7 @@ import { LandingPageService } from '../app/services/landing_page.service';
 import BookingService from '../app/services/booking.service';
 import { isDarkMode, addThemeListener, toggleTheme } from '../app/utils/themeUtils';
 import { useCart } from '../app/contexts/CartContext';
+import Logo from './Logo';
 
 const Header = () => {
   const navigate = useNavigate();
@@ -197,14 +198,13 @@ const Header = () => {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <div 
-                className="flex items-center space-x-1 cursor-pointer" 
+              <button
+                className="flex items-center cursor-pointer focus:outline-none"
                 onClick={() => navigate('/')}
+                aria-label="OMW Home"
               >
-                <span className="text-2xl font-bold text-orange-500">O</span>
-                <span className="text-2xl font-bold text-blue-500">T</span>
-                <span className="text-2xl font-bold text-green-500">W</span>
-              </div>
+                <Logo size="xl" alt="OMW logo" className="transition-opacity hover:opacity-90" />
+              </button>
             </div>
 
             {/* Search Bar (visible on wider screens) */}

@@ -1051,7 +1051,7 @@ const WorkerSignup = () => {
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-4">Become a Worker</h1>
             <p className="text-xl text-blue-100 mb-8">
-              Join thousands of professionals earning with OTW
+              Join thousands of professionals earning with OMW
             </p>
             
             {/* Steps indicator */}
