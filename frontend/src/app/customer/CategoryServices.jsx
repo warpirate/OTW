@@ -163,7 +163,7 @@ const CategoryServices = () => {
                         className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${darkMode ? 'bg-purple-900/30 text-purple-300 hover:bg-purple-900/50 border border-purple-700' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
                       >
                         <ShoppingCart className="h-4 w-4" />
-                        <span>{addingToCart[service.id] ? 'Adding...' : 'Add to Cart'}</span>
+                        <span>{addingToCart[service.id] ? 'Adding...' : 'Add Request'}</span>
                       </button>
                     </div>
                   </div>

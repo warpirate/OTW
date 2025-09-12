@@ -28,7 +28,7 @@ const Privacy = () => {
             Privacy Policy
           </h1>
           <div className={`max-w-2xl space-y-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            <p>Your privacy is important to us. This policy explains how OTW collects, uses, and protects your information.</p>
+            <p>Your privacy is important to us. This policy explains how OMW collects, uses, and protects your information.</p>
             <h2 className={`text-2xl font-semibold mt-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               1. Information We Collect
             </h2>
@@ -48,7 +48,7 @@ const Privacy = () => {
             <h2 className={`text-2xl font-semibold mt-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               5. Changes to Policy
             </h2>
-            <p>We may update this policy. Continued use of OTW means you accept the new policy.</p>
+            <p>We may update this policy. Continued use of OMW means you accept the new policy.</p>
           </div>
         </div>
       </div>

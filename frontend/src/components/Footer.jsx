@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Mail } from 'lucide-react';
+import Logo from './Logo';
 
 const Footer = () => {
   const navigate = useNavigate();
@@ -11,9 +12,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           <div>
             <div className="flex items-center space-x-1 mb-6">
-              <span className="text-2xl font-bold text-orange-500">O</span>
-              <span className="text-2xl font-bold text-blue-500">T</span>
-              <span className="text-2xl font-bold text-green-500">W</span>
+              <Logo size="lg" alt="OMW" className="shadow-md" />
             </div>
             <p className="text-gray-400 mb-8">
               Your trusted partner for professional home services.
@@ -75,7 +74,7 @@ const Footer = () => {
         </div>
         
         <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400 text-sm">
-          <p>&copy; {new Date().getFullYear()} OTW. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} OMW. All rights reserved.</p>
         </div>
       </div>
     </footer>

@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import Header from '../../components/Header';
+import Logo from '../../components/Logo';
 
 const CustomerSignup = () => {
   const navigate = useNavigate();
@@ -136,7 +137,7 @@ const CustomerSignup = () => {
       const response = await AuthService.register(userData);
       
       // Registration successful
-      toast.success("Registration successful! Welcome to OTW.");
+      toast.success("Registration successful! Welcome to OMW.");
       navigate('/'); // Redirect to home page after successful signup
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
@@ -177,19 +178,15 @@ const CustomerSignup = () => {
                 Back to Home
               </Link>
               <h2 className="text-3xl font-bold text-[var(--text-primary)]">Create Account</h2>
-              <p className="mt-2 text-[var(--text-secondary)]">Join OTW - On The Way and get started today</p>
+              <p className="mt-2 text-[var(--text-secondary)]">Join OMW and get started today</p>
             </div>
           </div>
 
           {/* Right Side: Form Content */}
           <div className="lg:w-1/2">
-            {/* OTW Logo */}
+            {/* Logo */}
             <div className="flex items-center mb-6">
-              <div className="flex items-center space-x-1 mr-3">
-                <span className="text-3xl font-bold text-orange-500">O</span>
-                <span className="text-3xl font-bold text-blue-500">T</span>
-                <span className="text-3xl font-bold text-green-500">W</span>
-              </div>
+              <Logo size="lg" alt="OMW" className="mr-3" />
               <span className="text-yellow-400 text-2xl">👋</span>
             </div>
             

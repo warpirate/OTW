@@ -116,7 +116,7 @@ const WorkerLogin = () => {
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-4">Join Our Worker Network</h1>
             <p className="text-xl text-blue-100 mb-6">
-              Start earning with your skills and grow your business with OTW
+              Start earning with your skills and grow your business with OMW
             </p>
             <div className="space-y-4">
               <div className="flex items-center space-x-3">

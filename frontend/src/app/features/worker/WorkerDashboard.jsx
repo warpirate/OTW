@@ -153,7 +153,7 @@ const WorkerDashboard = () => {
             {/* Logo */}
             <div className="flex items-center space-x-4">
               <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                OTW Worker
+                OMW Worker
               </h1>
             </div>
 
