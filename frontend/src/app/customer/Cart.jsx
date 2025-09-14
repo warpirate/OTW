@@ -104,7 +104,7 @@ const Cart = () => {
 
   // Handle clear cart
   const handleClearCart = async () => {
-    if (window.confirm('Are you sure you want to clear your cart?')) {
+    if (window.confirm('Are you sure you want to clear your requests?')) {
       await clearCart();
     }
   };
@@ -120,7 +120,7 @@ const Cart = () => {
     }
 
     if (cart.items.length === 0) {
-      toast.error('Your cart is empty');
+      toast.error('Your requests are empty');
       return;
     }
 
@@ -150,10 +150,10 @@ const Cart = () => {
               </div>
             </div>
             <h1 className={`text-2xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Your cart is empty
+              Your requests are empty
             </h1>
             <p className={`mb-8 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Looks like you haven't added any services to your cart yet.
+              Looks like you haven't added any services yet.
             </p>
             <button 
               onClick={() => navigate('/')}
@@ -228,7 +228,7 @@ const Cart = () => {
             <div className={`rounded-lg shadow-md ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} border overflow-hidden`}>
               <div className={`p-6 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  Your Cart ({cart.items.length} {cart.items.length === 1 ? 'item' : 'items'})
+                  Your Requests ({cart.items.length} {cart.items.length === 1 ? 'item' : 'items'})
                 </h1>
               </div>
               

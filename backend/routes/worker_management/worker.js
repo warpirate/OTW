@@ -532,14 +532,13 @@ router.put('/worker/profile', verifyToken, async (req, res) => {
       'emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_phone'
     ];
     
-    
     const filteredData = {};
     Object.keys(updateData).forEach(key => {
       if (allowedFields.includes(key) && updateData[key] !== undefined) {
         filteredData[key] = updateData[key];
       }
     });
-    
+
     if (Object.keys(filteredData).length === 0) {
       return res.status(400).json({ 
         message: 'No valid fields to update',
@@ -780,7 +779,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           s.description as service_description,
           sc.name as category_name
         FROM booking_requests br
-        INNER JOIN bookings b ON br.booking_id = b.id
+        LEFT JOIN bookings b ON br.booking_id = b.id
         INNER JOIN users u ON b.user_id = u.id
         LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
         LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
@@ -1183,15 +1182,18 @@ router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
               (SELECT u.phone_number FROM users u WHERE u.id = b.user_id) as customer_phone,
               CASE 
                 WHEN b.booking_type = 'ride' THEN 
-                  CONCAT(b.pickup_address, ' → ', b.drop_address)
-                ELSE b.address 
+                  CONCAT(rb.pickup_address, ' → ', rb.drop_address)
+                ELSE sb.address 
               END as display_address,
               CASE 
                 WHEN b.booking_type = 'ride' THEN b.estimated_cost
                 ELSE b.price 
               END as display_price
        FROM bookings b
+      
+       LEFT JOIN service_bookings sb ON sb.booking_id = b.id
        LEFT JOIN subcategories s ON s.id = b.subcategory_id
+       LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
        ${whereClause}
        ORDER BY b.created_at DESC
        LIMIT ? OFFSET ?`,
@@ -1218,6 +1220,61 @@ router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
     console.error('Get assigned bookings error:', error);
     res.status(500).json({ 
       message: 'Failed to retrieve assigned bookings',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// Recent Bookings for worker (by provider categories)
+router.get('/worker/recent-bookings', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 5 } = req.query;
+
+    // Get provider_id for this worker
+    const [providerRows] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+      [userId]
+    );
+
+    if (providerRows.length === 0) {
+      return res.status(404).json({ message: 'Provider profile not found' });
+    }
+
+    const providerId = providerRows[0].id;
+
+    // Fetch recent pending booking requests for this provider
+    const perPage = Math.max(1, Math.min(50, parseInt(limit) || 5));
+    const [bookings] = await pool.query(
+      `SELECT 
+          b.*, 
+          u.name AS customer_name,
+          u.phone_number AS customer_phone,
+          COALESCE(s.name, 'Ride Service') AS service_name,
+          COALESCE(s.description, 'Driver transportation service') AS service_description,
+          CASE WHEN b.booking_type = 'ride' THEN 
+            CONCAT(rb.pickup_address, ' → ', rb.drop_address)
+          ELSE sb.address END AS display_address,
+          CASE WHEN b.booking_type = 'ride' THEN b.estimated_cost ELSE b.price END AS display_price
+       FROM booking_requests br
+       JOIN bookings b ON br.booking_id = b.id
+       JOIN users u ON b.user_id = u.id
+       LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
+       LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
+       LEFT JOIN subcategories s ON b.subcategory_id = s.id
+       WHERE br.provider_id = ?
+         AND br.status = 'pending'
+         AND b.service_status = 'pending'
+       ORDER BY br.requested_at DESC
+       LIMIT ?`,
+      [providerId, perPage]
+    );
+
+    return res.json({ bookings });
+  } catch (error) {
+    console.error('Get recent bookings error:', error);
+    return res.status(500).json({ 
+      message: 'Failed to retrieve recent bookings',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
@@ -1348,9 +1405,9 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
       [providerId]
     );
 
-    // Get rating
+    // Get rating and reviews count (from providers aggregates)
     const [ratingResult] = await pool.query(
-      'SELECT rating FROM providers WHERE id = ?',
+      'SELECT COALESCE(average_rating, 0) AS average_rating, COALESCE(rating_count, 0) AS rating_count FROM providers WHERE id = ?',
       [providerId]
     );
 
@@ -1359,7 +1416,7 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
       `SELECT COUNT(*) as active_jobs
        FROM bookings b
        WHERE b.provider_id = ? 
-       AND b.service_status IN ('assigned', 'in_progress')`,
+       AND b.service_status IN ('assigned', 'in_progress', 'pending')`,
       [providerId]
     );
 
@@ -1370,7 +1427,8 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
       this_week_jobs: parseInt(weekStats[0].this_week_jobs || 0),
       total_earnings: parseFloat(totalStats[0].total_earnings || 0),
       total_jobs: parseInt(totalStats[0].total_jobs || 0),
-      rating: parseFloat(ratingResult[0]?.rating || 0),
+      rating: parseFloat(ratingResult[0]?.average_rating || 0),
+      total_reviews: parseInt(ratingResult[0]?.rating_count || 0),
       active_jobs: parseInt(activeJobsResult[0].active_jobs || 0)
     };
 

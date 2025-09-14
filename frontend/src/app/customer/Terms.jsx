@@ -28,11 +28,11 @@ const Terms = () => {
             Terms & Conditions
           </h1>
           <div className={`max-w-2xl space-y-4 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            <p>Welcome to OTW! By using our website and services, you agree to the following terms and conditions. Please read them carefully.</p>
+            <p>Welcome to OMW! By using our website and services, you agree to the following terms and conditions. Please read them carefully.</p>
             <h2 className={`text-2xl font-semibold mt-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               1. Use of Service
             </h2>
-            <p>You agree to use OTW only for lawful purposes and in accordance with these terms.</p>
+            <p>You agree to use OMW only for lawful purposes and in accordance with these terms.</p>
             <h2 className={`text-2xl font-semibold mt-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               2. User Accounts
             </h2>
@@ -40,15 +40,15 @@ const Terms = () => {
             <h2 className={`text-2xl font-semibold mt-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               3. Service Provider Responsibility
             </h2>
-            <p>Service providers are independent contractors. OTW is not liable for their actions.</p>
+            <p>Service providers are independent contractors. OMW is not liable for their actions.</p>
             <h2 className={`text-2xl font-semibold mt-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               4. Limitation of Liability
             </h2>
-            <p>OTW is not liable for any damages arising from the use of our services.</p>
+            <p>OMW is not liable for any damages arising from the use of our services.</p>
             <h2 className={`text-2xl font-semibold mt-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               5. Changes to Terms
             </h2>
-            <p>We may update these terms at any time. Continued use of OTW means you accept the new terms.</p>
+            <p>We may update these terms at any time. Continued use of OMW means you accept the new terms.</p>
           </div>
         </div>
       </div>

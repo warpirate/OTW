@@ -15,8 +15,8 @@ const BookingSuccess = () => {
   
   // Generate order number from booking IDs
   const orderNumber = bookingIds && bookingIds.length > 0 
-    ? `OTW-${bookingIds[0].toString().padStart(6, '0')}`
-    : `OTW-${Math.floor(100000 + Math.random() * 900000)}`;
+    ? `OMW-${bookingIds[0].toString().padStart(6, '0')}`
+    : `OMW-${Math.floor(100000 + Math.random() * 900000)}`;
 
   // Redirect if no booking data
   useEffect(() => {

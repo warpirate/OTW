@@ -8,7 +8,7 @@ import Footer from '../../components/Footer';
 const CheckoutSuccess = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(isDarkMode());
-  const orderNumber = `OTW-${Math.floor(100000 + Math.random() * 900000)}`;
+  const orderNumber = `OMW-${Math.floor(100000 + Math.random() * 900000)}`;
 
   return (
     <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>

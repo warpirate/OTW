@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import Header from '../../components/Header';
+import Logo from '../../components/Logo';
 
 const CustomerLogin = () => {
   const navigate = useNavigate();
@@ -106,7 +107,7 @@ const CustomerLogin = () => {
                 Back to Home
               </Link>
               <h2 className="text-3xl font-bold text-[var(--text-primary)]">Welcome Back</h2>
-              <p className="mt-2 text-[var(--text-secondary)]">Sign in to your OTW - On The Way account</p>
+              <p className="mt-2 text-[var(--text-secondary)]">Sign in to your OMW account</p>
             </div>
           </div>
 
@@ -114,13 +115,9 @@ const CustomerLogin = () => {
           <div className="lg:w-1/2">
             {/* Login Form */}
             <div className="bg-[var(--bg-primary)] rounded-xl shadow-lg p-8 border border-[var(--border-color)]">
-              {/* OTW Logo */}
+              {/* Logo */}
               <div className="flex items-center mb-6">
-                <div className="flex items-center space-x-1 mr-3">
-                  <span className="text-3xl font-bold text-orange-500">O</span>
-                  <span className="text-3xl font-bold text-blue-500">T</span>
-                  <span className="text-3xl font-bold text-green-500">W</span>
-                </div>
+                <Logo size="lg" alt="OMW" className="mr-3" />
                 <span className="text-yellow-400 text-2xl">👋</span>
               </div>
               <form onSubmit={handleLogin} className="space-y-6">
