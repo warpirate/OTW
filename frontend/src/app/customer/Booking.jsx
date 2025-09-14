@@ -207,6 +207,15 @@ const Booking = () => {
         }))
       });
 
+      // If slot is not available due to capacity or past time, mark it unavailable and notify
+      if (availabilityData && availabilityData.slot_available === false) {
+        setTimeSlots(prev => prev.map(s => s.time === timeSlot ? { ...s, available: false } : s));
+        setSelectedTimeSlot(null);
+        setWorkerAvailability({ male: false, female: false, any: false });
+        toast.warn(availabilityData.reason || 'Selected time slot is not available. Please pick another slot.');
+        return;
+      }
+
       setWorkerAvailability({
         male: availabilityData.male_available || false,
         female: availabilityData.female_available || false,
@@ -405,8 +414,23 @@ const Booking = () => {
         toast.error('Please select date and time');
         return;
       }
+      if (!selectedTimeSlot.available) {
+        toast.error('Selected time slot is not available. Please choose a different slot.');
+        return;
+      }
       if (!workerPreference) {
         toast.error('Please select a worker preference');
+        return;
+      }
+      // Ensure preferred worker gender is available for this slot
+      const avail = workerAvailability;
+      const ok = workerPreference === 'any'
+        ? !!avail.any
+        : workerPreference === 'male'
+          ? !!avail.male
+          : !!avail.female;
+      if (!ok) {
+        toast.error('Selected worker preference is not available for this time slot. Please adjust preference or pick another time.');
         return;
       }
       setCurrentStep('payment');
