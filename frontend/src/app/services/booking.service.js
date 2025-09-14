@@ -115,6 +115,17 @@ const BookingService = {
     }
   },
 
+  // Worker Availability Management
+  checkWorkerAvailability: async (availabilityData) => {
+    try {
+      const response = await apiClient.post('/bookings/check-worker-availability', availabilityData);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking worker availability:', error);
+      throw error;
+    }
+  },
+
   // Booking Management
   bookings: {
     // Create a new booking

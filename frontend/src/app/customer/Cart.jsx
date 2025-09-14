@@ -245,7 +245,7 @@ const Cart = () => {
                           {item.description}
                         </p>
                         <p className={`text-lg font-bold mt-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          ${item.price}
+                          ₹{item.price}
                         </p>
                       </div>
                       
@@ -296,7 +296,7 @@ const Cart = () => {
                       Total ({cart.items.length} {cart.items.length === 1 ? 'item' : 'items'})
                     </p>
                     <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      ${cart.total}
+                      ₹{cart.total}
                     </p>
                   </div>
                 </div>
@@ -323,7 +323,7 @@ const Cart = () => {
                         </p>
                       </div>
                       <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        ${(item.price * item.quantity).toFixed(2)}
+                        ₹{(item.price * item.quantity).toFixed(2)}
                       </p>
                     </div>
                   ))}
@@ -334,7 +334,7 @@ const Cart = () => {
                         Total
                       </span>
                       <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        ${cart.total}
+                        ₹{cart.total}
                       </span>
                     </div>
                   </div>
