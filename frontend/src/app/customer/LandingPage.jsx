@@ -39,6 +39,8 @@ import {
   LogOut,
   ChevronDown
 } from 'lucide-react';
+import { getTypeImageSrc, getCategoryImageSrc, getServiceImageSrc } from '../utils/infographicMap';
+import InfographicIcon from '../../components/InfographicIcon';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -408,11 +410,8 @@ const LandingPage = () => {
                           }}
                           className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600 border border-gray-600' : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}
                         >
-                          <div className={`${darkMode ? 'bg-gray-600 border border-gray-500' : 'bg-white border border-gray-100'} rounded-full p-2 mb-2`}>
-                            {category.id === 'maintenance' && <Wrench className="h-6 w-6 text-brand" />}
-                            {category.id === 'maid' && <Sparkles className="h-6 w-6 text-brand" />}
-                            {category.id === 'driver' && <Car className="h-6 w-6 text-brand" />}
-                          </div>
+                          {/* icon tile */}
+                          <InfographicIcon src={getTypeImageSrc(category.id)} alt={`${category.name} icon`} size="xl" tone="neutral" className="mb-2 shadow-md" />
                           <span className={`text-sm font-medium ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>{category.name}</span>
                         </div>
                       ))
@@ -507,13 +506,7 @@ const LandingPage = () => {
                   >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
-                            <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-brand-50 border border-gray-200'}`}>
-                              {selectedCategory.icon && <selectedCategory.icon className="service-icon" />}
-                            </div>
-                            <div className="flex items-center">
-                              <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                              <span className={`ml-1 text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{(4 + Math.random()).toFixed(1)}</span>
-                            </div>
+                            <InfographicIcon src={getServiceImageSrc(subcategory)} alt={`${subcategory.name} icon`} size="xl" tone="brand" className="shadow-md" />
                           </div>
                           <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{subcategory.name}</h3>
                           <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -633,10 +626,8 @@ const LandingPage = () => {
                                 }}
                               >
                                 <div className="p-6">
-                                  <div className="flex justify-between items-start mb-4">
-                                    <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-brand-50 border border-gray-200'}`}>
-                                      <IconComponent className="service-icon" />
-                                    </div>
+                                  <div className="mb-4">
+                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="xl" tone="brand" className="shadow-md" />
                                   </div>
                                   <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
                                   <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>

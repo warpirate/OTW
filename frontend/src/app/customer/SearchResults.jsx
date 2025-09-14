@@ -3,6 +3,8 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, Wrench, Sparkles, MapPin, Star, ArrowLeft } from 'lucide-react';
 import { LandingPageService } from '../services/landing_page.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
+import { getCategoryImageSrc, getServiceImageSrc } from '../utils/infographicMap';
+import InfographicIcon from '../../components/InfographicIcon';
 
 const SearchResults = () => {
   const [searchParams] = useSearchParams();
@@ -179,9 +181,7 @@ const SearchResults = () => {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="p-2 bg-brand/10 dark:bg-brand/30 rounded-lg">
-                          <Wrench className="h-5 w-5 text-brand" />
-                        </div>
+                        <InfographicIcon src={getCategoryImageSrc(category.name, category.image_url)} alt={`${category.name} icon`} size="lg" tone="brand" />
                         <div className="flex-1">
                           <h3 className="font-semibold text-lg mb-1">{category.name}</h3>
                           {category.description && (
@@ -230,9 +230,7 @@ const SearchResults = () => {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="p-2 bg-accent/10 dark:bg-accent/30 rounded-lg">
-                          <Sparkles className="h-5 w-5 text-accent" />
-                        </div>
+                        <InfographicIcon src={getServiceImageSrc(subcategory)} alt={`${subcategory.name} icon`} size="lg" tone="accent" />
                         <div className="flex-1">
                           <h3 className="font-semibold text-lg mb-1">{subcategory.name}</h3>
                           <p className={`text-sm mb-2 ${

@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LandingPageService } from '../services/landing_page.service';
 import { ArrowLeft, Star, ChevronRight, Wrench, Hammer, Wind, Droplets, Bug, Sparkles, ShoppingCart } from 'lucide-react';
+import { getCategoryImageSrc, getServiceImageSrc } from '../utils/infographicMap';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import { useCart } from '../contexts/CartContext';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
+import InfographicIcon from '../../components/InfographicIcon';
 
 const CategoryServices = () => {
   const { categoryId, categoryName } = useParams();
@@ -137,9 +139,7 @@ const CategoryServices = () => {
                 <div className="p-6">
                   <div className="flex justify-between items-start">
                     <div className="flex items-start space-x-4">
-                      <div className={`rounded-full p-3 ${darkMode ? 'bg-gray-700 border border-gray-600' : 'bg-purple-50 border border-gray-200'}`}>
-                        <IconComponent className="h-6 w-6 text-purple-600" />
-                      </div>
+                      <InfographicIcon src={getCategoryImageSrc(categoryName)} alt={`${categoryName} icon`} size="xl" tone="accent" className="shadow-md" />
                       <div>
                         <h3 className={`font-bold text-lg mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                           {service.name}
