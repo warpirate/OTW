@@ -333,7 +333,7 @@ const LandingPage = () => {
             <div className="w-full md:w-5/12">
               <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-6 md:p-8 transition-colors`}>
                 <div className="flex items-center mb-2">
-                  <Logo size="lg" className="mr-3" alt="OMW" />
+                  <Logo size="xl" className="mr-3" alt="OMW" />
                   <span className="text-yellow-400 text-2xl">👋</span>
                 </div>
                 <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-6`}>Explore our services</p>
