@@ -203,7 +203,7 @@ const Header = () => {
                 onClick={() => navigate('/')}
                 aria-label="OMW Home"
               >
-                <Logo size="xl" alt="OMW logo" className="transition-opacity hover:opacity-90" />
+                <Logo size="lg" alt="OMW logo" className="transition-opacity hover:opacity-90" />
               </button>
             </div>
 

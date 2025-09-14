@@ -117,7 +117,7 @@ const CustomerLogin = () => {
             <div className="bg-[var(--bg-primary)] rounded-xl shadow-lg p-8 border border-[var(--border-color)]">
               {/* Logo */}
               <div className="flex items-center mb-6">
-                <Logo size="lg" alt="OMW" className="mr-3" />
+                <Logo size="xl" alt="OMW" className="mr-3" />
                 <span className="text-yellow-400 text-2xl">👋</span>
               </div>
               <form onSubmit={handleLogin} className="space-y-6">
