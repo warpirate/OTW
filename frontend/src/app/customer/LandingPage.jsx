@@ -5,6 +5,7 @@ import {LandingPageService} from '../services/landing_page.service';
 import AuthService from '../services/auth.service';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
+import Logo from '../../components/Logo';
 import { 
   Search, 
   MapPin, 
@@ -332,11 +333,7 @@ const LandingPage = () => {
             <div className="w-full md:w-5/12">
               <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-6 md:p-8 transition-colors`}>
                 <div className="flex items-center mb-2">
-                  <div className="flex items-center space-x-1 mr-3">
-                    <span className="text-3xl font-bold text-orange-500">O</span>
-                    <span className="text-3xl font-bold text-blue-500">T</span>
-                    <span className="text-3xl font-bold text-green-500">W</span>
-                  </div>
+                  <Logo size="lg" className="mr-3" alt="OMW" />
                   <span className="text-yellow-400 text-2xl">👋</span>
                 </div>
                 <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-6`}>Explore our services</p>
@@ -502,7 +499,7 @@ const LandingPage = () => {
                     subcategories.map(subcategory => (
                                         <div 
                     key={subcategory.id}
-                    className={`service-card ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`service-card ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
                   >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
@@ -521,7 +518,7 @@ const LandingPage = () => {
                     ))
                   ) : (
                     <div className="col-span-full text-center py-8">
-                      <p className="text-lg">{`No services available in ${selectedCategory.name} category.`}</p>
+                      <p className="text-lg">No services available in {selectedCategory.name} category.</p>
                     </div>
                   )}
                 </div>
@@ -660,7 +657,7 @@ const LandingPage = () => {
         <div className="container-custom">
           <div className="text-center mb-16">
             <h2 className={`heading-secondary mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Why Choose OTW?
+              Why Choose OMW?
             </h2>
             <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} max-w-2xl mx-auto`}>
               Experience the best in-home services with our trusted platform
@@ -690,7 +687,7 @@ const LandingPage = () => {
           <div className="text-center max-w-3xl mx-auto">
             <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Get Started?</h2>
             <p className="text-lg mb-10 opacity-90">
-              Download the OTW app and experience hassle-free services at your doorstep.
+              Download the OMW app and experience hassle-free services at your doorstep.
             </p>
             <div className="flex flex-col md:flex-row justify-center gap-6">
               <button className="btn-accent py-4 px-8 rounded-xl flex items-center justify-center gap-3 text-lg" onClick={() => window.open('https://mockappstore.com/otw-app', '_blank')}>
