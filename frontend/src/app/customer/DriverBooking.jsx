@@ -9,6 +9,7 @@ import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import LocationMap from '../../components/LocationMap';
 import DriverTracker from '../../components/DriverTracker';
 import io from 'socket.io-client';
+import { API_BASE_URL } from '../config';
 
 const DriverBooking = () => {
   const navigate = useNavigate();
@@ -68,7 +69,7 @@ const DriverBooking = () => {
 
   // Initialize socket connection for real-time features
   useEffect(() => {
-    const newSocket = io('http://localhost:3000', {
+    const newSocket = io(API_BASE_URL, {
       transports: ['websocket'],
       autoConnect: false
     });
