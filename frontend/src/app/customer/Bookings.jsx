@@ -602,26 +602,37 @@ const Bookings = () => {
                     <CreditCard className="h-5 w-5 mr-2 text-green-600" />
                     Pricing Details
                   </h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
-                      <span className="text-green-700 dark:text-green-300">Base Price:</span>
-                      <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {formatPrice(selectedBooking.total_amount - (selectedBooking.gst_amount || 0))}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
-                      <span className="text-green-700 dark:text-green-300">GST (18%):</span>
-                      <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {formatPrice(selectedBooking.gst_amount || 0)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-3 bg-green-100 dark:bg-green-900/30 rounded-lg px-4">
-                      <span className="font-semibold text-lg text-green-700 dark:text-green-300">Total Amount:</span>
-                      <span className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {formatPrice(selectedBooking.total_amount)}
-                      </span>
-                    </div>
-                  </div>
+                  {(() => {
+                    // Derive pricing when gst_amount is missing or 0
+                    const total = Number(selectedBooking.total_amount || 0);
+                    const rawGst = Number(selectedBooking.gst_amount || 0);
+                    const GST_RATE = 0.18;
+                    // If GST provided and positive, trust it; else infer assuming total includes GST
+                    const inferredGst = rawGst > 0 ? rawGst : Number((total - (total / (1 + GST_RATE))).toFixed(2));
+                    const base = total > 0 ? Number((total - inferredGst).toFixed(2)) : 0;
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
+                          <span className="text-emerald-700 dark:text-emerald-300">Base Price:</span>
+                          <span className={`font-medium ${darkMode ? 'text-emerald-100' : 'text-emerald-900'}`}>
+                            {formatPrice(base)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
+                          <span className="text-emerald-700 dark:text-emerald-300">GST (18%):</span>
+                          <span className={`font-medium ${darkMode ? 'text-emerald-100' : 'text-emerald-900'}`}>
+                            {formatPrice(inferredGst)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 bg-green-100 dark:bg-green-900/30 rounded-lg px-4">
+                          <span className="font-semibold text-lg text-emerald-800 dark:text-emerald-200">Total Amount:</span>
+                          <span className={`text-2xl font-bold ${darkMode ? 'text-emerald-50' : 'text-emerald-900'}`}>
+                            {formatPrice(total)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 
                 {/* Payment Status */}
