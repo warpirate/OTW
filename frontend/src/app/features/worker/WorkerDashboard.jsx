@@ -11,7 +11,8 @@ import {
   Bell,
   TrendingUp,
   CheckCircle,
-  XCircle
+  XCircle,
+  DollarSign
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
@@ -403,16 +404,16 @@ const WorkerDashboard = () => {
           </Link>
 
           <Link
-            to="/worker/earnings"
+            to="/worker/payments"
             className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
           >
             <div className="text-center">
-              <TrendingUp className="w-8 h-8 text-yellow-600 mx-auto mb-3" />
+              <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-3" />
               <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Earnings
+                Cash Payments
               </h3>
               <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Track income
+                Manage "Pay After Service" payments
               </p>
             </div>
           </Link>
