@@ -13,7 +13,7 @@ const SuperAdminLayout = () => {
       {/* Sidebar */}
       <div className="w-64 bg-gray-900 text-white">
         <div className="p-4">
-          <h1 className="text-xl font-bold mb-6">UrbanGo Super Admin</h1>
+          <h1 className="text-xl font-bold mb-6">OMW Super Admin</h1>
           <nav className="flex flex-col space-y-2">
             <NavLink
               to="/superadmin/dashboard"

@@ -433,7 +433,7 @@ const WorkerSignup = () => {
         last_name: formData.lastName,
         email: formData.email,
         password: formData.password,
-        phone_number: formData.phone,
+        phone: formData.phone,
         gender: formData.gender,
         provider_data: {
           phone: formData.phone,

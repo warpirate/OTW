@@ -5,6 +5,7 @@ const verifyToken = require('../middlewares/verify_token');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const AWS = require('aws-sdk');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -36,6 +37,19 @@ const upload = multer({
     }
   }
 });
+
+// AWS S3 setup for presigned URL uploads
+const S3_REGION = process.env.AWS_REGION;
+const S3_BUCKET = process.env.S3_BUCKET || process.env.S3_BUCKET_PROVIDER_DOCS || process.env.AWS_BUCKET_NAME;
+const s3 = new AWS.S3({ region: S3_REGION });
+
+// Helper to create a safe S3 key filename
+const sanitizeFileName = (name) => {
+  return (name || 'file')
+    .replace(/[^a-zA-Z0-9_.-]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 200);
+};
 
 // ============= BANKING DETAILS APIs =============
 
@@ -254,6 +268,97 @@ router.delete('/banking-details/:id', verifyToken, async (req, res) => {
 
 // ============= DOCUMENTS APIs =============
 
+// Generate a presigned URL for direct S3 upload
+router.post('/documents/presign', verifyToken, async (req, res) => {
+  try {
+    if (!S3_BUCKET || !S3_REGION) {
+      return res.status(500).json({ message: 'S3 is not configured on the server' });
+    }
+
+    const userId = req.user.id;
+    const { file_name, content_type, document_type } = req.body;
+
+    if (!file_name || !content_type || !document_type) {
+      return res.status(400).json({ message: 'file_name, content_type and document_type are required' });
+    }
+
+    // Get provider ID
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+    const safeName = sanitizeFileName(file_name);
+    const key = `provider_documents/${providerId}/${Date.now()}_${safeName}`;
+
+    const params = {
+      Bucket: S3_BUCKET,
+      Key: key,
+      ContentType: content_type,
+      Expires: 300
+    };
+
+    const uploadUrl = await s3.getSignedUrlPromise('putObject', params);
+
+    return res.json({
+      uploadUrl,
+      objectKey: key,
+      expiresIn: 300,
+      bucket: S3_BUCKET,
+      region: S3_REGION
+    });
+  } catch (err) {
+    console.error('Error generating presigned URL:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Confirm upload and save document metadata to DB
+router.post('/documents/confirm', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { document_type, object_key } = req.body;
+
+    if (!document_type || !object_key) {
+      return res.status(400).json({ message: 'document_type and object_key are required' });
+    }
+
+    // Get provider ID
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+
+    // Save document info to database; store the S3 object key in document_url column
+    const [result] = await pool.query(
+      `INSERT INTO provider_documents 
+       (provider_id, document_type, document_url, status) 
+       VALUES (?, ?, ?, 'pending_review')`,
+      [providerId, document_type, object_key]
+    );
+
+    return res.status(201).json({
+      message: 'Document saved successfully',
+      id: result.insertId,
+      document_url: object_key
+    });
+  } catch (err) {
+    console.error('Error confirming document upload:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // GET /documents - Get provider's documents
 router.get('/documents', verifyToken, async (req, res) => {
   try {
@@ -282,6 +387,94 @@ router.get('/documents', verifyToken, async (req, res) => {
     res.json({ documents });
   } catch (err) {
     console.error('Error fetching documents:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /documents/:id/presign - Get a presigned GET URL to download/view a document
+router.get('/documents/:id/presign', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const documentId = req.params.id;
+
+    // Get provider ID
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+
+    // Verify the document belongs to the provider
+    const [docs] = await pool.query(
+      'SELECT document_url FROM provider_documents WHERE id = ? AND provider_id = ?',
+      [documentId, providerId]
+    );
+
+    if (docs.length === 0) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    let key = docs[0].document_url;
+    if (!key) {
+      return res.status(400).json({ message: 'Document key is empty' });
+    }
+
+    // If the document is stored locally, migrate it to S3 once and update DB
+    if (key.startsWith('/uploads/')) {
+      try {
+        if (!S3_BUCKET || !S3_REGION) {
+          const baseUrl = `${req.protocol}://${req.get('host')}`;
+          return res.json({ success: true, url: `${baseUrl}${key}`, storage: 'local' });
+        }
+
+        const relPath = key.startsWith('/') ? key.slice(1) : key;
+        const absPath = path.join(process.cwd(), relPath);
+        if (!fs.existsSync(absPath)) {
+          return res.status(404).json({ message: 'Local document not found for migration' });
+        }
+
+        const fileName = path.basename(absPath);
+        const migrateKey = `provider_documents/${providerId}/${Date.now()}_${fileName}`;
+
+        await s3.upload({
+          Bucket: S3_BUCKET,
+          Key: migrateKey,
+          Body: fs.createReadStream(absPath)
+        }).promise();
+
+        await pool.query(
+          'UPDATE provider_documents SET document_url = ? WHERE id = ?',
+          [migrateKey, documentId]
+        );
+
+        key = migrateKey;
+      } catch (migrateErr) {
+        console.error('Error migrating worker document to S3:', migrateErr);
+        return res.status(500).json({ message: 'Failed to migrate document to S3' });
+      }
+    }
+
+    if (!S3_BUCKET || !S3_REGION) {
+      return res.status(500).json({ message: 'S3 is not configured on the server' });
+    }
+
+    // Force download in browser by setting ContentDisposition to attachment
+    const params = {
+      Bucket: S3_BUCKET,
+      Key: key,
+      Expires: 300,
+      ResponseContentDisposition: 'attachment'
+    };
+
+    const url = await s3.getSignedUrlPromise('getObject', params);
+    return res.json({ success: true, url, storage: 's3', expiresIn: 300 });
+  } catch (err) {
+    console.error('Error generating worker document presigned URL:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
@@ -361,10 +554,24 @@ router.delete('/documents/:id', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'Document not found' });
     }
     
-    // Delete file from filesystem
-    const filePath = path.join(process.cwd(), document[0].document_url);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    // Delete file from S3 if it's an S3 object (does not start with '/uploads/')
+    const docUrl = document[0].document_url || '';
+    if (docUrl && !docUrl.startsWith('/uploads/')) {
+      if (!S3_BUCKET) {
+        console.warn('S3 bucket not configured; cannot delete S3 object');
+      } else {
+        try {
+          await s3.deleteObject({ Bucket: S3_BUCKET, Key: docUrl }).promise();
+        } catch (e) {
+          console.error('Error deleting from S3:', e);
+        }
+      }
+    } else {
+      // Local filesystem fallback
+      const filePath = path.join(process.cwd(), document[0].document_url);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
     
     // Delete from database
