@@ -12,6 +12,7 @@ import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
+import PaymentService from '../services/payment.service';
 
 const Booking = () => {
   const navigate = useNavigate();
@@ -58,6 +59,12 @@ const Booking = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [bookingNotes, setBookingNotes] = useState('');
   
+  // Payment methods
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [paymentType, setPaymentType] = useState('upi'); // 'upi' or 'pay_after_service'
+  
   // Sync dark mode with global theme changes
   useEffect(() => {
     const remove = addThemeListener(() => setDarkMode(isDarkMode()));
@@ -91,6 +98,9 @@ const Booking = () => {
 
     // Load customer addresses
     loadAddresses();
+    
+    // Load payment methods
+    loadPaymentMethods();
   }, [cartLoading, cart, navigate]);
   
   // Load customer addresses
@@ -110,6 +120,29 @@ const Booking = () => {
       toast.error('Failed to load addresses');
     } finally {
       setLoadingAddresses(false);
+    }
+  };
+
+  // Load payment methods
+  const loadPaymentMethods = async () => {
+    setLoadingPaymentMethods(true);
+    try {
+      const response = await PaymentService.upiMethods.getAll();
+      const methods = response.payment_methods || [];
+      setPaymentMethods(methods);
+      
+      // Auto-select default method
+      const defaultMethod = methods.find(method => method.is_default);
+      if (defaultMethod) {
+        setSelectedPaymentMethod(defaultMethod);
+      } else if (methods.length > 0) {
+        setSelectedPaymentMethod(methods[0]);
+      }
+    } catch (error) {
+      console.error('Error loading payment methods:', error);
+      // Don't show error toast as this is optional
+    } finally {
+      setLoadingPaymentMethods(false);
     }
   };
   
@@ -504,6 +537,13 @@ const Booking = () => {
         return;
       }
 
+      // Validate payment method selection
+      if (paymentType === 'upi' && !selectedPaymentMethod) {
+        toast.error('Please select a UPI payment method or choose "Pay After Service".');
+        setIsProcessing(false);
+        return;
+      }
+
       const scheduledAt = buildUTCMySQLDateTime(selectedDate, selectedTimeSlot.time);
 
       // Prepare booking data
@@ -516,7 +556,7 @@ const Booking = () => {
         scheduled_time: scheduledAt,
         address_id: selectedAddress.address_id,
         notes: bookingNotes,
-        payment_method: 'online',
+        payment_method: paymentType === 'pay_after_service' ? 'pay_after_service' : (selectedPaymentMethod ? 'upi' : 'online'),
         worker_preference: workerPreference
       };
 
@@ -526,19 +566,46 @@ const Booking = () => {
       // Clear cart
       await clearCart();
 
-      // Show success and redirect
-      toast.success('Booking created successfully!');
-      
-      // Create local date object for display in success page
+      // Handle different payment types
+      if (paymentType === 'pay_after_service') {
+        // For pay after service, go directly to booking success
+        toast.success('Booking created successfully! Payment will be collected after service completion.');
+        
       const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
-      
+        navigate('/booking-success', { 
+          state: { 
+            bookingIds: result.booking_ids,
+            totalAmount: result.total_amount,
+            scheduledDate: scheduledLocalDate.toISOString(),
+            paymentMethod: 'pay_after_service'
+          } 
+        });
+      } else {
+        // For UPI payments, go to payment screen
+        toast.success('Booking created successfully! Redirecting to payment...');
+        
+        navigate('/payment', { 
+          state: { 
+            amount: result.total_amount,
+            bookingId: result.booking_ids?.[0], // Use first booking ID
+            description: `Payment for ${cart.items.map(item => item.name).join(', ')}`,
+            selectedPaymentMethod: selectedPaymentMethod, // Pass selected UPI method
+            onPaymentSuccess: (paymentId) => {
+              console.log('Payment successful:', paymentId);
+              // Navigate to booking success after payment
+              const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
       navigate('/booking-success', { 
         state: { 
           bookingIds: result.booking_ids,
           totalAmount: result.total_amount,
-          scheduledDate: scheduledLocalDate.toISOString()
+                  scheduledDate: scheduledLocalDate.toISOString(),
+                  paymentId: paymentId
         } 
       });
+            }
+          } 
+        });
+      }
 
     } catch (error) {
       console.error('Error creating booking:', error);
@@ -555,6 +622,27 @@ const Booking = () => {
       case 'work': return <Briefcase className="h-5 w-5" />;
       default: return <MapPin className="h-5 w-5" />;
     }
+  };
+
+  // Get provider icon
+  const getProviderIcon = (provider) => {
+    const iconMap = {
+      'Paytm': '💳',
+      'Google Pay': '📱',
+      'PhonePe': '📲',
+      'Amazon Pay': '🛒',
+      'BHIM': '🏦',
+      'Yono SBI': '🏛️',
+      'HDFC Bank': '🏦',
+      'ICICI Bank': '🏦',
+      'Axis Bank': '🏦',
+      'Kotak Bank': '🏦',
+      'Punjab National Bank': '🏦',
+      'State Bank of India': '🏦',
+      'Bank UPI': '🏦',
+      'Other': '💳'
+    };
+    return iconMap[provider] || '💳';
   };
   
   // Calculate total amount
@@ -1043,16 +1131,180 @@ const Booking = () => {
                     <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                       Payment Method
                     </h3>
-                    <div className={`border rounded-lg p-4 ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-white'}`}>
-                      <div className="flex items-center">
-                        <CreditCard className="h-5 w-5 text-purple-600 mr-3" />
-                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                          Pay Online (Secure Payment)
+                    
+                    <div className="space-y-4">
+                      {/* Pay After Service Option */}
+                      <div
+                        onClick={() => setPaymentType('pay_after_service')}
+                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                          paymentType === 'pay_after_service'
+                            ? 'border-green-500 bg-green-50'
+                            : darkMode
+                            ? 'border-gray-600 hover:border-gray-500'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="text-2xl">💰</div>
+                            <div>
+                              <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                Pay After Service
+                              </h4>
+                              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                Pay cash or card after service completion
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex-shrink-0">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              paymentType === 'pay_after_service'
+                                ? 'border-green-500 bg-green-500'
+                                : 'border-gray-300'
+                            }`}>
+                              {paymentType === 'pay_after_service' && (
+                                <CheckCircle className="h-4 w-4 text-white" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* UPI Payment Options */}
+                      <div
+                        onClick={() => setPaymentType('upi')}
+                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                          paymentType === 'upi'
+                            ? 'border-purple-500 bg-purple-50'
+                            : darkMode
+                            ? 'border-gray-600 hover:border-gray-500'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className="text-2xl">📱</div>
+                            <div>
+                              <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                UPI Payment
+                              </h4>
+                              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                Pay instantly with UPI
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex-shrink-0">
+                            <div className={`w-4 h-4 rounded-full border-2 ${
+                              paymentType === 'upi'
+                                ? 'border-purple-500 bg-purple-500'
+                                : 'border-gray-300'
+                            }`}>
+                              {paymentType === 'upi' && (
+                                <CheckCircle className="h-4 w-4 text-white" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* UPI Methods List */}
+                        {paymentType === 'upi' && (
+                          <div className="ml-8 space-y-2">
+                            {loadingPaymentMethods ? (
+                              <div className="flex items-center justify-center py-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
+                                <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  Loading UPI methods...
                         </span>
                       </div>
-                      <p className={`text-sm mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Payment will be collected after service completion
-                      </p>
+                            ) : paymentMethods.length === 0 ? (
+                              <div className="text-center py-2">
+                                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  No UPI methods found
+                                </p>
+                                <button
+                                  onClick={() => navigate('/add-upi-method')}
+                                  className="text-purple-600 hover:text-purple-700 text-sm font-medium mt-1"
+                                >
+                                  Add UPI Method
+                                </button>
+                    </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {paymentMethods.map((method) => (
+                                  <div
+                                    key={method.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedPaymentMethod(method);
+                                    }}
+                                    className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                                      selectedPaymentMethod?.id === method.id
+                                        ? 'border-purple-400 bg-purple-100'
+                                        : darkMode
+                                        ? 'border-gray-500 hover:border-gray-400'
+                                        : 'border-gray-200 hover:border-gray-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="text-lg">
+                                          {getProviderIcon(method.provider_name)}
+                  </div>
+                                        <div>
+                                          <div className="flex items-center space-x-2">
+                                            <h5 className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                              {method.upi_id}
+                                            </h5>
+                                            {method.is_default && (
+                                              <span className="px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                                                Default
+                                              </span>
+                                            )}
+                </div>
+                                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                            {method.provider_name}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex-shrink-0">
+                                        <div className={`w-3 h-3 rounded-full border-2 ${
+                                          selectedPaymentMethod?.id === method.id
+                                            ? 'border-purple-500 bg-purple-500'
+                                            : 'border-gray-300'
+                                        }`}>
+                                          {selectedPaymentMethod?.id === method.id && (
+                                            <CheckCircle className="h-3 w-3 text-white" />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate('/add-upi-method');
+                                  }}
+                                  className={`w-full border-2 border-dashed rounded-lg p-2 text-center transition-colors ${
+                                    darkMode
+                                      ? 'border-gray-500 hover:border-gray-400 hover:bg-gray-600'
+                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <Plus className="h-4 w-4 text-gray-400 mx-auto mb-1" />
+                                  <span className={`text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Add New UPI Method
+                                  </span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

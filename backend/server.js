@@ -22,6 +22,8 @@ const cartRoute = require('./routes/category_management/cart');
 const addressRoute = require('./routes/customer_management/addresses');
 const bookingRoute = require('./routes/customer_management/bookings');
 const driverRoute = require('./routes/customer_management/driver_booking');
+const paymentRoute = require('./routes/customer_management/payments');
+const webhookRoute = require('./routes/customer_management/webhooks');
 const baseURL = process.env.BASE_URL1 || '/api';
 
 app.use(`${baseURL}/categories`, categoryRoute); 
@@ -31,9 +33,12 @@ app.use(`${baseURL}/customer/driver`, driverRoute);
 app.use(`${baseURL}/customer/cart`, cartRoute);
 app.use(`${baseURL}/customer/addresses`, addressRoute);
 app.use(`${baseURL}/customer/bookings`, bookingRoute);
+app.use(`${baseURL}/payment`, paymentRoute);
+app.use(`${baseURL}/webhooks`, webhookRoute);
 app.use(`${baseURL}/superadmin`, superAdminRoute);
 app.use(`${baseURL}/admin`, providerAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
+app.use(`${baseURL}/worker-management`, require('./routes/worker_management/cash_payments'));
 app.use(`${baseURL}/worker`, workerDocsRoute);
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);

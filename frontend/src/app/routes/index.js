@@ -9,6 +9,7 @@ import WorkerAssignedBookings from '../features/worker/WorkerAssignedBookings';
 import WorkerSchedule from '../features/worker/WorkerSchedule';
 import WorkerProfile from '../features/worker/WorkerProfile';
 import WorkerSettings from '../features/worker/WorkerSettings';
+import WorkerPayments from '../features/worker/WorkerPayments';
 
 // Layouts
 import WorkerLayout from '../layouts/WorkerLayout';
@@ -84,6 +85,10 @@ export const workerRoutes = [
       {
         path: "settings",
         element: <WorkerSettings />
+      },
+      {
+        path: "payments",
+        element: <WorkerPayments />
       }
     ]
   }

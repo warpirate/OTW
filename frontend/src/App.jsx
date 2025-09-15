@@ -29,6 +29,10 @@ const Contact = lazy(() => import('./app/customer/Contact'));
 const Terms = lazy(() => import('./app/customer/Terms'));
 const Privacy = lazy(() => import('./app/customer/Privacy'));
 const DriverBooking = lazy(() => import('./app/customer/DriverBooking'));
+const PaymentMethods = lazy(() => import('./app/customer/PaymentMethods'));
+const AddUPIMethod = lazy(() => import('./app/customer/AddUPIMethod'));
+const PaymentHistory = lazy(() => import('./app/customer/PaymentHistory'));
+const Payment = lazy(() => import('./app/customer/Payment'));
 
 // Admin
 const AdminLayout = lazy(() => import('./app/layouts/AdminLayout'));
@@ -58,6 +62,7 @@ const WorkerSchedule = lazy(() => import('./app/features/worker/WorkerSchedule')
 const WorkerProfile = lazy(() => import('./app/features/worker/WorkerProfile'));
 const WorkerSettings = lazy(() => import('./app/features/worker/WorkerSettings'));
 const WorkerDocuments = lazy(() => import('./app/features/worker/WorkerDocuments'));
+const WorkerPayments = lazy(() => import('./app/features/worker/WorkerPayments'));
 
 // Protected Route Components
 const CustomerProtectedRoute = ({ children }) => {
@@ -392,6 +397,26 @@ function App() {
                 <DriverBooking />
               </CustomerProtectedRoute>
             } />
+            <Route path="payment-methods" element={
+              <CustomerProtectedRoute>
+                <PaymentMethods />
+              </CustomerProtectedRoute>
+            } />
+            <Route path="add-upi-method" element={
+              <CustomerProtectedRoute>
+                <AddUPIMethod />
+              </CustomerProtectedRoute>
+            } />
+            <Route path="payment-history" element={
+              <CustomerProtectedRoute>
+                <PaymentHistory />
+              </CustomerProtectedRoute>
+            } />
+            <Route path="payment" element={
+              <CustomerProtectedRoute>
+                <Payment />
+              </CustomerProtectedRoute>
+            } />
             </Route>
 
             {/* Admin Routes */}
@@ -438,7 +463,7 @@ function App() {
               <Route path="dashboard" element={<WorkerDashboard />} />
               <Route path="jobs" element={<WorkerJobs />} />
               <Route path="schedule" element={<WorkerSchedule />} />
-              <Route path="earnings" element={<div className="p-8 text-center">Worker Earnings Page (Coming Soon)</div>} />
+              <Route path="payments" element={<WorkerPayments />} />
               <Route path="profile" element={<WorkerProfile />} />
               <Route path="documents" element={<WorkerDocuments />} />
               <Route path="settings" element={<WorkerSettings />} />

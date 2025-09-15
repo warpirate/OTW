@@ -178,6 +178,77 @@ const CustomerProfile = () => {
             </div>
           </div>
 
+          {/* Quick Access Menu */}
+          <div className={`card p-6 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              Quick Access
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button
+                onClick={() => navigate('/payment-methods')}
+                className={`p-4 rounded-lg border text-left transition-colors ${
+                  darkMode 
+                    ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <CreditCard className="h-6 w-6 text-purple-600" />
+                  <div>
+                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      Payment Methods
+                    </h3>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Manage UPI payments
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => navigate('/bookings')}
+                className={`p-4 rounded-lg border text-left transition-colors ${
+                  darkMode 
+                    ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <Calendar className="h-6 w-6 text-purple-600" />
+                  <div>
+                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      My Bookings
+                    </h3>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      View booking history
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => navigate('/payment-history')}
+                className={`p-4 rounded-lg border text-left transition-colors ${
+                  darkMode 
+                    ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <Shield className="h-6 w-6 text-purple-600" />
+                  <div>
+                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      Payment History
+                    </h3>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Transaction records
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* Profile Card */}
           <div className={`card p-8 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <div className="flex justify-between items-start mb-6">
