@@ -218,6 +218,18 @@ class AdminService {
       throw error;
     }
   }
+
+  /**
+   * Get presigned GET URL for a provider document (admin-only)
+   */
+  static async getDocumentPresignedUrl(documentId) {
+    try {
+      const response = await apiClient.get(`/providers/documents/${documentId}/presign`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 export default AdminService;

@@ -134,19 +134,55 @@ class WorkerDocumentsService {
   }
   
   /**
-   * Upload a new document
+   * Upload a new document via S3 presigned URL with legacy fallback
    */
   static async uploadDocument(documentData) {
+    const file = documentData.document;
+    if (!file) throw new Error('No document selected');
+
+    // 1) Try presigned upload flow first
     try {
-      const formData = new FormData();
-      formData.append('document_type', documentData.document_type);
-      formData.append('document', documentData.document);
-      
-      const response = await fileApiClient.post('/documents', formData);
-      return response.data;
-    } catch (error) {
-      console.error('Error uploading document:', error);
-      throw new Error(error.response?.data?.message || 'Failed to upload document');
+      // a) Request presigned PUT URL
+      const presignResp = await apiClient.post('/documents/presign', {
+        file_name: file.name,
+        content_type: file.type || 'application/octet-stream',
+        document_type: documentData.document_type,
+      });
+
+      const { uploadUrl, objectKey } = presignResp.data || {};
+      if (!uploadUrl || !objectKey) {
+        throw new Error('Invalid presign response');
+      }
+
+      // b) Upload file directly to S3
+      await axios.put(uploadUrl, file, {
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+      });
+
+      // c) Confirm upload with backend to persist metadata
+      const confirmResp = await apiClient.post('/documents/confirm', {
+        document_type: documentData.document_type,
+        object_key: objectKey,
+      });
+      return confirmResp.data;
+    } catch (presignErr) {
+      console.warn('Presigned upload failed; falling back to legacy upload', presignErr);
+
+      // 2) Legacy fallback: multipart upload to server (stores locally)
+      try {
+        const formData = new FormData();
+        formData.append('document_type', documentData.document_type);
+        formData.append('document', documentData.document);
+
+        const response = await fileApiClient.post('/documents', formData);
+        return response.data;
+      } catch (legacyErr) {
+        console.error('Legacy upload failed:', legacyErr);
+        const err = legacyErr.response?.data?.message || presignErr.response?.data?.message || 'Failed to upload document';
+        throw new Error(err);
+      }
     }
   }
   
@@ -160,6 +196,19 @@ class WorkerDocumentsService {
     } catch (error) {
       console.error('Error deleting document:', error);
       throw new Error(error.response?.data?.message || 'Failed to delete document');
+    }
+  }
+
+  /**
+   * Get a presigned GET URL for a specific document
+   */
+  static async getDocumentPresignedUrl(documentId) {
+    try {
+      const response = await apiClient.get(`/documents/${documentId}/presign`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting document presigned URL:', error);
+      throw new Error(error.response?.data?.message || 'Failed to get document link');
     }
   }
   

@@ -14,7 +14,7 @@ const AdminLayout = () => {
       {/* Sidebar */}
       <div className="w-64 bg-gray-800 text-white">
         <div className="p-4">
-          <h1 className="text-xl font-bold mb-6">UrbanGo Admin</h1>
+          <h1 className="text-xl font-bold mb-6">OMW Admin</h1>
           <nav className="flex flex-col space-y-2">
             <NavLink
               to="/admin/dashboard"
