@@ -597,27 +597,27 @@ const Bookings = () => {
                 </div>
                 
                 {/* Enhanced Pricing */}
-                <div className="card p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700">
+                <div className="card p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700 text-black dark:text-white">
                   <h4 className={`text-xl font-semibold mb-4 flex items-center ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                     <CreditCard className="h-5 w-5 mr-2 text-green-600" />
                     Pricing Details
                   </h4>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
-                      <span className="text-green-700 dark:text-green-300">Base Price:</span>
-                      <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <span className="text-black dark:text-white font-semibold">Base Price:</span>
+                      <span className="font-semibold text-black dark:text-white">
                         {formatPrice(selectedBooking.total_amount - (selectedBooking.gst_amount || 0))}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
-                      <span className="text-green-700 dark:text-green-300">GST (18%):</span>
-                      <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <span className="text-black dark:text-white font-semibold">GST (18%):</span>
+                      <span className="font-semibold text-black dark:text-white">
                         {formatPrice(selectedBooking.gst_amount || 0)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center py-3 bg-green-100 dark:bg-green-900/30 rounded-lg px-4">
-                      <span className="font-semibold text-lg text-green-700 dark:text-green-300">Total Amount:</span>
-                      <span className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <span className="font-semibold text-lg text-black dark:text-white">Total Amount:</span>
+                      <span className="text-2xl font-bold text-black dark:text-white">
                         {formatPrice(selectedBooking.total_amount)}
                       </span>
                     </div>
