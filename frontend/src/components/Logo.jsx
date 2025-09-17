@@ -25,9 +25,7 @@ const Logo = ({ size = 'md', className = '', rounded = false, alt = 'OMW', ...pr
       src="/omw_logo.jpg"
       alt={alt}
       className={
-        `${sizeClass} w-auto object-contain ${shapeClass} ` +
-        // Neutral white chip with padding, border, and stronger shadow; tuned for dark/light
-        `bg-white p-1.5 border border-gray-200 dark:border-gray-700 shadow-md ` +
+        `${sizeClass} w-auto object-contain ${shapeClass}` +
         (className ? ` ${className}` : '')
       }
       {...props}

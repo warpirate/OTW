@@ -25,6 +25,14 @@ const AdminLayout = () => {
               <i className="fas fa-chart-line mr-2"></i> Dashboard
             </NavLink>
             <NavLink
+              to="/admin/customers"
+              className={({ isActive }) =>
+                isActive ? 'nav-tab-active' : 'nav-tab-inactive'
+              }
+            >
+              <i className="fas fa-user mr-2"></i> Customers
+            </NavLink>
+            <NavLink
               to="/admin/users"
               className={({ isActive }) =>
                 isActive ? 'nav-tab-active' : 'nav-tab-inactive'

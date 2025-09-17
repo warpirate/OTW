@@ -123,10 +123,13 @@ router.get('/profile', verifyToken, async (req, res) => {
     const [rows] = await pool.query(
       `SELECT 
           c.*, 
+          ct.name AS customer_type_name,
+          ct.discount_percentage AS customer_discount_percentage,
           u.name, u.email, u.phone_number, u.gender, 
           ca.address, ca.city, ca.state, ca.country, ca.pin_code, 
           ca.location_lat, ca.location_lng
        FROM customers c
+       LEFT JOIN customer_types ct ON ct.id = c.customer_type_id
        LEFT JOIN users u 
          ON c.id = u.id 
        LEFT JOIN customer_addresses ca 
