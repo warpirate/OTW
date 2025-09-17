@@ -193,9 +193,9 @@ const Header = () => {
   };
 
   return (
-    <header className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} shadow-sm border-b transition-colors`}>
+    <header className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} shadow-sm border-b transition-colors sticky top-0 z-50`}>
       <div className="container-custom">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-14 sm:h-16">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <button
@@ -203,7 +203,7 @@ const Header = () => {
                 onClick={() => navigate('/')}
                 aria-label="OMW Home"
               >
-                <Logo size="lg" alt="OMW logo" className="transition-opacity hover:opacity-90" />
+                <Logo size="md" alt="OMW logo" className="h-10 sm:h-12 md:h-16 transition-opacity hover:opacity-90" />
               </button>
             </div>
 
@@ -255,11 +255,11 @@ const Header = () => {
             </div>
           </div>
           
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
             {/* Cart Icon */}
             <button 
               onClick={() => navigate('/cart')}
-              className={`relative p-2 rounded-lg transition-colors ${
+              className={`relative p-1.5 sm:p-2 rounded-lg transition-colors ${
                 darkMode 
                   ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' 
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -280,7 +280,7 @@ const Header = () => {
                   const newDarkMode = toggleTheme();
                   setDarkMode(newDarkMode);
                 }}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`hidden sm:inline-flex p-2 rounded-lg transition-colors ${
                   darkMode 
                     ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -294,17 +294,17 @@ const Header = () => {
               <div className="relative profile-dropdown">
                 <button
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
+                  className={`flex items-center space-x-2 px-2 sm:px-3 py-2 rounded-lg transition-colors ${
                     darkMode 
                       ? 'text-white hover:bg-gray-800' 
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  <span className="font-medium">
+                  <span className="font-medium hidden sm:inline">
                     {user.firstName || user.first_name || (user.name ? user.name.split(' ')[0] : 'User')}
                   </span>
                   <User className="h-5 w-5" />
-                  <ChevronDown className={`h-4 w-4 transition-transform ${
+                  <ChevronDown className={`h-4 w-4 transition-transform hidden sm:inline ${
                     showProfileDropdown ? 'rotate-180' : ''
                   }`} />
                 </button>
@@ -393,18 +393,34 @@ const Header = () => {
             ) : (
               // Sign In/Sign Up buttons for non-authenticated users
               <>
-                <button 
-                  onClick={() => navigate('/login')} 
-                  className={`btn-ghost ${darkMode ? 'text-white hover:bg-gray-800' : ''}`}
+                {/* Mobile: compact login icon */}
+                <button
+                  onClick={() => navigate('/login')}
+                  aria-label="Sign In"
+                  className={`sm:hidden p-1.5 rounded-lg transition-colors ${
+                    darkMode
+                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
                 >
-                  Sign In
+                  <User className="h-5 w-5" />
                 </button>
-                <button 
-                  onClick={() => navigate('/signup')} 
-                  className="btn-brand"
-                >
-                  Sign Up
-                </button>
+
+                {/* Tablet/Desktop: full buttons */}
+                <div className="hidden sm:flex items-center space-x-2">
+                  <button 
+                    onClick={() => navigate('/login')} 
+                    className={`btn-ghost ${darkMode ? 'text-white hover:bg-gray-800' : ''}`}
+                  >
+                    Sign In
+                  </button>
+                  <button 
+                    onClick={() => navigate('/signup')} 
+                    className="btn-brand"
+                  >
+                    Sign Up
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -414,4 +430,4 @@ const Header = () => {
   );
 };
 
-export default Header; 
+export default Header;
