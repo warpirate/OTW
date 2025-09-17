@@ -9,4 +9,4 @@ import { config } from './environments';
 // individual services append their own "/api/..." paths.
 export const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL) 
   || (config && config.backend && config.backend.url) 
-  || 'https://d1v40s48mdt8sd.cloudfront.net';
+  || 'https://api.omwhub.com';

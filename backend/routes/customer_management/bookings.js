@@ -310,6 +310,22 @@ router.post('/create', verifyToken, async (req, res) => {
     }
     const customerAddress = addressResult[0];
 
+    // Fetch customer's discount percentage from customer_types
+    let discountPercentage = 0;
+    try {
+      const [[discRow]] = await pool.query(
+        `SELECT COALESCE(ct.discount_percentage, 0) AS discount_percentage
+         FROM customers c
+         LEFT JOIN customer_types ct ON ct.id = c.customer_type_id
+         WHERE c.id = ?
+         LIMIT 1`,
+        [customerId]
+      );
+      discountPercentage = parseFloat(discRow?.discount_percentage || 0) || 0;
+    } catch (e) {
+      discountPercentage = 0;
+    }
+
     // UTC timestamp for created_at in MySQL format
     const createdAtUTC = new Date().toISOString().slice(0, 19).replace('T', ' ');
     // Normalize and validate worker preference
@@ -348,10 +364,12 @@ router.post('/create', verifyToken, async (req, res) => {
         // For now, provider_id is null
         const provider_id = null;
 
-        // Calculate prices
+        // Calculate prices with customer-type discount before GST
         const itemPrice = price * quantity;
-        const gst = Math.round(itemPrice * 0.18); // 18% GST
-        const totalPrice = itemPrice + gst;
+        const discountAmount = Math.round((itemPrice * discountPercentage) / 100);
+        const discountedPrice = Math.max(itemPrice - discountAmount, 0);
+        const gst = Math.round(discountedPrice * 0.18); // 18% GST
+        const totalPrice = discountedPrice + gst;
         totalAmount += totalPrice;
 
         // Create booking with explicit UTC created_at

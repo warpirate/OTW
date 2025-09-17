@@ -230,6 +230,67 @@ class AdminService {
       throw error;
     }
   }
+
+  // ===== Customers & Types Management =====
+  static async getCustomerTypes() {
+    try {
+      const response = await apiClient.get(`/customer-types`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async updateCustomerType(customerId, customer_type_id) {
+    try {
+      const response = await apiClient.patch(`/customers/${customerId}/type`, { customer_type_id });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async getCustomers(params = {}) {
+    try {
+      const query = new URLSearchParams();
+      if (params.page) query.append('page', params.page);
+      if (params.limit) query.append('limit', params.limit);
+      if (params.search) query.append('search', params.search);
+      if (params.customer_type_id) query.append('customer_type_id', params.customer_type_id);
+      if (params.verification) query.append('verification', params.verification);
+      const response = await apiClient.get(`/customers?${query.toString()}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async getCustomer(id) {
+    try {
+      const response = await apiClient.get(`/customers/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async verifyCustomerDocument(documentId, status) {
+    try {
+      const response = await apiClient.patch(`/customer-verifications/${documentId}/verify`, { status });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async getCustomerDocPresignedUrl(documentId) {
+    try {
+      const response = await apiClient.get(`/customer-verifications/${documentId}/presign`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 export default AdminService;

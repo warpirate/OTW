@@ -118,7 +118,6 @@ const CustomerLogin = () => {
               {/* Logo */}
               <div className="flex items-center mb-6">
                 <Logo size="xl" alt="OMW" className="mr-3" />
-                <span className="text-yellow-400 text-2xl">👋</span>
               </div>
               <form onSubmit={handleLogin} className="space-y-6">
                 {/* Login Method Toggle */}
