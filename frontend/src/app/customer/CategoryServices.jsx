@@ -134,12 +134,12 @@ const CategoryServices = () => {
             {subcategories.map((service) => (
               <div 
                 key={service.id}
-                className={`card ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'}`}
+                className={`card ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'} transition transform hover:shadow-lg hover:-translate-y-0.5`}
               >
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                   <div className="flex justify-between items-start">
-                    <div className="flex items-start space-x-4">
-                      <InfographicIcon src={getCategoryImageSrc(categoryName)} alt={`${categoryName} icon`} size="xl" tone="accent" className="shadow-md" />
+                    <div className="flex items-start space-x-3 sm:space-x-4">
+                      <InfographicIcon src={getServiceImageSrc(service, undefined, categoryName)} alt={`${service.name} icon`} size="xl" tone="brand" className="shadow-md flex-shrink-0" />
                       <div>
                         <h3 className={`font-bold text-lg mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                           {service.name}
