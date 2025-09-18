@@ -9,6 +9,20 @@ const assetModules = import.meta && import.meta.glob
   ? import.meta.glob('../../assets/infographics/*.{svg,png,webp,jpg,jpeg}', { eager: true, query: '?url', import: 'default' })
   : {};
 
+// Ensure mapping URLs work in production by serving from the Vite public directory
+// Our ICON_MAPPINGS currently use "/src/assets/infographics/Icons/..." during dev
+// We normalize them to 
+//     `${import.meta.env.BASE_URL}infographics/Icons/...` for production
+const BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) ? import.meta.env.BASE_URL : '/';
+const normalizeIconUrl = (url) => {
+  if (!url) return url;
+  if (url.startsWith('/src/assets/infographics/Icons/')) {
+    const rel = url.replace('/src/assets/', ''); // -> 'infographics/Icons/...'
+    return `${BASE_URL}${rel}`;
+  }
+  return url;
+};
+
 // Manual icon mapping for nested Icons folder
 const ICON_MAPPINGS = {
   // AC Services
@@ -203,18 +217,18 @@ const findIconBySlug = (slug) => {
   const s = toSlug(slug);
   // exact filename slug match
   let hit = ICON_INDEX.find((e) => e.baseSlug === s);
-  if (hit) return hit.url;
+  if (hit) return normalizeIconUrl(hit.url);
   // loose contains match
   hit = ICON_INDEX.find((e) => e.baseSlug.includes(s) || s.includes(e.baseSlug));
-  if (hit) return hit.url;
+  if (hit) return normalizeIconUrl(hit.url);
   // try reverse synonyms
   const rev = synonymsFor(s);
   for (const alt of rev) {
     const a = toSlug(alt);
     hit = ICON_INDEX.find((e) => e.baseSlug === a);
-    if (hit) return hit.url;
+    if (hit) return normalizeIconUrl(hit.url);
     hit = ICON_INDEX.find((e) => e.baseSlug.includes(a) || a.includes(e.baseSlug));
-    if (hit) return hit.url;
+    if (hit) return normalizeIconUrl(hit.url);
   }
   return null;
 };
@@ -226,12 +240,12 @@ const findCategoryIcon = (categoryName) => {
   // First try to find a category-specific icon (with "cat" in the name)
   const categorySlug = slug + '-cat';
   if (ICON_MAPPINGS[categorySlug]) {
-    return ICON_MAPPINGS[categorySlug];
+    return normalizeIconUrl(ICON_MAPPINGS[categorySlug]);
   }
   
   // Try direct category mapping
   if (ICON_MAPPINGS[slug]) {
-    return ICON_MAPPINGS[slug];
+    return normalizeIconUrl(ICON_MAPPINGS[slug]);
   }
   
   // Try folder-based lookup using category folder mappings
@@ -242,7 +256,7 @@ const findCategoryIcon = (categoryName) => {
       path.includes(`/${folderName}/`) && (key.includes('cat') || key.includes('category'))
     );
     if (categoryFile) {
-      return categoryFile[1];
+      return normalizeIconUrl(categoryFile[1]);
     }
     
     // Fall back to any file in this folder
@@ -250,7 +264,7 @@ const findCategoryIcon = (categoryName) => {
       path.includes(`/${folderName}/`)
     );
     if (anyFileInFolder) {
-      return anyFileInFolder[1];
+      return normalizeIconUrl(anyFileInFolder[1]);
     }
   }
   
@@ -380,7 +394,7 @@ export const getServiceImageSrc = (service, explicitUrl, categoryContext) => {
     console.debug('[IconResolver] Service', { name, key, serviceSlug, categoryContext, asset });
   }
   
-  if (asset) return asset;
+  if (asset) return normalizeIconUrl(asset);
   const base = Object.keys(CATEGORY_STYLES).find((k) => key.includes(k)) || 'carpenter';
   const style = CATEGORY_STYLES[base] || { bgColor: '#F8FAFC', fgColor: '#0EA5E9', symbol: '🛠️' };
   return createBadgeSvg(name || 'Service', style);
@@ -395,7 +409,7 @@ export const getBestImageSrc = (entity) => {
   if (typeof window !== 'undefined' && window.__DEBUG_ICONS__) {
     console.debug('[IconResolver] Best', { name, asset });
   }
-  if (asset) return asset;
+  if (asset) return normalizeIconUrl(asset);
   return getServiceImageSrc(name);
 };
 
