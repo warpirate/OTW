@@ -111,7 +111,7 @@ const CategoryServices = () => {
 
         {/* Category Title */}
         <h1 className={`heading-secondary mb-8 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-          {categoryName} Services
+          {categoryName}
         </h1>
 
         {/* Services List */}
@@ -130,42 +130,44 @@ const CategoryServices = () => {
             </button>
           </div>
         ) : subcategories.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6">
             {subcategories.map((service) => (
               <div 
                 key={service.id}
                 className={`card ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'} transition transform hover:shadow-lg hover:-translate-y-0.5`}
               >
                 <div className="p-4 sm:p-6">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-start space-x-3 sm:space-x-4">
-                      <InfographicIcon src={getServiceImageSrc(service, undefined, categoryName)} alt={`${service.name} icon`} size="xl" tone="brand" className="shadow-md flex-shrink-0" />
-                      <div>
-                        <h3 className={`font-bold text-lg mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {service.name}
-                        </h3>
-                        <p className={`text-sm mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                          {service.description || `Professional ${service.name} services`}
-                        </p>
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    {/* Text block */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-bold text-base sm:text-lg leading-snug ${darkMode ? 'text-white' : 'text-gray-900'} break-words`}>
+                        {service.name}
+                      </h3>
+                      <div className="mt-1 flex items-center text-gray-600 dark:text-gray-300">
+                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                        <span className={`ml-1 text-xs sm:text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{(4 + Math.random()).toFixed(1)}</span>
                       </div>
+                      <p className={`mt-2 text-xs sm:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} break-words`}> 
+                        {service.description || `Professional ${service.name} services`}
+                      </p>
                     </div>
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                      <span className={`ml-1 text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{(4 + Math.random()).toFixed(1)}</span>
+
+                    {/* Icon on the right */}
+                    <div className="shrink-0 ml-2">
+                      <InfographicIcon src={getServiceImageSrc(service, undefined, categoryName)} alt={`${service.name} icon`} size="xl" tone="brand" />
                     </div>
                   </div>
-                  <div className="flex justify-between items-center mt-4">
-                    <span className={`font-semibold ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>{`Starting ₹${service.base_price || Math.floor(Math.random() * 5000) + 1000}`}</span>
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleAddToCart(service)}
-                        disabled={addingToCart[service.id]}
-                        className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${darkMode ? 'bg-purple-900/30 text-purple-300 hover:bg-purple-900/50 border border-purple-700' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
-                      >
-                        <ShoppingCart className="h-4 w-4" />
-                        <span>{addingToCart[service.id] ? 'Adding...' : 'Add Request'}</span>
-                      </button>
-                    </div>
+
+                  <div className="mt-3 sm:mt-4 flex items-center justify-between">
+                    <span className={`font-semibold text-sm sm:text-base ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>{`₹${service.base_price || Math.floor(Math.random() * 5000) + 1000}`}</span>
+                    <button 
+                      onClick={() => handleAddToCart(service)}
+                      disabled={addingToCart[service.id]}
+                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${darkMode ? 'bg-purple-900/30 text-purple-300 hover:bg-purple-900/50 border border-purple-700' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      <span className="text-sm sm:text-base">{addingToCart[service.id] ? 'Adding...' : 'Add Request'}</span>
+                    </button>
                   </div>
                 </div>
               </div>

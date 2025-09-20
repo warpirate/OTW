@@ -491,7 +491,7 @@ const LandingPage = () => {
                 </button>
               </div>
               <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                {selectedCategory.name} Services
+                {selectedCategory.name}
               </h2>
               
               {loadingSubcategories ? (
@@ -508,14 +508,14 @@ const LandingPage = () => {
                   >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
-                            <InfographicIcon src={getServiceImageSrc(subcategory)} alt={`${subcategory.name} icon`} size="3xl" tone="brand" className="shadow-md" />
+                            <InfographicIcon src={getServiceImageSrc(subcategory)} alt={`${subcategory.name} icon`} size="3xl" tone="brand" />
                           </div>
                           <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{subcategory.name}</h3>
                           <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                             {subcategory.description || `Professional ${subcategory.name} services`}
                           </p>
                           <div className="flex justify-between items-center">
-                            <span className={`font-semibold ${darkMode ? 'text-brand-light' : 'text-brand'}`}>{`Starting ₹${subcategory.base_price || 199}`}</span>
+                            <span className={`font-semibold ${darkMode ? 'text-brand-light' : 'text-brand'}`}>{`₹${subcategory.base_price || 199}`}</span>
                             <button className={`btn-sm ${darkMode ? 'bg-brand-dark hover:bg-brand-darker' : ''}`}>Book</button>
                           </div>
                         </div>
@@ -629,7 +629,7 @@ const LandingPage = () => {
                               >
                                 <div className="p-6">
                                   <div className="mb-4">
-                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="3xl" tone="brand" className="shadow-md" />
+                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="3xl" tone="brand" />
                                   </div>
                                   <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
                                   <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>

@@ -251,7 +251,7 @@ const SearchResults = () => {
                             </span>
                             {subcategory.base_price && (
                               <span className="text-xs font-medium text-accent">
-                                Starting ₹{subcategory.base_price}
+                                ₹{subcategory.base_price}
                               </span>
                             )}
                           </div>
