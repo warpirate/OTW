@@ -65,6 +65,17 @@ const Booking = () => {
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
   const [paymentType, setPaymentType] = useState('upi'); // 'upi' or 'pay_after_service'
   
+  // Enhanced payment states
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
+  const [currentPayment, setCurrentPayment] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
+  const [newUpiId, setNewUpiId] = useState('');
+  const [paymentRetryCount, setPaymentRetryCount] = useState(0);
+  const [serviceBookingId, setServiceBookingId] = useState(null);
+  
   // Sync dark mode with global theme changes
   useEffect(() => {
     const remove = addThemeListener(() => setDarkMode(isDarkMode()));
@@ -101,6 +112,14 @@ const Booking = () => {
     
     // Load payment methods
     loadPaymentMethods();
+    
+    // Set default payment method if available
+    if (paymentMethods.length > 0 && !selectedPaymentMethod) {
+      const defaultMethod = paymentMethods.find(method => method.is_default);
+      if (defaultMethod) {
+        setSelectedPaymentMethod(defaultMethod);
+      }
+    }
   }, [cartLoading, cart, navigate]);
   
   // Load customer addresses
@@ -131,19 +150,29 @@ const Booking = () => {
       const methods = response.payment_methods || [];
       setPaymentMethods(methods);
       
-      // Auto-select default method
+      // Auto-select default payment method
       const defaultMethod = methods.find(method => method.is_default);
       if (defaultMethod) {
         setSelectedPaymentMethod(defaultMethod);
-      } else if (methods.length > 0) {
-        setSelectedPaymentMethod(methods[0]);
       }
     } catch (error) {
       console.error('Error loading payment methods:', error);
-      // Don't show error toast as this is optional
+      // Don't show error toast as user might not have payment methods yet
     } finally {
       setLoadingPaymentMethods(false);
     }
+  };
+  
+  // Calculate totals
+  const calculateTotals = () => {
+    if (!cart || !cart.items) return { subtotal: 0, serviceFee: 0, tax: 0, total: 0 };
+    
+    const subtotal = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const serviceFee = subtotal * 0.05; // 5% service fee
+    const tax = (subtotal + serviceFee) * 0.18; // 18% GST
+    const total = subtotal + serviceFee + tax;
+    
+    return { subtotal, serviceFee, tax, total };
   };
   
   // Generate available dates for booking
@@ -526,7 +555,139 @@ const Booking = () => {
     return true;
   };
 
-  // Create booking
+  // Process payment for service booking
+  const processServicePayment = async (amount, bookingIds) => {
+    if (!selectedPaymentMethod) {
+      setPaymentStatus('cash');
+      return true;
+    }
+
+    setPaymentProcessing(true);
+    setPaymentError(null);
+    
+    try {
+      const paymentData = {
+        amount: amount,
+        upi_id: selectedPaymentMethod.upi_id,
+        description: `Service Payment - ${cart.items.map(item => item.name).join(', ')}`,
+        booking_id: bookingIds[0] // Use first booking ID
+      };
+      
+      const paymentResponse = await PaymentService.upi.initiate(paymentData);
+      setCurrentPayment(paymentResponse);
+      
+      if (paymentResponse.success) {
+        // Start payment verification polling
+        const paymentSuccess = await pollServicePaymentStatus(paymentResponse.payment_id);
+        return paymentSuccess;
+      } else {
+        throw new Error(paymentResponse.message || 'Payment initiation failed');
+      }
+      
+    } catch (error) {
+      console.error('Error processing service payment:', error);
+      setPaymentError(error.response?.data?.message || error.message || 'Payment failed');
+      setPaymentStatus('failed');
+      toast.error('Payment failed. Please try again or choose pay after service.');
+      return false;
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
+  // Poll service payment status
+  const pollServicePaymentStatus = async (paymentId, attempts = 0) => {
+    const maxAttempts = 30; // 30 attempts = 5 minutes
+    const pollInterval = 10000; // 10 seconds
+    
+    if (attempts >= maxAttempts) {
+      setPaymentStatus('timeout');
+      setPaymentError('Payment verification timed out');
+      toast.error('Payment verification timed out. Please check your payment app.');
+      return false;
+    }
+    
+    try {
+      const statusResponse = await PaymentService.upi.verify(paymentId);
+      
+      if (statusResponse.success && statusResponse.status === 'completed') {
+        setPaymentStatus('completed');
+        toast.success('Payment completed successfully!');
+        return true;
+      } else if (statusResponse.status === 'failed') {
+        setPaymentStatus('failed');
+        setPaymentError('Payment failed');
+        toast.error('Payment failed. Please try again.');
+        return false;
+      }
+      
+      // Continue polling if payment is still pending
+      return new Promise((resolve) => {
+        setTimeout(async () => {
+          const result = await pollServicePaymentStatus(paymentId, attempts + 1);
+          resolve(result);
+        }, pollInterval);
+      });
+      
+    } catch (error) {
+      console.error('Error verifying service payment:', error);
+      return new Promise((resolve) => {
+        setTimeout(async () => {
+          const result = await pollServicePaymentStatus(paymentId, attempts + 1);
+          resolve(result);
+        }, pollInterval);
+      });
+    }
+  };
+
+  // Retry service payment
+  const retryServicePayment = async () => {
+    if (paymentRetryCount >= 3) {
+      toast.error('Maximum retry attempts reached. Please try a different payment method.');
+      return;
+    }
+    
+    setPaymentRetryCount(prev => prev + 1);
+    if (serviceBookingId) {
+      const totals = calculateTotals();
+      await processServicePayment(totals.total, [serviceBookingId]);
+    }
+  };
+
+  // Add new UPI payment method
+  const addServicePaymentMethod = async () => {
+    if (!PaymentService.utils.validateUPIId(newUpiId)) {
+      toast.error('Please enter a valid UPI ID');
+      return;
+    }
+    
+    try {
+      const providerName = PaymentService.utils.detectProvider(newUpiId);
+      const response = await PaymentService.upiMethods.add({
+        upi_id: newUpiId,
+        provider_name: providerName,
+        is_default: paymentMethods.length === 0
+      });
+      
+      if (response.success) {
+        const newMethod = response.payment_method;
+        setPaymentMethods(prev => [...prev, newMethod]);
+        
+        if (paymentMethods.length === 0) {
+          setSelectedPaymentMethod(newMethod);
+        }
+        
+        setNewUpiId('');
+        setShowAddPaymentMethod(false);
+        toast.success('Payment method added successfully!');
+      }
+    } catch (error) {
+      console.error('Error adding service payment method:', error);
+      toast.error(error.response?.data?.message || 'Failed to add payment method');
+    }
+  };
+
+  // Create booking with enhanced payment processing
   const handleCreateBooking = async () => {
     setIsProcessing(true);
 
@@ -545,6 +706,7 @@ const Booking = () => {
       }
 
       const scheduledAt = buildUTCMySQLDateTime(selectedDate, selectedTimeSlot.time);
+      const totals = calculateTotals();
 
       // Prepare booking data
       const bookingData = {
@@ -556,22 +718,23 @@ const Booking = () => {
         scheduled_time: scheduledAt,
         address_id: selectedAddress.address_id,
         notes: bookingNotes,
-        payment_method: paymentType === 'pay_after_service' ? 'pay_after_service' : (selectedPaymentMethod ? 'upi' : 'online'),
+        payment_method: paymentType === 'pay_after_service' ? 'pay_after_service' : 'upi',
         worker_preference: workerPreference
       };
 
       // Send to backend
       const result = await BookingService.bookings.create(bookingData);
-
-      // Clear cart
-      await clearCart();
+      setServiceBookingId(result.booking_ids?.[0]);
 
       // Handle different payment types
       if (paymentType === 'pay_after_service') {
         // For pay after service, go directly to booking success
         toast.success('Booking created successfully! Payment will be collected after service completion.');
         
-      const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
+        // Clear cart
+        await clearCart();
+        
+        const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
         navigate('/booking-success', { 
           state: { 
             bookingIds: result.booking_ids,
@@ -581,30 +744,29 @@ const Booking = () => {
           } 
         });
       } else {
-        // For UPI payments, go to payment screen
-        toast.success('Booking created successfully! Redirecting to payment...');
+        // For UPI payments, process payment inline
+        toast.success('Booking created successfully! Processing payment...');
         
-        navigate('/payment', { 
-          state: { 
-            amount: result.total_amount,
-            bookingId: result.booking_ids?.[0], // Use first booking ID
-            description: `Payment for ${cart.items.map(item => item.name).join(', ')}`,
-            selectedPaymentMethod: selectedPaymentMethod, // Pass selected UPI method
-            onPaymentSuccess: (paymentId) => {
-              console.log('Payment successful:', paymentId);
-              // Navigate to booking success after payment
-              const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
-      navigate('/booking-success', { 
-        state: { 
-          bookingIds: result.booking_ids,
-          totalAmount: result.total_amount,
-                  scheduledDate: scheduledLocalDate.toISOString(),
-                  paymentId: paymentId
-        } 
-      });
-            }
-          } 
-        });
+        const paymentSuccess = await processServicePayment(totals.total, result.booking_ids);
+        
+        if (paymentSuccess) {
+          // Clear cart only after successful payment
+          await clearCart();
+          
+          const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
+          navigate('/booking-success', { 
+            state: { 
+              bookingIds: result.booking_ids,
+              totalAmount: result.total_amount,
+              scheduledDate: scheduledLocalDate.toISOString(),
+              paymentId: currentPayment?.payment_id,
+              paymentMethod: 'upi'
+            } 
+          });
+        } else {
+          // Payment failed, but booking is created
+          toast.error('Booking created but payment failed. You can retry payment or pay after service.');
+        }
       }
 
     } catch (error) {
@@ -1126,184 +1288,170 @@ const Booking = () => {
                     />
                   </div>
                   
-                  {/* Payment Method */}
+                  {/* Enhanced Payment Method Selection */}
                   <div className="mb-6">
-                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    <h3 className={`text-lg font-semibold mb-4 ${
+                      darkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
                       Payment Method
                     </h3>
                     
-                    <div className="space-y-4">
-                      {/* Pay After Service Option */}
-                      <div
-                        onClick={() => setPaymentType('pay_after_service')}
-                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                          paymentType === 'pay_after_service'
-                            ? 'border-green-500 bg-green-50'
-                            : darkMode
-                            ? 'border-gray-600 hover:border-gray-500'
-                            : 'border-gray-200 hover:border-gray-300'
+                    {/* Selected Payment Method Display */}
+                    <div className="mb-4">
+                      <button
+                        onClick={() => setShowPaymentMethods(true)}
+                        className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                          darkMode
+                            ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="text-2xl">💰</div>
-                            <div>
-                              <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                Pay After Service
-                              </h4>
-                              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                                Pay cash or card after service completion
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex-shrink-0">
-                            <div className={`w-4 h-4 rounded-full border-2 ${
-                              paymentType === 'pay_after_service'
-                                ? 'border-green-500 bg-green-500'
-                                : 'border-gray-300'
-                            }`}>
-                              {paymentType === 'pay_after_service' && (
-                                <CheckCircle className="h-4 w-4 text-white" />
-                              )}
-                            </div>
-                          </div>
+                        <div className="flex items-center space-x-3">
+                          {paymentType === 'pay_after_service' ? (
+                            <>
+                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                <span className="text-green-600 font-semibold">💰</span>
+                              </div>
+                              <div className="text-left">
+                                <p className={`font-medium ${
+                                  darkMode ? 'text-white' : 'text-gray-900'
+                                }`}>
+                                  Pay After Service
+                                </p>
+                                <p className={`text-sm ${
+                                  darkMode ? 'text-gray-400' : 'text-gray-600'
+                                }`}>
+                                  Pay cash or card after completion
+                                </p>
+                              </div>
+                            </>
+                          ) : selectedPaymentMethod ? (
+                            <>
+                              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                                <span className="text-purple-600 font-semibold">
+                                  {selectedPaymentMethod.provider_name.charAt(0)}
+                                </span>
+                              </div>
+                              <div className="text-left">
+                                <p className={`font-medium ${
+                                  darkMode ? 'text-white' : 'text-gray-900'
+                                }`}>
+                                  {selectedPaymentMethod.provider_name}
+                                </p>
+                                <p className={`text-sm ${
+                                  darkMode ? 'text-gray-400' : 'text-gray-600'
+                                }`}>
+                                  {selectedPaymentMethod.upi_id}
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                                <span className="text-gray-600 font-semibold">💳</span>
+                              </div>
+                              <div className="text-left">
+                                <p className={`font-medium ${
+                                  darkMode ? 'text-white' : 'text-gray-900'
+                                }`}>
+                                  Select Payment Method
+                                </p>
+                                <p className={`text-sm ${
+                                  darkMode ? 'text-gray-400' : 'text-gray-600'
+                                }`}>
+                                  Choose how to pay
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        <ChevronRight className={`h-5 w-5 ${
+                          darkMode ? 'text-gray-400' : 'text-gray-500'
+                        }`} />
+                      </button>
+                    </div>
+                    
+                    {/* Payment Status Display */}
+                    {paymentProcessing && (
+                      <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 mb-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+                          <span className="text-blue-600 dark:text-blue-400 font-medium">
+                            Processing payment...
+                          </span>
                         </div>
                       </div>
-
-                      {/* UPI Payment Options */}
-                      <div
-                        onClick={() => setPaymentType('upi')}
-                        className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                          paymentType === 'upi'
-                            ? 'border-purple-500 bg-purple-50'
-                            : darkMode
-                            ? 'border-gray-600 hover:border-gray-500'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="text-2xl">📱</div>
-                            <div>
-                              <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                UPI Payment
-                              </h4>
-                              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                                Pay instantly with UPI
-                              </p>
-                            </div>
+                    )}
+                    
+                    {paymentError && (
+                      <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 mb-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                            <span className="text-red-600 dark:text-red-400 font-medium">
+                              Payment Failed
+                            </span>
                           </div>
-                          
-                          <div className="flex-shrink-0">
-                            <div className={`w-4 h-4 rounded-full border-2 ${
-                              paymentType === 'upi'
-                                ? 'border-purple-500 bg-purple-500'
-                                : 'border-gray-300'
-                            }`}>
-                              {paymentType === 'upi' && (
-                                <CheckCircle className="h-4 w-4 text-white" />
-                              )}
-                            </div>
-                          </div>
+                          <button
+                            onClick={retryServicePayment}
+                            className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+                          >
+                            Retry
+                          </button>
                         </div>
-
-                        {/* UPI Methods List */}
-                        {paymentType === 'upi' && (
-                          <div className="ml-8 space-y-2">
-                            {loadingPaymentMethods ? (
-                              <div className="flex items-center justify-center py-2">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
-                                <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                                  Loading UPI methods...
+                        <p className="text-sm text-red-600 dark:text-red-400 mt-1">{paymentError}</p>
+                      </div>
+                    )}
+                    
+                    {paymentStatus === 'completed' && (
+                      <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 mb-4">
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          <span className="text-green-600 dark:text-green-400 font-medium">
+                            Payment Completed Successfully
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Service Total Display */}
+                  <div className={`p-4 rounded-xl border mb-6 ${
+                    darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <span className={`text-lg font-semibold ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        Total Amount
+                      </span>
+                      <span className="text-2xl font-bold text-purple-600">
+                        ₹{calculateTotals().total.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          Subtotal
+                        </span>
+                        <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                          ₹{calculateTotals().subtotal.toFixed(2)}
                         </span>
                       </div>
-                            ) : paymentMethods.length === 0 ? (
-                              <div className="text-center py-2">
-                                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                                  No UPI methods found
-                                </p>
-                                <button
-                                  onClick={() => navigate('/add-upi-method')}
-                                  className="text-purple-600 hover:text-purple-700 text-sm font-medium mt-1"
-                                >
-                                  Add UPI Method
-                                </button>
-                    </div>
-                            ) : (
-                              <div className="space-y-2">
-                                {paymentMethods.map((method) => (
-                                  <div
-                                    key={method.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedPaymentMethod(method);
-                                    }}
-                                    className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                                      selectedPaymentMethod?.id === method.id
-                                        ? 'border-purple-400 bg-purple-100'
-                                        : darkMode
-                                        ? 'border-gray-500 hover:border-gray-400'
-                                        : 'border-gray-200 hover:border-gray-300'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center space-x-2">
-                                        <div className="text-lg">
-                                          {getProviderIcon(method.provider_name)}
-                  </div>
-                                        <div>
-                                          <div className="flex items-center space-x-2">
-                                            <h5 className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                                              {method.upi_id}
-                                            </h5>
-                                            {method.is_default && (
-                                              <span className="px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                                                Default
-                                              </span>
-                                            )}
-                </div>
-                                          <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                                            {method.provider_name}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="flex-shrink-0">
-                                        <div className={`w-3 h-3 rounded-full border-2 ${
-                                          selectedPaymentMethod?.id === method.id
-                                            ? 'border-purple-500 bg-purple-500'
-                                            : 'border-gray-300'
-                                        }`}>
-                                          {selectedPaymentMethod?.id === method.id && (
-                                            <CheckCircle className="h-3 w-3 text-white" />
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                                
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate('/add-upi-method');
-                                  }}
-                                  className={`w-full border-2 border-dashed rounded-lg p-2 text-center transition-colors ${
-                                    darkMode
-                                      ? 'border-gray-500 hover:border-gray-400 hover:bg-gray-600'
-                                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  <Plus className="h-4 w-4 text-gray-400 mx-auto mb-1" />
-                                  <span className={`text-xs font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                                    Add New UPI Method
-                                  </span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                      <div className="flex justify-between">
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          Service Fee (5%)
+                        </span>
+                        <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                          ₹{calculateTotals().serviceFee.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                          Tax (18%)
+                        </span>
+                        <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                          ₹{calculateTotals().tax.toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1386,6 +1534,221 @@ const Booking = () => {
         </div>
       </div>
       
+      {/* Payment Methods Modal */}
+      {showPaymentMethods && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-md ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-xl font-bold ${
+                darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Payment Methods
+              </h3>
+              <button
+                onClick={() => setShowPaymentMethods(false)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Pay After Service Option */}
+            <div className="mb-4">
+              <button
+                onClick={() => {
+                  setPaymentType('pay_after_service');
+                  setSelectedPaymentMethod(null);
+                  setShowPaymentMethods(false);
+                }}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                  paymentType === 'pay_after_service'
+                    ? 'border-green-600 bg-green-50 dark:bg-green-900/20'
+                    : darkMode
+                      ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 font-semibold">💰</span>
+                  </div>
+                  <div className="text-left">
+                    <p className={`font-medium ${
+                      darkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Pay After Service
+                    </p>
+                    <p className={`text-sm ${
+                      darkMode ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Pay cash or card after completion
+                    </p>
+                  </div>
+                </div>
+                {paymentType === 'pay_after_service' && (
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                )}
+              </button>
+            </div>
+
+            {/* UPI Payment Methods */}
+            <div className="space-y-3 mb-6">
+              {paymentMethods.map((method) => (
+                <button
+                  key={method.id}
+                  onClick={() => {
+                    setPaymentType('upi');
+                    setSelectedPaymentMethod(method);
+                    setShowPaymentMethods(false);
+                  }}
+                  className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                    paymentType === 'upi' && selectedPaymentMethod?.id === method.id
+                      ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20'
+                      : darkMode
+                        ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                      <span className="text-purple-600 font-semibold">
+                        {method.provider_name.charAt(0)}
+                      </span>
+                    </div>
+                    <div className="text-left">
+                      <p className={`font-medium ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {method.provider_name}
+                      </p>
+                      <p className={`text-sm ${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        {method.upi_id}
+                      </p>
+                      {method.is_default && (
+                        <span className="text-xs text-purple-600 font-medium">Default</span>
+                      )}
+                    </div>
+                  </div>
+                  {paymentType === 'upi' && selectedPaymentMethod?.id === method.id && (
+                    <CheckCircle className="h-5 w-5 text-purple-600" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Add New Payment Method */}
+            <button
+              onClick={() => {
+                setShowPaymentMethods(false);
+                setShowAddPaymentMethod(true);
+              }}
+              className="w-full p-4 rounded-xl border-2 border-dashed border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors flex items-center justify-center space-x-2"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="font-medium">Add New UPI Method</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Payment Method Modal */}
+      {showAddPaymentMethod && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-md ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-xl font-bold ${
+                darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Add UPI Payment Method
+              </h3>
+              <button
+                onClick={() => {
+                  setShowAddPaymentMethod(false);
+                  setNewUpiId('');
+                }}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                UPI ID
+              </label>
+              <input
+                type="text"
+                value={newUpiId}
+                onChange={(e) => setNewUpiId(e.target.value)}
+                placeholder="example@paytm"
+                className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
+                  darkMode
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+              />
+              <p className={`text-xs mt-2 ${
+                darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                Enter your UPI ID (e.g., yourname@paytm, yourname@gpay)
+              </p>
+            </div>
+
+            {/* Provider Detection */}
+            {newUpiId && PaymentService.utils.validateUPIId(newUpiId) && (
+              <div className="mb-6 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    Detected: {PaymentService.utils.detectProvider(newUpiId)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Validation Error */}
+            {newUpiId && !PaymentService.utils.validateUPIId(newUpiId) && (
+              <div className="mb-6 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                    Invalid UPI ID format
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowAddPaymentMethod(false);
+                  setNewUpiId('');
+                }}
+                className="flex-1 py-3 px-4 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addServicePaymentMethod}
+                disabled={!newUpiId || !PaymentService.utils.validateUPIId(newUpiId)}
+                className="flex-1 py-3 px-4 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Method
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   );

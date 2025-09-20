@@ -42,6 +42,9 @@ const UserManagement = lazy(() => import('./app/features/admin/UserManagement'))
 const ProviderDetailsPage = lazy(() => import('./app/features/admin/ProviderDetailsPage'));
 const CategoryManagement = lazy(() => import('./app/features/admin/CategoryManagement'));
 const DisputeManagement = lazy(() => import('./app/features/admin/DisputeManagement'));
+const PricingManagement = lazy(() => import('./app/features/admin/PricingManagement'));
+const SurgeMonitoring = lazy(() => import('./app/features/admin/SurgeMonitoring'));
+const PayoutManagement = lazy(() => import('./app/features/admin/PayoutManagement'));
 
 // SuperAdmin
 const SuperAdminLayout = lazy(() => import('./app/layouts/SuperAdminLayout'));
@@ -432,6 +435,9 @@ function App() {
               <Route path="provider/:providerId" element={<ProviderDetailsPage />} />
               <Route path="categories" element={<CategoryManagement />} />
               <Route path="disputes" element={<DisputeManagement />} />
+              <Route path="pricing" element={<PricingManagement />} />
+              <Route path="surge" element={<SurgeMonitoring />} />
+              <Route path="payouts" element={<PayoutManagement />} />
             </Route>
 
             {/* SuperAdmin Routes */}
