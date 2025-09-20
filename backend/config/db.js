@@ -4,11 +4,21 @@ require('dotenv').config();
 const db = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASS || '',
+  password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME,
-  connectionLimit: 15,
+  port: process.env.DB_PORT || 3306,
+  connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 15,
+  queueLimit: 0,
+  acquireTimeout: 60000,
+  timeout: 60000,
   // Return DATE/DATETIME as strings to avoid timezone conversion to UTC
   dateStrings: true,
+  // Enable multiple statements for migrations
+  multipleStatements: process.env.NODE_ENV !== 'production',
+  // SSL configuration for production
+  ssl: process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: true
+  } : false
 });
  
 db.getConnection((err, connection) => {

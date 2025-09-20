@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
+const FareCalculator = require('../../utils/fareCalculator');
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
   const toRad = deg => (deg * Math.PI) / 180;
@@ -133,7 +134,9 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     drop_lon,
     pickup_time,
     booking_type, // 'with_car' or 'without_car'
-    estimated_cost,
+    quote_id, // New: replaces estimated_cost
+    vehicle_type_id, // New: vehicle type for fare calculation
+    estimated_cost, // Deprecated: kept for backward compatibility
     cost_type,
     duration,
     vehicle_id // Optional: if booking with a specific vehicle
@@ -146,11 +149,69 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     return res.status(400).json({ message: 'Missing required booking information.' });
   }
 
+  // Validate quote_id if provided (new flow) or fall back to estimated_cost (legacy)
+  if (!quote_id && !estimated_cost) {
+    return res.status(400).json({ 
+      message: 'Either quote_id (recommended) or estimated_cost is required' 
+    });
+  }
+
+  if (quote_id && !vehicle_type_id) {
+    return res.status(400).json({ 
+      message: 'vehicle_type_id is required when using quote_id' 
+    });
+  }
+
   const with_vehicle = booking_type === 'with_car' ? 1 : 0;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    let finalEstimatedCost = estimated_cost || 0;
+    let fareBreakdown = null;
+
+    // Handle new quote-based booking flow
+    if (quote_id && vehicle_type_id) {
+      try {
+        // Recalculate fare to ensure quote is still valid
+        const distanceData = await FareCalculator.getDistanceAndDuration(
+          { lat: pickup_lat, lng: pickup_lon },
+          { lat: drop_lat, lng: drop_lon }
+        );
+
+        fareBreakdown = await FareCalculator.calculateFareEstimate({
+          distance_km: distanceData.distance_km,
+          duration_min: distanceData.duration_min,
+          vehicle_type_id,
+          pickup_time: new Date(pickup_time),
+          pickup_location: { lat: pickup_lat, lng: pickup_lon },
+          drop_location: { lat: drop_lat, lng: drop_lon }
+        });
+
+        // Validate quote_id matches (basic validation)
+        if (fareBreakdown.quote_id !== quote_id) {
+          // For now, accept any valid UUID format quote_id
+          // In production, validate against stored quotes
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          if (!uuidRegex.test(quote_id)) {
+            await connection.rollback();
+            return res.status(400).json({ message: 'Invalid or expired quote_id' });
+          }
+          // Use the provided quote_id but with recalculated fare
+          fareBreakdown.quote_id = quote_id;
+        }
+
+        finalEstimatedCost = fareBreakdown.total_fare;
+        
+      } catch (fareError) {
+        console.error('Error calculating fare for booking:', fareError);
+        await connection.rollback();
+        return res.status(400).json({ 
+          message: 'Error validating fare quote. Please request a new quote.' 
+        });
+      }
+    }
 
     // 1. Insert into bookings table (main booking record)
     const [mainBookingResult] = await connection.query(
@@ -162,7 +223,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
         user_id,
         'ride',
         pickup_time,
-        estimated_cost || 0,
+        finalEstimatedCost,
         'pending',
         'pending',
         cost_type,
@@ -191,7 +252,12 @@ router.post('/book-ride', verifyToken, async (req, res) => {
       ]
     );
 
-    // 3. Get ride category id
+    // 3. Store fare breakdown if using new quote system
+    if (fareBreakdown && quote_id) {
+      await FareCalculator.storeFareQuote(fareBreakdown, bookingId);
+    }
+
+    // 4. Get ride category id
     const [rideCategory] = await connection.query(
       `SELECT id FROM service_categories WHERE category_type = 'driver' AND is_active = 1`
     );
@@ -203,7 +269,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
 
     const rideCategoryId = rideCategory[0].id;
 
-    // 4. Fetch provider permanent addresses and convert to coordinates
+    // 5. Fetch provider permanent addresses and convert to coordinates
     const [providers] = await connection.query(`
       SELECT 
         p.id as provider_id,
@@ -261,7 +327,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     const driverIds = [];
     console.log("locations", locations);
     
-    // 5. Find drivers within service radius
+    // 6. Find drivers within service radius
     for (const row of locations) {
       const distance = haversineDistance(pickup_lat, pickup_lon, row.latitude, row.longitude);
       if (distance <= row.service_radius_km) {
@@ -280,7 +346,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     
     console.log("driver IDs", driverIds);
 
-    // 6. Insert booking requests
+    // 7. Insert booking requests
     for (const providerId of driverIds) {
       await connection.query(
         `INSERT INTO booking_requests (booking_id, provider_id, status, requested_at)
@@ -314,7 +380,17 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     res.status(201).json({
       message: 'Driver booking created successfully',
       booking_id: bookingId,
-      available_providers: driverIds
+      available_providers: driverIds,
+      quote_id: quote_id || null,
+      estimated_cost: finalEstimatedCost,
+      fare_breakdown: fareBreakdown ? {
+        distance_km: fareBreakdown.distance_km,
+        duration_min: fareBreakdown.duration_min,
+        vehicle_type: fareBreakdown.vehicle_type_name,
+        total_fare: fareBreakdown.total_fare,
+        surge_multiplier: fareBreakdown.surge_multiplier,
+        night_hours: fareBreakdown.night_hours_applied
+      } : null
     });
 
   } catch (error) {

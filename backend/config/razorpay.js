@@ -1,17 +1,72 @@
 const Razorpay = require('razorpay');
 require('dotenv').config();
 
-// Razorpay configuration
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// Check if Razorpay keys are available
+const hasRazorpayKeys = process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET;
 
-// Validate Razorpay configuration
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+let razorpay = null;
+
+// Initialize Razorpay only if keys are available
+if (hasRazorpayKeys) {
+  try {
+    razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+    console.log('✅ Razorpay initialized successfully');
+  } catch (error) {
+    console.error('❌ Error initializing Razorpay:', error.message);
+    razorpay = null;
+  }
+} else {
   console.warn('⚠️  Razorpay credentials not found in environment variables');
-  console.warn('   Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to your .env file');
+  console.warn('   Payment processing will use mock functions for testing');
+  console.warn('   Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to your .env file for live payments');
 }
+
+// Mock functions for when Razorpay is not available
+const createMockOrder = async (amount, currency = 'INR', receipt = null) => {
+  console.log(`🔧 MOCK: Creating order for ₹${amount/100} (${currency})`);
+  return {
+    success: true,
+    order: {
+      id: `mock_order_${Date.now()}`,
+      amount: Math.round(amount * 100),
+      currency: currency,
+      receipt: receipt || `mock_receipt_${Date.now()}`,
+      status: 'created'
+    }
+  };
+};
+
+const createMockPayment = async (orderId, upiId, amount, description) => {
+  console.log(`🔧 MOCK: Processing UPI payment for ₹${amount/100} via ${upiId}`);
+  return {
+    success: true,
+    payment: {
+      id: `mock_payment_${Date.now()}`,
+      order_id: orderId,
+      amount: Math.round(amount * 100),
+      currency: 'INR',
+      status: 'captured',
+      method: 'upi',
+      upi: { vpa: upiId }
+    }
+  };
+};
+
+const createMockVerification = async (paymentId) => {
+  console.log(`🔧 MOCK: Verifying payment ${paymentId}`);
+  return {
+    success: true,
+    payment: {
+      id: paymentId,
+      status: 'captured',
+      amount: 100000, // ₹1000 in paise
+      currency: 'INR'
+    }
+  };
+};
 
 // Razorpay UPI configuration
 const UPI_CONFIG = {
@@ -34,6 +89,11 @@ const UPI_CONFIG = {
 
 // Helper function to create UPI payment order
 const createUPIOrder = async (amount, currency = 'INR', receipt = null) => {
+  // Use mock function if Razorpay is not available
+  if (!hasRazorpayKeys || !razorpay) {
+    return await createMockOrder(amount, currency, receipt);
+  }
+
   try {
     const options = {
       amount: Math.round(amount * 100), // Convert to paise
@@ -62,6 +122,11 @@ const createUPIOrder = async (amount, currency = 'INR', receipt = null) => {
 
 // Helper function to create UPI payment request
 const createUPIPaymentRequest = async (orderId, upiId, amount, description) => {
+  // Use mock function if Razorpay is not available
+  if (!hasRazorpayKeys || !razorpay) {
+    return await createMockPayment(orderId, upiId, amount, description);
+  }
+
   try {
     const paymentRequest = {
       order_id: orderId,
@@ -95,6 +160,11 @@ const createUPIPaymentRequest = async (orderId, upiId, amount, description) => {
 
 // Helper function to verify payment
 const verifyPayment = async (paymentId) => {
+  // Use mock function if Razorpay is not available
+  if (!hasRazorpayKeys || !razorpay) {
+    return await createMockVerification(paymentId);
+  }
+
   try {
     const payment = await razorpay.payments.fetch(paymentId);
     return {
@@ -112,6 +182,21 @@ const verifyPayment = async (paymentId) => {
 
 // Helper function to capture payment
 const capturePayment = async (paymentId, amount) => {
+  // Use mock function if Razorpay is not available
+  if (!hasRazorpayKeys || !razorpay) {
+    console.log(`🔧 MOCK: Capturing payment ${paymentId} for ₹${amount/100}`);
+    return {
+      success: true,
+      capture: {
+        id: `mock_capture_${Date.now()}`,
+        payment_id: paymentId,
+        amount: Math.round(amount * 100),
+        currency: 'INR',
+        status: 'captured'
+      }
+    };
+  }
+
   try {
     const capture = await razorpay.payments.capture(paymentId, Math.round(amount * 100), 'INR');
     return {
@@ -129,6 +214,21 @@ const capturePayment = async (paymentId, amount) => {
 
 // Helper function to refund payment
 const refundPayment = async (paymentId, amount, reason = 'Refund requested by customer') => {
+  // Use mock function if Razorpay is not available
+  if (!hasRazorpayKeys || !razorpay) {
+    console.log(`🔧 MOCK: Refunding payment ${paymentId} for ₹${amount/100}`);
+    return {
+      success: true,
+      refund: {
+        id: `mock_refund_${Date.now()}`,
+        payment_id: paymentId,
+        amount: Math.round(amount * 100),
+        currency: 'INR',
+        status: 'processed'
+      }
+    };
+  }
+
   try {
     const refund = await razorpay.payments.refund(paymentId, {
       amount: Math.round(amount * 100), // Convert to paise
@@ -151,6 +251,19 @@ const refundPayment = async (paymentId, amount, reason = 'Refund requested by cu
 
 // Helper function to get payment methods
 const getPaymentMethods = async () => {
+  // Use mock function if Razorpay is not available
+  if (!hasRazorpayKeys || !razorpay) {
+    console.log('🔧 MOCK: Returning mock payment methods');
+    return {
+      success: true,
+      methods: {
+        upi: ['gpay', 'paytm', 'phonepe', 'bhim'],
+        cards: ['credit_card', 'debit_card'],
+        netbanking: ['sbi', 'hdfc', 'icici']
+      }
+    };
+  }
+
   try {
     const methods = await razorpay.methods.fetchAll();
     return {
@@ -183,7 +296,8 @@ const validateWebhookSignature = (body, signature, secret) => {
 };
 
 module.exports = {
-  razorpay,
+  razorpay: razorpay || null, // Return null if not initialized
+  hasRazorpayKeys,
   UPI_CONFIG,
   createUPIOrder,
   createUPIPaymentRequest,

@@ -22,6 +22,10 @@ const cartRoute = require('./routes/category_management/cart');
 const addressRoute = require('./routes/customer_management/addresses');
 const bookingRoute = require('./routes/customer_management/bookings');
 const driverRoute = require('./routes/customer_management/driver_booking');
+const rideQuoteRoute = require('./routes/customer_management/ride_quote');
+const tripTrackingRoute = require('./routes/worker_management/trip_tracking');
+const pricingAdminRoute = require('./routes/admin_management/pricing_admin');
+const payoutAdminRoute = require('./routes/admin_management/payout_admin');
 const paymentRoute = require('./routes/customer_management/payments');
 const webhookRoute = require('./routes/customer_management/webhooks');
 const baseURL = process.env.BASE_URL1 || '/api';
@@ -30,6 +34,7 @@ app.use(`${baseURL}/categories`, categoryRoute);
 app.use(`${baseURL}/auth`, authRoute);
 app.use(`${baseURL}/customer`, customerRoute);
 app.use(`${baseURL}/customer/driver`, driverRoute);
+app.use(`${baseURL}/customer/ride`, rideQuoteRoute);
 app.use(`${baseURL}/customer/cart`, cartRoute);
 app.use(`${baseURL}/customer/addresses`, addressRoute);
 app.use(`${baseURL}/customer/bookings`, bookingRoute);
@@ -37,9 +42,35 @@ app.use(`${baseURL}/payment`, paymentRoute);
 app.use(`${baseURL}/webhooks`, webhookRoute);
 app.use(`${baseURL}/superadmin`, superAdminRoute);
 app.use(`${baseURL}/admin`, providerAdminRoute);
+app.use(`${baseURL}/admin/pricing`, pricingAdminRoute);
+app.use(`${baseURL}/admin/payouts`, payoutAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker-management`, require('./routes/worker_management/cash_payments'));
 app.use(`${baseURL}/worker`, workerDocsRoute);
+app.use(`${baseURL}/worker/trip`, tripTrackingRoute);
+
+// Health check endpoint
+app.get(`${baseURL}/health`, async (req, res) => {
+  try {
+    // Check database connection
+    await pool.query('SELECT 1');
+    
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      version: process.env.npm_package_version || '1.0.0'
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
+});
+
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);
 const io = new Server(server, {

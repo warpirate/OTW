@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { MapPin, Clock, ArrowLeft, Search, Car, User, Star, Shield, Share2, Phone, Calendar, Map, Navigation, AlertTriangle, CheckCircle, XCircle, Eye, EyeOff, Plus, Settings, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { DriverService } from '../services/driver.service';
+import RideQuoteService from '../services/rideQuote.service';
+import PaymentService from '../services/payment.service';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
@@ -31,6 +33,15 @@ const DriverBooking = () => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  
+  // Dynamic fare estimation states
+  const [vehicleTypes, setVehicleTypes] = useState([]);
+  const [selectedVehicleType, setSelectedVehicleType] = useState(null);
+  const [currentQuote, setCurrentQuote] = useState(null);
+  const [fareBreakdown, setFareBreakdown] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [pricingInfo, setPricingInfo] = useState(null);
+  const [quoteError, setQuoteError] = useState(null);
 
   // Real-time tracking states
   const [socket, setSocket] = useState(null);
@@ -38,6 +49,31 @@ const DriverBooking = () => {
   const [driverDetails, setDriverDetails] = useState(null);
   const [tripStatus, setTripStatus] = useState('searching');
   const [eta, setEta] = useState(null);
+  
+  // Enhanced ride lifecycle states
+  const [currentBooking, setCurrentBooking] = useState(null);
+  const [searchingDrivers, setSearchingDrivers] = useState(false);
+  const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const [tripProgress, setTripProgress] = useState(0);
+  const [finalFare, setFinalFare] = useState(null);
+  const [tripReceipt, setTripReceipt] = useState(null);
+  const [showRating, setShowRating] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [feedback, setFeedback] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [showCancellation, setShowCancellation] = useState(false);
+  
+  // Payment gateway states
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
+  const [currentPayment, setCurrentPayment] = useState(null);
+  const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
+  const [newUpiId, setNewUpiId] = useState('');
+  const [paymentRetryCount, setPaymentRetryCount] = useState(0);
   
   // Safety and sharing states
   const [shareTrip, setShareTrip] = useState(false);
@@ -53,7 +89,7 @@ const DriverBooking = () => {
   const [bookingNotes, setBookingNotes] = useState('');
   const [specialRequests, setSpecialRequests] = useState([]);
 
-  // Simple pricing constants
+  // Simple pricing constants (fallback)
   const RATE_PER_HOUR = 500;
   const RATE_PER_DAY = 1500;
 
@@ -77,25 +113,41 @@ const DriverBooking = () => {
       console.log('Connected to real-time server');
     });
 
+    newSocket.on('driver_assigned', (data) => {
+      setDriverDetails(data.driver);
+      setTripStatus('driver_assigned');
+      toast.success(`Driver ${data.driver.name} assigned to your trip!`);
+    });
+
     newSocket.on('driver_location_update', (data) => {
       setDriverLocation(data.location);
       setEta(data.eta);
     });
 
-    newSocket.on('driver_assigned', (data) => {
-      setDriverDetails(data.driver);
-      setTripStatus('confirmed');
-      toast.success(`Driver ${data.driver.name} assigned to your trip!`);
+    newSocket.on('driver_arrived', () => {
+      setTripStatus('driver_arrived');
+      toast.info('Your driver has arrived!');
     });
 
     newSocket.on('trip_started', () => {
-      setTripStatus('in_progress');
+      setTripStatus('trip_started');
       toast.info('Your trip has started!');
     });
 
-    newSocket.on('trip_completed', () => {
-      setTripStatus('completed');
+    newSocket.on('trip_progress', (data) => {
+      setTripProgress(data.progress);
+      setEta(data.eta);
+    });
+
+    newSocket.on('trip_completed', (data) => {
+      setTripStatus('trip_completed');
+      setFinalFare(data.final_fare);
       toast.success('Trip completed successfully!');
+    });
+
+    newSocket.on('trip_cancelled', (data) => {
+      setTripStatus('cancelled');
+      toast.info(`Trip cancelled: ${data.reason}`);
     });
 
     setSocket(newSocket);
@@ -130,6 +182,55 @@ const DriverBooking = () => {
     
     loadFavorites();
     loadEmergencyContacts();
+  }, []);
+
+  // Load vehicle types and pricing info on component mount
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        // Load vehicle types
+        const vehicleTypesResponse = await RideQuoteService.getVehicleTypes();
+        setVehicleTypes(vehicleTypesResponse.vehicle_types || []);
+        
+        // Set default vehicle type (first one)
+        if (vehicleTypesResponse.vehicle_types?.length > 0) {
+          setSelectedVehicleType(vehicleTypesResponse.vehicle_types[0]);
+        }
+        
+        // Load general pricing info
+        const pricingResponse = await RideQuoteService.getPricingInfo();
+        setPricingInfo(pricingResponse);
+        
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+        toast.error('Failed to load pricing information');
+      }
+    };
+    
+    loadInitialData();
+  }, []);
+
+  // Load payment methods on component mount
+  useEffect(() => {
+    const loadPaymentMethods = async () => {
+      try {
+        const response = await PaymentService.upiMethods.getAll();
+        setPaymentMethods(response.payment_methods || []);
+        
+        // Set default payment method
+        const defaultMethod = response.payment_methods?.find(method => method.is_default);
+        if (defaultMethod) {
+          setSelectedPaymentMethod(defaultMethod);
+        } else if (response.payment_methods?.length > 0) {
+          setSelectedPaymentMethod(response.payment_methods[0]);
+        }
+      } catch (error) {
+        console.error('Error loading payment methods:', error);
+        // Don't show error toast here as user might not have any payment methods yet
+      }
+    };
+    
+    loadPaymentMethods();
   }, []);
 
   const debounce = (func, delay) => {
@@ -170,6 +271,396 @@ const DriverBooking = () => {
 
   const debouncedFetchSuggestions = useCallback(debounce(fetchSuggestions, 500), []);
 
+  // Generate fare quote when locations and vehicle type are selected
+  const generateQuote = useCallback(async () => {
+    if (!pickupLocation.selected || !dropLocation.selected || !selectedVehicleType) {
+      setCurrentQuote(null);
+      setFareBreakdown(null);
+      return;
+    }
+
+    setQuoteLoading(true);
+    setQuoteError(null);
+    
+    try {
+      const pickupDateTime = isScheduledBooking 
+        ? new Date(`${scheduledDate} ${scheduledTime}:00`)
+        : new Date();
+      
+      const quoteData = {
+        pickup: {
+          lat: parseFloat(pickupLocation.selected.lat),
+          lng: parseFloat(pickupLocation.selected.lon),
+          address: pickupLocation.selected.display_name
+        },
+        drop: {
+          lat: parseFloat(dropLocation.selected.lat),
+          lng: parseFloat(dropLocation.selected.lon),
+          address: dropLocation.selected.display_name
+        },
+        vehicle_type_id: selectedVehicleType.id,
+        pickup_time: pickupDateTime.toISOString(),
+        passenger_count: 1
+      };
+      
+      // Validate quote data
+      const validation = RideQuoteService.utils.validateQuoteRequest(quoteData);
+      if (!validation.isValid) {
+        setQuoteError(Object.values(validation.errors).join(', '));
+        return;
+      }
+      
+      const quote = await RideQuoteService.getQuote(quoteData);
+      setCurrentQuote(quote);
+      setFareBreakdown(quote.fare);
+      
+    } catch (error) {
+      console.error('Error generating quote:', error);
+      setQuoteError(error.response?.data?.message || 'Failed to calculate fare');
+      toast.error('Failed to calculate fare estimate');
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, [pickupLocation.selected, dropLocation.selected, selectedVehicleType, isScheduledBooking, scheduledDate, scheduledTime]);
+
+  // Debounced quote generation
+  const debouncedGenerateQuote = useCallback(debounce(generateQuote, 1000), [generateQuote]);
+
+  // Search for nearby drivers
+  const searchNearbyDrivers = useCallback(async () => {
+    if (!pickupLocation.selected) return;
+    
+    try {
+      setSearchingDrivers(true);
+      const response = await DriverService.searchNearbyDrivers({
+        pickup: {
+          lat: pickupLocation.selected.lat,
+          lng: pickupLocation.selected.lon
+        }
+      });
+      
+      setNearbyDrivers(response.drivers || []);
+      
+      if (response.drivers?.length > 0) {
+        toast.success(`Found ${response.drivers.length} nearby drivers`);
+        // Simulate driver assignment after 3-8 seconds
+        setTimeout(() => {
+          assignDriver(response.drivers[0]);
+        }, Math.random() * 5000 + 3000);
+      } else {
+        toast.error('No drivers available in your area');
+        setTripStatus('no_drivers');
+      }
+    } catch (error) {
+      console.error('Error searching drivers:', error);
+      toast.error('Failed to find nearby drivers');
+      setTripStatus('search_failed');
+    } finally {
+      setSearchingDrivers(false);
+    }
+  }, [pickupLocation.selected]);
+
+  // Simulate driver assignment
+  const assignDriver = (driver) => {
+    setDriverDetails({
+      id: driver.provider_id,
+      name: driver.provider_name,
+      rating: (4.2 + Math.random() * 0.8).toFixed(1),
+      vehicleNumber: `KA ${Math.floor(Math.random() * 99) + 1} ${String.fromCharCode(65 + Math.floor(Math.random() * 26))}${String.fromCharCode(65 + Math.floor(Math.random() * 26))} ${Math.floor(Math.random() * 9999) + 1000}`,
+      vehicleModel: ['Toyota Etios', 'Maruti Swift', 'Hyundai Xcent', 'Honda City'][Math.floor(Math.random() * 4)],
+      phone: `+91 ${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+      photo: null,
+      location: { lat: driver.lat, lng: driver.lng },
+      distance: driver.distance_km
+    });
+    
+    setTripStatus('driver_assigned');
+    setEta(driver.eta_minutes);
+    toast.success(`Driver ${driver.provider_name} assigned to your trip!`);
+    
+    // Simulate driver coming to pickup
+    setTimeout(() => {
+      setTripStatus('driver_coming');
+      setEta(Math.max(1, driver.eta_minutes - 2));
+    }, 2000);
+    
+    // Simulate driver arrival
+    setTimeout(() => {
+      setTripStatus('driver_arrived');
+      setEta(0);
+      toast.info('Your driver has arrived!');
+    }, (driver.eta_minutes * 60 * 1000) * 0.3); // 30% of actual time for demo
+  };
+
+  // Start trip
+  const startTrip = () => {
+    setTripStatus('trip_started');
+    setTripProgress(0);
+    toast.success('Trip started! Enjoy your ride.');
+    
+    // Simulate trip progress
+    const progressInterval = setInterval(() => {
+      setTripProgress(prev => {
+        const newProgress = prev + Math.random() * 5;
+        if (newProgress >= 100) {
+          clearInterval(progressInterval);
+          completeTrip();
+          return 100;
+        }
+        return newProgress;
+      });
+    }, 2000);
+    
+    // Update ETA during trip
+    const etaInterval = setInterval(() => {
+      setEta(prev => {
+        const newEta = Math.max(0, prev - 1);
+        if (newEta <= 0) {
+          clearInterval(etaInterval);
+        }
+        return newEta;
+      });
+    }, 60000); // Update every minute
+  };
+
+  // Complete trip
+  const completeTrip = async () => {
+    setTripStatus('trip_completed');
+    
+    try {
+      // Calculate final fare (simulate backend calculation)
+      const actualDistance = currentQuote?.distance_km * (0.9 + Math.random() * 0.2); // ±10% variance
+      const actualDuration = currentQuote?.duration_min * (0.8 + Math.random() * 0.4); // ±20% variance
+      
+      const finalFareData = {
+        base_fare: currentQuote?.fare.base || 0,
+        distance_fare: actualDistance * selectedVehicleType?.pricing.rate_per_km || 0,
+        time_fare: actualDuration * selectedVehicleType?.pricing.rate_per_min || 0,
+        surge_fare: currentQuote?.fare.surge || 0,
+        night_fare: currentQuote?.fare.night || 0,
+        total: 0,
+        actual_distance: actualDistance,
+        actual_duration: actualDuration,
+        estimated_total: currentQuote?.fare.total || 0
+      };
+      
+      finalFareData.total = finalFareData.base_fare + finalFareData.distance_fare + 
+                           finalFareData.time_fare + finalFareData.surge_fare + finalFareData.night_fare;
+      
+      setFinalFare(finalFareData);
+      
+      // Generate receipt
+      setTripReceipt({
+        trip_id: `OTW${Date.now()}`,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+        pickup: pickupLocation.selected?.display_name,
+        drop: dropLocation.selected?.display_name,
+        driver: driverDetails?.name,
+        vehicle: `${driverDetails?.vehicleModel} (${driverDetails?.vehicleNumber})`,
+        distance: actualDistance.toFixed(1),
+        duration: Math.round(actualDuration),
+        fare: finalFareData
+      });
+      
+      toast.success('Trip completed successfully!');
+      
+      // Process payment if payment method is selected
+      if (selectedPaymentMethod) {
+        await processPayment(finalFareData.total);
+      } else {
+        setPaymentStatus('cash');
+      }
+      
+      // Show rating modal after payment processing
+      setTimeout(() => {
+        setShowRating(true);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error completing trip:', error);
+      toast.error('Error processing trip completion');
+    }
+  };
+
+  // Process payment
+  const processPayment = async (amount) => {
+    if (!selectedPaymentMethod) {
+      setPaymentStatus('cash');
+      return;
+    }
+
+    setPaymentProcessing(true);
+    setPaymentError(null);
+    
+    try {
+      const paymentData = {
+        amount: amount,
+        upi_id: selectedPaymentMethod.upi_id,
+        description: `OTW Ride Payment - ${tripReceipt?.trip_id || 'Trip'}`,
+        booking_id: currentBooking?.id
+      };
+      
+      const paymentResponse = await PaymentService.upi.initiate(paymentData);
+      setCurrentPayment(paymentResponse);
+      
+      if (paymentResponse.success) {
+        // Start payment verification polling
+        pollPaymentStatus(paymentResponse.payment_id);
+        toast.success('Payment initiated successfully!');
+      } else {
+        throw new Error(paymentResponse.message || 'Payment initiation failed');
+      }
+      
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      setPaymentError(error.response?.data?.message || error.message || 'Payment failed');
+      setPaymentStatus('failed');
+      toast.error('Payment failed. You can retry or pay with cash.');
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
+  // Poll payment status
+  const pollPaymentStatus = async (paymentId, attempts = 0) => {
+    const maxAttempts = 30; // 30 attempts = 5 minutes
+    const pollInterval = 10000; // 10 seconds
+    
+    if (attempts >= maxAttempts) {
+      setPaymentStatus('timeout');
+      setPaymentError('Payment verification timed out');
+      toast.error('Payment verification timed out. Please check your payment app.');
+      return;
+    }
+    
+    try {
+      const statusResponse = await PaymentService.upi.verify(paymentId);
+      
+      if (statusResponse.success && statusResponse.status === 'completed') {
+        setPaymentStatus('completed');
+        toast.success('Payment completed successfully!');
+        return;
+      } else if (statusResponse.status === 'failed') {
+        setPaymentStatus('failed');
+        setPaymentError('Payment failed');
+        toast.error('Payment failed. Please try again.');
+        return;
+      }
+      
+      // Continue polling if payment is still pending
+      setTimeout(() => {
+        pollPaymentStatus(paymentId, attempts + 1);
+      }, pollInterval);
+      
+    } catch (error) {
+      console.error('Error verifying payment:', error);
+      setTimeout(() => {
+        pollPaymentStatus(paymentId, attempts + 1);
+      }, pollInterval);
+    }
+  };
+
+  // Retry payment
+  const retryPayment = async () => {
+    if (paymentRetryCount >= 3) {
+      toast.error('Maximum retry attempts reached. Please try a different payment method.');
+      return;
+    }
+    
+    setPaymentRetryCount(prev => prev + 1);
+    await processPayment(finalFare?.total);
+  };
+
+  // Add new UPI payment method
+  const addPaymentMethod = async () => {
+    if (!PaymentService.utils.validateUPIId(newUpiId)) {
+      toast.error('Please enter a valid UPI ID');
+      return;
+    }
+    
+    try {
+      const providerName = PaymentService.utils.detectProvider(newUpiId);
+      const response = await PaymentService.upiMethods.add({
+        upi_id: newUpiId,
+        provider_name: providerName,
+        is_default: paymentMethods.length === 0
+      });
+      
+      if (response.success) {
+        const newMethod = response.payment_method;
+        setPaymentMethods(prev => [...prev, newMethod]);
+        
+        if (paymentMethods.length === 0) {
+          setSelectedPaymentMethod(newMethod);
+        }
+        
+        setNewUpiId('');
+        setShowAddPaymentMethod(false);
+        toast.success('Payment method added successfully!');
+      }
+    } catch (error) {
+      console.error('Error adding payment method:', error);
+      toast.error(error.response?.data?.message || 'Failed to add payment method');
+    }
+  };
+
+  // Cancel trip
+  const cancelTrip = async (reason) => {
+    try {
+      // Here you would call the backend API to cancel the trip
+      // await RideService.cancelTrip(currentBooking.id, { reason });
+      
+      // Process refund if payment was made
+      if (currentPayment && paymentStatus === 'completed') {
+        await processRefund(reason);
+      }
+      
+      toast.success('Trip cancelled successfully');
+      setTripStatus('cancelled');
+      
+      // Reset after showing cancellation confirmation
+      setTimeout(() => {
+        setTripStatus('searching');
+        setCurrentBooking(null);
+        setDriverDetails(null);
+        setShowCancellation(false);
+        setCurrentPayment(null);
+        setPaymentStatus('pending');
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error cancelling trip:', error);
+      toast.error('Failed to cancel trip');
+    }
+  };
+
+  // Process refund
+  const processRefund = async (reason) => {
+    try {
+      const refundData = {
+        reason: reason,
+        amount: finalFare?.total || currentQuote?.fare.total
+      };
+      
+      const refundResponse = await PaymentService.upi.refund(currentPayment.payment_id, refundData);
+      
+      if (refundResponse.success) {
+        toast.success('Refund initiated successfully. It will be processed within 5-7 business days.');
+      } else {
+        toast.error('Refund initiation failed. Please contact support.');
+      }
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      toast.error('Refund processing failed. Please contact support.');
+    }
+  };
+
+  // Trigger quote generation when locations or vehicle type change
+  useEffect(() => {
+    debouncedGenerateQuote();
+  }, [debouncedGenerateQuote]);
+
   const handleLocationChange = (e, locationType) => {
     const query = e.target.value;
     if (locationType === 'pickup') {
@@ -186,6 +677,9 @@ const DriverBooking = () => {
     } else {
       setDropLocation({ query: suggestion.display_name, suggestions: [], selected: suggestion });
     }
+    // Clear previous quote when location changes
+    setCurrentQuote(null);
+    setFareBreakdown(null);
   };
 
   // Add to favorites
@@ -299,6 +793,23 @@ const DriverBooking = () => {
       return;
     }
     
+    if (!selectedVehicleType) {
+      toast.error('Please select a vehicle type.');
+      return;
+    }
+    
+    if (!currentQuote) {
+      toast.error('Please wait for fare calculation to complete.');
+      return;
+    }
+    
+    // Validate quote hasn't expired
+    if (RideQuoteService.utils.isQuoteExpired(currentQuote.expires_at)) {
+      toast.error('Quote has expired. Please wait for a new quote.');
+      generateQuote(); // Generate new quote
+      return;
+    }
+    
     const bookingTime = isScheduledBooking 
       ? `${scheduledDate} ${scheduledTime}:00` 
       : formatDateToMySQL(new Date());
@@ -307,39 +818,32 @@ const DriverBooking = () => {
       toast.error('Please select a date and time for your scheduled booking.');
       return;
     }
-    
-    // Duration validation - using default value of 1 if not set
-    const validDuration = duration || 1;
-
-    const bookingType = activeTab === 'withCar' ? 'with_car' : 'without_car';
-    const costType = activeTab === 'withCar' ? 'per_hour' : 'per_day';
-    const rate = activeTab === 'withCar' ? RATE_PER_HOUR : RATE_PER_DAY;
-    const estimated_cost = validDuration * rate;
-
-    const bookingData = {
-      pickup_address: pickupLocation.selected.display_name,
-      pickup_lat: pickupLocation.selected.lat,
-      pickup_lon: pickupLocation.selected.lon,
-      drop_address: dropLocation.selected.display_name,
-      drop_lat: dropLocation.selected.lat,
-      drop_lon: dropLocation.selected.lon,
-      pickup_time: bookingTime,
-      booking_type: bookingType,
-      cost_type: costType,
-      duration: validDuration,
-      estimated_cost,
-      is_scheduled: isScheduledBooking,
-      ac_preference: acPreference,
-      vehicle_type: vehicleType,
-      booking_notes: bookingNotes,
-      special_requests: specialRequests,
-      preferred_driver: preferredDriver
-    };
 
     setLoading(true);
     try {
+      // Validate quote before booking
+      await RideQuoteService.validateQuote(currentQuote.quote_id);
+      
+      const bookingData = {
+        pickup_address: pickupLocation.selected.display_name,
+        pickup_lat: pickupLocation.selected.lat,
+        pickup_lon: pickupLocation.selected.lon,
+        drop_address: dropLocation.selected.display_name,
+        drop_lat: dropLocation.selected.lat,
+        drop_lon: dropLocation.selected.lon,
+        pickup_time: bookingTime,
+        quote_id: currentQuote.quote_id,
+        vehicle_type_id: selectedVehicleType.id,
+        booking_type: 'ride', // New booking type for ride bookings
+        estimated_cost: currentQuote.fare.total,
+        is_scheduled: isScheduledBooking,
+        booking_notes: bookingNotes,
+        special_requests: specialRequests,
+        preferred_driver: preferredDriver
+      };
+
       const response = await DriverService.booking.create(bookingData);
-      toast.success(response.message || 'Booking created successfully');
+      toast.success(response.message || 'Ride booked successfully!');
       
       // Connect to real-time tracking
       if (socket) {
@@ -347,11 +851,24 @@ const DriverBooking = () => {
         socket.emit('join_trip', { bookingId: response.booking_id });
       }
       
-      setTripStatus('searching');
-      navigate('/bookings');
+      // Start the ride lifecycle
+      setCurrentBooking(response.booking);
+      setTripStatus('searching_driver');
+      setSearchingDrivers(true);
+      
+      // Start searching for nearby drivers
+      searchNearbyDrivers();
+      
+      // Don't navigate away, stay on this page for ride tracking
+      toast.info('Searching for nearby drivers...');
     } catch (error) {
       console.error('Error creating booking:', error);
-      toast.error(error.response?.data?.message || 'Failed to create booking.');
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('quote')) {
+        toast.error('Quote has expired. Generating new quote...');
+        generateQuote();
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to create booking.');
+      }
     } finally {
       setLoading(false);
     }
@@ -391,7 +908,7 @@ const DriverBooking = () => {
             </div>
           )}
 
-          {/* Ride Tracking View - Shows when ride is booked */}
+          {/* Enhanced Ride Lifecycle View */}
           {tripStatus !== 'searching' ? (
             <div className="h-full relative" style={{ minHeight: 'calc(100vh - 160px)' }}>
               {/* Map Background */}
@@ -417,16 +934,32 @@ const DriverBooking = () => {
                     </button>
                     <div className="text-center flex-1">
                       <h2 className="font-semibold text-lg">
-                        {tripStatus === 'confirmed' && 'Driver on the way'}
-                        {tripStatus === 'arrived' && 'Driver has arrived'}
-                        {tripStatus === 'in_progress' && 'On trip'}
-                        {tripStatus === 'completed' && 'Trip completed'}
+                        {tripStatus === 'searching_driver' && 'Searching for drivers...'}
+                        {tripStatus === 'driver_assigned' && 'Driver assigned'}
+                        {tripStatus === 'driver_coming' && 'Driver on the way'}
+                        {tripStatus === 'driver_arrived' && 'Driver has arrived'}
+                        {tripStatus === 'trip_started' && 'On trip'}
+                        {tripStatus === 'trip_completed' && 'Trip completed'}
+                        {tripStatus === 'cancelled' && 'Trip cancelled'}
+                        {tripStatus === 'no_drivers' && 'No drivers available'}
                       </h2>
-                      {eta && (
+                      {eta !== null && tripStatus !== 'trip_completed' && (
                         <p className="text-sm text-gray-600">
-                          {tripStatus === 'confirmed' && `Arrives in ${eta} mins`}
-                          {tripStatus === 'in_progress' && `${eta} mins to destination`}
+                          {tripStatus === 'driver_coming' && `Arrives in ${eta} mins`}
+                          {tripStatus === 'trip_started' && `${eta} mins to destination`}
+                          {tripStatus === 'driver_assigned' && `ETA: ${eta} mins`}
                         </p>
+                      )}
+                      {tripStatus === 'trip_started' && (
+                        <div className="mt-2">
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${tripProgress}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">{Math.round(tripProgress)}% complete</p>
+                        </div>
                       )}
                     </div>
                     <button
@@ -511,47 +1044,152 @@ const DriverBooking = () => {
                     </div>
                   </div>
 
+                  {/* State-specific Content */}
+                  {tripStatus === 'searching_driver' && (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-600 border-t-transparent mx-auto mb-4"></div>
+                      <h3 className="text-lg font-semibold mb-2">Finding your driver...</h3>
+                      <p className="text-gray-600 mb-4">We're searching for the best driver near you</p>
+                      {nearbyDrivers.length > 0 && (
+                        <p className="text-sm text-green-600">{nearbyDrivers.length} drivers found nearby</p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Fare Details */}
-                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Total Fare</p>
-                        <p className="text-2xl font-bold">₹{estimatedCost || '0'}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-gray-600">Payment</p>
-                        <p className="font-medium">Cash</p>
+                  {(finalFare || currentQuote) && (
+                    <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-600">
+                            {tripStatus === 'trip_completed' ? 'Final Fare' : 'Estimated Fare'}
+                          </p>
+                          <p className="text-2xl font-bold">
+                            ₹{finalFare?.total || currentQuote?.fare.total || '0'}
+                          </p>
+                          {finalFare && finalFare.total !== finalFare.estimated_total && (
+                            <p className="text-xs text-gray-500">
+                              Est: ₹{finalFare.estimated_total}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">Payment</p>
+                          <p className="font-medium">
+                            {paymentStatus === 'completed' ? 'Paid' : 'Cash'}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="space-y-3">
-                    {tripStatus === 'confirmed' && (
+                    {tripStatus === 'searching_driver' && (
                       <button 
-                        onClick={() => {
-                          if (window.confirm('Are you sure you want to cancel this ride?')) {
-                            setTripStatus('searching');
-                            setDriverDetails(null);
-                            toast.info('Ride cancelled');
-                          }
-                        }}
+                        onClick={() => setShowCancellation(true)}
                         className="w-full py-3 px-4 border-2 border-red-500 text-red-500 rounded-xl font-medium hover:bg-red-50 transition-colors"
                       >
-                        Cancel Ride
+                        Cancel Search
                       </button>
                     )}
-                    {tripStatus === 'completed' && (
-                      <button 
-                        onClick={() => {
-                          setTripStatus('searching');
-                          setDriverDetails(null);
-                          toast.success('Thanks for riding with us!');
-                        }}
-                        className="w-full py-3 px-4 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
-                      >
-                        Book Another Ride
-                      </button>
+                    
+                    {(tripStatus === 'driver_assigned' || tripStatus === 'driver_coming') && (
+                      <>
+                        <button 
+                          onClick={() => handleCallDriver(driverDetails?.phone)}
+                          className="w-full py-3 px-4 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors flex items-center justify-center"
+                        >
+                          <Phone className="h-5 w-5 mr-2" />
+                          Call Driver
+                        </button>
+                        <button 
+                          onClick={() => setShowCancellation(true)}
+                          className="w-full py-3 px-4 border-2 border-red-500 text-red-500 rounded-xl font-medium hover:bg-red-50 transition-colors"
+                        >
+                          Cancel Ride
+                        </button>
+                      </>
+                    )}
+                    
+                    {tripStatus === 'driver_arrived' && (
+                      <>
+                        <button 
+                          onClick={startTrip}
+                          className="w-full py-3 px-4 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors flex items-center justify-center"
+                        >
+                          <CheckCircle className="h-5 w-5 mr-2" />
+                          Start Trip
+                        </button>
+                        <button 
+                          onClick={() => handleCallDriver(driverDetails?.phone)}
+                          className="w-full py-3 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors flex items-center justify-center"
+                        >
+                          <Phone className="h-5 w-5 mr-2" />
+                          Call Driver
+                        </button>
+                      </>
+                    )}
+                    
+                    {tripStatus === 'trip_started' && (
+                      <div className="text-center py-4">
+                        <div className="flex items-center justify-center space-x-4 mb-4">
+                          <Car className="h-6 w-6 text-purple-600" />
+                          <span className="text-lg font-medium">Trip in progress...</span>
+                        </div>
+                        <button 
+                          onClick={() => handleCallDriver(driverDetails?.phone)}
+                          className="w-full py-3 px-4 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors flex items-center justify-center"
+                        >
+                          <Phone className="h-5 w-5 mr-2" />
+                          Call Driver
+                        </button>
+                      </div>
+                    )}
+                    
+                    {tripStatus === 'trip_completed' && (
+                      <>
+                        <button 
+                          onClick={() => setShowRating(true)}
+                          className="w-full py-3 px-4 bg-yellow-500 text-white rounded-xl font-medium hover:bg-yellow-600 transition-colors flex items-center justify-center"
+                        >
+                          <Star className="h-5 w-5 mr-2" />
+                          Rate Your Trip
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setTripStatus('searching');
+                            setCurrentBooking(null);
+                            setDriverDetails(null);
+                            setFinalFare(null);
+                            toast.success('Thanks for riding with us!');
+                          }}
+                          className="w-full py-3 px-4 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+                        >
+                          Book Another Ride
+                        </button>
+                      </>
+                    )}
+                    
+                    {tripStatus === 'no_drivers' && (
+                      <>
+                        <button 
+                          onClick={searchNearbyDrivers}
+                          className="w-full py-3 px-4 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors flex items-center justify-center"
+                        >
+                          <Search className="h-5 w-5 mr-2" />
+                          Search Again
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setTripStatus('searching');
+                            setCurrentBooking(null);
+                          }}
+                          className="w-full py-3 px-4 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                        >
+                          Back to Booking
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -626,45 +1264,97 @@ const DriverBooking = () => {
                   </div>
                 )}
 
-                {/* Booking Type Tabs */}
+                {/* Vehicle Type Selection */}
                 <div className="mb-8">
-                  <div className={`flex border-b ${
-                    darkMode ? 'border-gray-700' : 'border-gray-200'
+                  <h3 className={`text-lg font-semibold mb-4 ${
+                    darkMode ? 'text-white' : 'text-gray-900'
                   }`}>
-                    <button
-                      onClick={() => setActiveTab('withCar')}
-                      className={`flex items-center px-6 py-3 font-medium transition-all duration-200 ${
-                        activeTab === 'withCar' 
-                          ? 'border-b-2 border-purple-600 text-purple-600' 
-                          : darkMode 
-                            ? 'text-gray-400 hover:text-gray-300' 
-                            : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      <Car className="h-5 w-5 mr-2" />
-                      With Car
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('withoutCar')}
-                      className={`flex items-center px-6 py-3 font-medium transition-all duration-200 ${
-                        activeTab === 'withoutCar' 
-                          ? 'border-b-2 border-purple-600 text-purple-600' 
-                          : darkMode 
-                            ? 'text-gray-400 hover:text-gray-300' 
-                            : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      <User className="h-5 w-5 mr-2" />
-                      Without Car
-                    </button>
+                    Choose Vehicle Type
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {vehicleTypes.map((vehicle) => (
+                      <div
+                        key={vehicle.id}
+                        onClick={() => {
+                          setSelectedVehicleType(vehicle);
+                          setCurrentQuote(null); // Clear quote to trigger recalculation
+                        }}
+                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+                          selectedVehicleType?.id === vehicle.id
+                            ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20'
+                            : darkMode
+                              ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-2xl">{RideQuoteService.utils.getVehicleTypeIcon(vehicle.name)}</span>
+                            <div>
+                              <h4 className={`font-semibold ${
+                                darkMode ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                {vehicle.display_name}
+                              </h4>
+                              <p className={`text-sm ${
+                                darkMode ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                {vehicle.description}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`text-sm ${
+                          darkMode ? 'text-gray-300' : 'text-gray-700'
+                        }`}>
+                          <div className="flex justify-between">
+                            <span>Base Fare:</span>
+                            <span>₹{vehicle.pricing.base_fare}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Per KM:</span>
+                            <span>₹{vehicle.pricing.rate_per_km}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Per Min:</span>
+                            <span>₹{vehicle.pricing.rate_per_min}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                  
+                  {/* Surge and Night Hours Info */}
+                  {pricingInfo && (
+                    <div className="mt-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center space-x-4">
+                          {pricingInfo.surge_info.current_surge > 1 && (
+                            <div className="flex items-center space-x-1 text-orange-600 dark:text-orange-400">
+                              <AlertTriangle className="h-4 w-4" />
+                              <span>{pricingInfo.surge_info.message}</span>
+                            </div>
+                          )}
+                          {pricingInfo.night_hours.is_active && (
+                            <div className="flex items-center space-x-1 text-blue-600 dark:text-blue-400">
+                              <Clock className="h-4 w-4" />
+                              <span>Night charges apply ({pricingInfo.night_hours.start} - {pricingInfo.night_hours.end})</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Booking Type Selection */}
                 <div className="mb-6">
                   <div className="flex items-center space-x-4">
                     <button
-                      onClick={() => setIsScheduledBooking(false)}
+                      onClick={() => {
+                        setIsScheduledBooking(false);
+                        setCurrentQuote(null); // Clear quote to trigger recalculation
+                      }}
                       className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                         !isScheduledBooking
                           ? 'bg-purple-100 text-purple-700'
@@ -677,7 +1367,10 @@ const DriverBooking = () => {
                       Book Now
                     </button>
                     <button
-                      onClick={() => setIsScheduledBooking(true)}
+                      onClick={() => {
+                        setIsScheduledBooking(true);
+                        setCurrentQuote(null); // Clear quote to trigger recalculation
+                      }}
                       className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                         isScheduledBooking
                           ? 'bg-purple-100 text-purple-700'
@@ -837,6 +1530,191 @@ const DriverBooking = () => {
                       </ul>
                     )}
                   </div>
+                </div>
+
+                {/* Dynamic Fare Breakdown */}
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold mb-4 ${
+                    darkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Fare Estimate
+                  </h3>
+                  
+                  {quoteLoading && (
+                    <div className={`p-6 rounded-xl border-2 border-dashed ${
+                      darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-gray-50'
+                    }`}>
+                      <div className="flex items-center justify-center space-x-3">
+                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-600 border-t-transparent"></div>
+                        <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                          Calculating fare...
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {quoteError && (
+                    <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                      <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
+                        <AlertTriangle className="h-5 w-5" />
+                        <span className="font-medium">Error calculating fare</span>
+                      </div>
+                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">{quoteError}</p>
+                    </div>
+                  )}
+                  
+                  {currentQuote && fareBreakdown && !quoteLoading && (
+                    <div className={`p-6 rounded-xl border-2 ${
+                      darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'
+                    }`}>
+                      {/* Trip Summary */}
+                      <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                        <div>
+                          <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                            <Navigation className="h-4 w-4" />
+                            <span>{RideQuoteService.utils.formatDistance(currentQuote.distance_km)}</span>
+                            <span>•</span>
+                            <Clock className="h-4 w-4" />
+                            <span>{RideQuoteService.utils.formatDuration(currentQuote.duration_min)}</span>
+                          </div>
+                          <p className={`text-lg font-semibold mt-1 ${
+                            darkMode ? 'text-white' : 'text-gray-900'
+                          }`}>
+                            {currentQuote.vehicle_type}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-3xl font-bold text-purple-600">
+                            ₹{fareBreakdown.total}
+                          </p>
+                          {currentQuote.surge_multiplier > 1 && (
+                            <p className="text-sm text-orange-600 dark:text-orange-400">
+                              {currentQuote.surge_multiplier}x surge
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Fare Breakdown */}
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                            Base Fare
+                          </span>
+                          <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                            ₹{fareBreakdown.base}
+                          </span>
+                        </div>
+                        
+                        {parseFloat(fareBreakdown.distance) > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                              Distance ({currentQuote.billable_distance} km)
+                            </span>
+                            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                              ₹{fareBreakdown.distance}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {parseFloat(fareBreakdown.time) > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                              Time ({currentQuote.duration_min} min)
+                            </span>
+                            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                              ₹{fareBreakdown.time}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {parseFloat(fareBreakdown.surge) > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-orange-600 dark:text-orange-400">
+                              Surge ({currentQuote.surge_multiplier}x)
+                            </span>
+                            <span className="text-orange-600 dark:text-orange-400">
+                              ₹{fareBreakdown.surge}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {parseFloat(fareBreakdown.night) > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-blue-600 dark:text-blue-400">
+                              Night Charges
+                            </span>
+                            <span className="text-blue-600 dark:text-blue-400">
+                              ₹{fareBreakdown.night}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {currentQuote.vehicle_multiplier !== 1 && (
+                          <div className="flex justify-between text-sm">
+                            <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                              Vehicle Multiplier ({currentQuote.vehicle_multiplier}x)
+                            </span>
+                            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                              Applied
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Quote Expiry Warning */}
+                      {RideQuoteService.utils.isQuoteExpiring(currentQuote.expires_at) && (
+                        <div className="mt-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                          <div className="flex items-center space-x-2 text-yellow-600 dark:text-yellow-400">
+                            <Clock className="h-4 w-4" />
+                            <span className="text-sm font-medium">
+                              Quote expires soon! Book now to secure this price.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Breakdown Details */}
+                      {currentQuote.breakdown_details && (
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                            {currentQuote.breakdown_details.base_fare_description && (
+                              <p>• {currentQuote.breakdown_details.base_fare_description}</p>
+                            )}
+                            {currentQuote.breakdown_details.distance_description && (
+                              <p>• {currentQuote.breakdown_details.distance_description}</p>
+                            )}
+                            {currentQuote.breakdown_details.time_description && (
+                              <p>• {currentQuote.breakdown_details.time_description}</p>
+                            )}
+                            {currentQuote.breakdown_details.surge_description && (
+                              <p>• {currentQuote.breakdown_details.surge_description}</p>
+                            )}
+                            {currentQuote.breakdown_details.night_description && (
+                              <p>• {currentQuote.breakdown_details.night_description}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {!currentQuote && !quoteLoading && !quoteError && (
+                    <div className={`p-6 rounded-xl border-2 border-dashed text-center ${
+                      darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-gray-50'
+                    }`}>
+                      <div className="flex flex-col items-center space-y-2">
+                        <Car className={`h-8 w-8 ${
+                          darkMode ? 'text-gray-500' : 'text-gray-400'
+                        }`} />
+                        <p className={`text-sm ${
+                          darkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          Select pickup and drop locations to see fare estimate
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Enhanced Date and Time Selection */}
@@ -1407,6 +2285,115 @@ const DriverBooking = () => {
                   />
                 </div>
 
+                {/* Payment Method Selection */}
+                <div className="mb-8">
+                  <h3 className={`text-lg font-semibold mb-4 ${
+                    darkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Payment Method
+                  </h3>
+                  
+                  {/* Selected Payment Method */}
+                  <div className="mb-4">
+                    <button
+                      onClick={() => setShowPaymentMethods(true)}
+                      className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                        darkMode
+                          ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        {selectedPaymentMethod ? (
+                          <>
+                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                              <span className="text-purple-600 font-semibold">
+                                {selectedPaymentMethod.provider_name.charAt(0)}
+                              </span>
+                            </div>
+                            <div className="text-left">
+                              <p className={`font-medium ${
+                                darkMode ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                {selectedPaymentMethod.provider_name}
+                              </p>
+                              <p className={`text-sm ${
+                                darkMode ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                {selectedPaymentMethod.upi_id}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                              <span className="text-gray-600 font-semibold">💰</span>
+                            </div>
+                            <div className="text-left">
+                              <p className={`font-medium ${
+                                darkMode ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                Cash Payment
+                              </p>
+                              <p className={`text-sm ${
+                                darkMode ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                Pay with cash to driver
+                              </p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <ChevronRight className={`h-5 w-5 ${
+                        darkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`} />
+                    </button>
+                  </div>
+                  
+                  {/* Payment Status Display */}
+                  {paymentProcessing && (
+                    <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center space-x-3">
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+                        <span className="text-blue-600 dark:text-blue-400 font-medium">
+                          Processing payment...
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {paymentError && (
+                    <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          <span className="text-red-600 dark:text-red-400 font-medium">
+                            Payment Failed
+                          </span>
+                        </div>
+                        <button
+                          onClick={retryPayment}
+                          className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">{paymentError}</p>
+                    </div>
+                  )}
+                  
+                  {paymentStatus === 'completed' && (
+                    <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <div className="flex items-center space-x-2">
+                        <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <span className="text-green-600 dark:text-green-400 font-medium">
+                          Payment Completed Successfully
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Action Buttons */}
                 <div className="flex justify-between items-center">
                   <div className="flex items-center space-x-4">
@@ -1431,11 +2418,37 @@ const DriverBooking = () => {
                   </div>
                   <button
                     onClick={handleBooking}
-                    disabled={loading || !pickupLocation.selected || !dropLocation.selected}
+                    disabled={
+                      loading || 
+                      !pickupLocation.selected || 
+                      !dropLocation.selected || 
+                      !selectedVehicleType || 
+                      !currentQuote || 
+                      quoteLoading ||
+                      RideQuoteService.utils.isQuoteExpired(currentQuote?.expires_at)
+                    }
                     className="btn-brand flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? 'Booking...' : 'Confirm Booking'}
-                    <Search size={20} className="ml-2" />
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        Booking...
+                      </>
+                    ) : quoteLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        Calculating...
+                      </>
+                    ) : !currentQuote ? (
+                      'Select locations first'
+                    ) : RideQuoteService.utils.isQuoteExpired(currentQuote?.expires_at) ? (
+                      'Quote expired'
+                    ) : (
+                      <>
+                        Book Ride - ₹{currentQuote.fare.total}
+                        <Car size={20} className="ml-2" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1597,6 +2610,407 @@ const DriverBooking = () => {
               </div> */}
         </div>
       </main>
+
+      {/* Rating Modal */}
+      {showRating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-md ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="h-8 w-8 text-green-600" />
+              </div>
+              <h3 className={`text-xl font-bold mb-2 ${
+                darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Trip Completed!
+              </h3>
+              <p className={`text-sm ${
+                darkMode ? 'text-gray-300' : 'text-gray-600'
+              }`}>
+                How was your ride with {driverDetails?.name}?
+              </p>
+            </div>
+
+            {/* Trip Receipt Summary */}
+            {tripReceipt && (
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Trip ID</span>
+                  <span className="font-mono text-sm">{tripReceipt.trip_id}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Distance</span>
+                  <span className="text-sm">{tripReceipt.distance} km</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Duration</span>
+                  <span className="text-sm">{tripReceipt.duration} min</span>
+                </div>
+                <div className="flex justify-between items-center font-semibold">
+                  <span>Total Fare</span>
+                  <span>₹{finalFare?.total}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Rating Stars */}
+            <div className="mb-6">
+              <p className={`text-sm font-medium mb-3 ${
+                darkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                Rate your experience
+              </p>
+              <div className="flex justify-center space-x-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    onClick={() => setRating(star)}
+                    className="transition-colors"
+                  >
+                    <Star
+                      className={`h-8 w-8 ${
+                        star <= rating
+                          ? 'text-yellow-400 fill-current'
+                          : 'text-gray-300'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Feedback */}
+            <div className="mb-6">
+              <textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="Share your feedback (optional)"
+                className={`w-full p-3 rounded-lg border resize-none ${
+                  darkMode
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+                rows="3"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowRating(false)}
+                className="flex-1 py-3 px-4 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              >
+                Skip
+              </button>
+              <button
+                onClick={submitRating}
+                className="flex-1 py-3 px-4 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancellation Modal */}
+      {showCancellation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-md ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <XCircle className="h-8 w-8 text-red-600" />
+              </div>
+              <h3 className={`text-xl font-bold mb-2 ${
+                darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Cancel Trip?
+              </h3>
+              <p className={`text-sm ${
+                darkMode ? 'text-gray-300' : 'text-gray-600'
+              }`}>
+                {tripStatus === 'searching_driver' 
+                  ? 'Are you sure you want to cancel the driver search?'
+                  : 'Cancellation fees may apply. Are you sure you want to cancel?'
+                }
+              </p>
+            </div>
+
+            {/* Cancellation Reasons */}
+            <div className="mb-6">
+              <p className={`text-sm font-medium mb-3 ${
+                darkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                Reason for cancellation
+              </p>
+              <div className="space-y-2">
+                {[
+                  'Change of plans',
+                  'Driver taking too long',
+                  'Found alternative transport',
+                  'Emergency',
+                  'Other'
+                ].map((reason) => (
+                  <label key={reason} className="flex items-center">
+                    <input
+                      type="radio"
+                      name="cancellation_reason"
+                      value={reason}
+                      checked={cancellationReason === reason}
+                      onChange={(e) => setCancellationReason(e.target.value)}
+                      className="mr-3"
+                    />
+                    <span className={`text-sm ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      {reason}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowCancellation(false)}
+                className="flex-1 py-3 px-4 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              >
+                Keep Trip
+              </button>
+              <button
+                onClick={() => {
+                  if (cancellationReason) {
+                    cancelTrip(cancellationReason);
+                  } else {
+                    toast.error('Please select a reason for cancellation');
+                  }
+                }}
+                className="flex-1 py-3 px-4 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+              >
+                Cancel Trip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Methods Modal */}
+      {showPaymentMethods && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-md ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-xl font-bold ${
+                darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Payment Methods
+              </h3>
+              <button
+                onClick={() => setShowPaymentMethods(false)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Cash Payment Option */}
+            <div className="mb-4">
+              <button
+                onClick={() => {
+                  setSelectedPaymentMethod(null);
+                  setShowPaymentMethods(false);
+                }}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                  !selectedPaymentMethod
+                    ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20'
+                    : darkMode
+                      ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-gray-600 font-semibold">💰</span>
+                  </div>
+                  <div className="text-left">
+                    <p className={`font-medium ${
+                      darkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Cash Payment
+                    </p>
+                    <p className={`text-sm ${
+                      darkMode ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Pay with cash to driver
+                    </p>
+                  </div>
+                </div>
+                {!selectedPaymentMethod && (
+                  <CheckCircle className="h-5 w-5 text-purple-600" />
+                )}
+              </button>
+            </div>
+
+            {/* UPI Payment Methods */}
+            <div className="space-y-3 mb-6">
+              {paymentMethods.map((method) => (
+                <button
+                  key={method.id}
+                  onClick={() => {
+                    setSelectedPaymentMethod(method);
+                    setShowPaymentMethods(false);
+                  }}
+                  className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                    selectedPaymentMethod?.id === method.id
+                      ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20'
+                      : darkMode
+                        ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                      <span className="text-purple-600 font-semibold">
+                        {method.provider_name.charAt(0)}
+                      </span>
+                    </div>
+                    <div className="text-left">
+                      <p className={`font-medium ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {method.provider_name}
+                      </p>
+                      <p className={`text-sm ${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        {method.upi_id}
+                      </p>
+                      {method.is_default && (
+                        <span className="text-xs text-purple-600 font-medium">Default</span>
+                      )}
+                    </div>
+                  </div>
+                  {selectedPaymentMethod?.id === method.id && (
+                    <CheckCircle className="h-5 w-5 text-purple-600" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Add New Payment Method */}
+            <button
+              onClick={() => {
+                setShowPaymentMethods(false);
+                setShowAddPaymentMethod(true);
+              }}
+              className="w-full p-4 rounded-xl border-2 border-dashed border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors flex items-center justify-center space-x-2"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="font-medium">Add New UPI Method</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Payment Method Modal */}
+      {showAddPaymentMethod && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-md ${
+            darkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className={`text-xl font-bold ${
+                darkMode ? 'text-white' : 'text-gray-900'
+              }`}>
+                Add UPI Payment Method
+              </h3>
+              <button
+                onClick={() => {
+                  setShowAddPaymentMethod(false);
+                  setNewUpiId('');
+                }}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                UPI ID
+              </label>
+              <input
+                type="text"
+                value={newUpiId}
+                onChange={(e) => setNewUpiId(e.target.value)}
+                placeholder="example@paytm"
+                className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
+                  darkMode
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+              />
+              <p className={`text-xs mt-2 ${
+                darkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                Enter your UPI ID (e.g., yourname@paytm, yourname@gpay)
+              </p>
+            </div>
+
+            {/* Provider Detection */}
+            {newUpiId && PaymentService.utils.validateUPIId(newUpiId) && (
+              <div className="mb-6 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                    Detected: {PaymentService.utils.detectProvider(newUpiId)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Validation Error */}
+            {newUpiId && !PaymentService.utils.validateUPIId(newUpiId) && (
+              <div className="mb-6 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <span className="text-sm text-red-600 dark:text-red-400 font-medium">
+                    Invalid UPI ID format
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setShowAddPaymentMethod(false);
+                  setNewUpiId('');
+                }}
+                className="flex-1 py-3 px-4 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addPaymentMethod}
+                disabled={!newUpiId || !PaymentService.utils.validateUPIId(newUpiId)}
+                className="flex-1 py-3 px-4 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Method
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>
