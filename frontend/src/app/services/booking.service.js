@@ -115,6 +115,17 @@ const BookingService = {
     }
   },
 
+  // Worker Availability Management
+  checkWorkerAvailability: async (availabilityData) => {
+    try {
+      const response = await apiClient.post('/bookings/check-worker-availability', availabilityData);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking worker availability:', error);
+      throw error;
+    }
+  },
+
   // Booking Management
   bookings: {
     // Create a new booking
@@ -128,23 +139,13 @@ const BookingService = {
       }
     },
 
-    // Get booking history (supports both legacy page/limit and cursor-based with lastId)
-    getHistory: async (...args) => {
+    // Get booking history (cursor-based only)
+    getHistory: async ({ limit = 10, lastId = null, status = null } = {}) => {
       try {
-        let params = {};
-        if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null) {
-          // New signature: getHistory({ limit, lastId, status, page })
-          const { limit = 10, lastId = null, status = null, page } = args[0];
-          if (typeof page !== 'undefined') params.page = page; // allow forcing legacy mode
-          if (typeof limit !== 'undefined') params.limit = limit;
-          if (lastId !== null && typeof lastId !== 'undefined') params.lastId = lastId;
-          if (status) params.status = status;
-        } else {
-          // Legacy signature: getHistory(page = 1, limit = 10, status = null)
-          const [page = 1, limit = 10, status = null] = args;
-          params = { page, limit };
-          if (status) params.status = status;
-        }
+        const params = {};
+        if (typeof limit !== 'undefined') params.limit = limit;
+        if (lastId !== null && typeof lastId !== 'undefined') params.lastId = lastId;
+        if (status) params.status = status;
 
         const response = await apiClient.get('/bookings/history', { params });
         return response.data;
@@ -278,19 +279,18 @@ const BookingService = {
       };
     },
 
-    // Map backend booking list to frontend format (supports cursor fields)
+    // Map backend booking list to frontend format (cursor fields only)
     mapBookingList: (backendResponse) => {
       const bookings = backendResponse.bookings || [];
+      const hasMore = typeof backendResponse.hasMore === 'boolean'
+        ? backendResponse.hasMore
+        : (typeof backendResponse.hasMore === 'string' ? backendResponse.hasMore === 'true' : false);
+      const lastId = typeof backendResponse.lastId !== 'undefined' ? backendResponse.lastId : null;
+
       return {
         bookings: bookings.map(BookingService.utils.mapBookingData),
-        hasMore: typeof backendResponse.hasMore === 'boolean' ? backendResponse.hasMore : false,
-        lastId: typeof backendResponse.lastId !== 'undefined' ? backendResponse.lastId : null,
-        pagination: backendResponse.pagination || {
-          current_page: 1,
-          per_page: 10,
-          total: bookings.length,
-          total_pages: 1
-        }
+        hasMore,
+        lastId
       };
     }
   }

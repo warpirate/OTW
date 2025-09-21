@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Briefcase, 
@@ -13,6 +13,7 @@ import {
   CheckCircle,
   XCircle
 } from 'lucide-react';
+import { ChevronDown, LogOut, User as UserIcon, FileText } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
 import WorkerService from '../../services/worker.service';
@@ -32,6 +33,8 @@ const WorkerDashboard = () => {
   });
 
   const [recentJobs, setRecentJobs] = useState([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     setDarkMode(isDarkMode());
@@ -50,6 +53,17 @@ const WorkerDashboard = () => {
     
     return cleanup;
   }, [navigate]);
+
+  // Close profile menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Refresh data every 30 seconds
   useEffect(() => {
@@ -87,16 +101,16 @@ const WorkerDashboard = () => {
       // Fetch dashboard stats
       const statsResponse = await WorkerService.getDashboardStats();
       setStats({
-        totalJobs: statsResponse.total_bookings || 0,
-        completedJobs: statsResponse.completed_bookings || 0,
-        pendingJobs: statsResponse.pending_bookings || 0,
+        totalJobs: statsResponse.total_jobs || 0,
+        completedJobs: statsResponse.total_jobs || 0,
+        pendingJobs: statsResponse.active_jobs || 0,
         totalEarnings: statsResponse.total_earnings || 0,
-        rating: statsResponse.average_rating || 0,
+        rating: statsResponse.rating || 0,
         totalReviews: statsResponse.total_reviews || 0
       });
 
-      // Fetch recent jobs
-      const jobsResponse = await WorkerService.getRecentJobs(5);
+      // Fetch recent jobs (provider categories)
+      const jobsResponse = await WorkerService.getRecentBookings(5);
       const formattedJobs = jobsResponse.bookings?.map(booking => ({
         id: booking.id,
         title: booking.service_name || booking.subcategory_name || 'Service',
@@ -147,18 +161,18 @@ const WorkerDashboard = () => {
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Header */}
-      <header className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b`}>
+      <header className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b sticky top-0 z-30`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center space-x-4">
               <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                OTW Worker
+                OMW Worker
               </h1>
             </div>
 
             {/* User Menu */}
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <button 
                 className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 aria-label="Notifications"
@@ -174,31 +188,76 @@ const WorkerDashboard = () => {
               >
                 <Settings className="w-5 h-5" />
               </button>
-              <div className="flex items-center space-x-3">
-                <button 
-                  onClick={() => navigate('/worker/profile')}
-                  className="flex items-center space-x-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg p-2 transition-colors"
-                  aria-label="Profile"
-                  title="Profile"
+
+              {/* Profile dropdown */}
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className={`flex items-center space-x-2 sm:space-x-3 rounded-lg px-2 py-1 sm:px-3 sm:py-2 transition-colors ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
                 >
                   <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
                       {(profile?.firstName?.[0] || user?.firstName?.[0] || '').toUpperCase()}{(profile?.lastName?.[0] || user?.lastName?.[0] || '').toUpperCase()}
                     </span>
                   </div>
-                  <span className={`hidden sm:block ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    {profile?.firstName || user?.firstName} {profile?.lastName || user?.lastName}
-                  </span>
+                  <div className="hidden sm:flex sm:flex-col sm:items-start">
+                    <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {getWorkerDisplayName()}
+                    </span>
+                    <span className={`text-xs ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
+                      {user?.email || ''}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 ${darkMode ? 'text-gray-300' : 'text-gray-500'}`} />
                 </button>
+
+                {menuOpen && (
+                  <div
+                    className={`absolute right-0 mt-2 w-56 rounded-lg shadow-lg ring-1 ring-black/5 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'}`}
+                    role="menu"
+                  >
+                    <div className="py-2">
+                      <button
+                        onClick={() => { setMenuOpen(false); navigate('/worker/profile'); }}
+                        className="w-full px-4 py-2 flex items-center space-x-2 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/40 dark:hover:text-blue-200"
+                        role="menuitem"
+                      >
+                        <UserIcon className="w-4 h-4" />
+                        <span>View Profile</span>
+                      </button>
+                      <button
+                        onClick={() => { setMenuOpen(false); navigate('/worker/documents'); }}
+                        className="w-full px-4 py-2 flex items-center space-x-2 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/40 dark:hover:text-blue-200"
+                        role="menuitem"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>Documents</span>
+                      </button>
+                      <button
+                        onClick={() => { setMenuOpen(false); navigate('/worker/settings'); }}
+                        className="w-full px-4 py-2 flex items-center space-x-2 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/40 dark:hover:text-blue-200"
+                        role="menuitem"
+                      >
+                        <Settings className="w-4 h-4" />
+                        <span>Settings</span>
+                      </button>
+                    </div>
+                    <div className={`my-1 ${darkMode ? 'border-gray-700' : 'border-gray-200'} border-t`} />
+                    <div className="py-2">
+                      <button
+                        onClick={() => { setMenuOpen(false); handleLogout(); }}
+                        className="w-full px-4 py-2 flex items-center space-x-2 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                        role="menuitem"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                aria-label="Logout"
-                title="Logout"
-              >
-                Logout
-              </button>
             </div>
           </div>
         </div>
@@ -368,36 +427,6 @@ const WorkerDashboard = () => {
               </h3>
               <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 Manage your jobs
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            to="/worker/assigned-bookings"
-            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
-          >
-            <div className="text-center">
-              <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                My Bookings
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Assigned bookings
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            to="/worker/schedule"
-            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
-          >
-            <div className="text-center">
-              <Calendar className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Schedule
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Manage availability
               </p>
             </div>
           </Link>

@@ -91,9 +91,23 @@ const ProviderDetailsPage = () => {
     }
   };
 
-  const openFile = (fileUrl) => {
-    const fullUrl = `${config.backend.uploadsUrl}/${fileUrl}`;
-    window.open(fullUrl, '_blank');
+  const openDocument = async (documentId, fallbackFileUrl) => {
+    try {
+      const resp = await AdminService.getDocumentPresignedUrl(documentId);
+      const url = resp?.url;
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    } catch (e) {
+      console.warn('Presigned URL fetch failed, falling back to local path', e);
+    }
+    // Fallback to local uploads path if present
+    if (fallbackFileUrl) {
+      const isAbsolute = /^(http|https):\/\//i.test(fallbackFileUrl);
+      const fullUrl = isAbsolute ? fallbackFileUrl : `${config.backend?.uploadsUrl ? config.backend.uploadsUrl + '/' : ''}${fallbackFileUrl}`;
+      window.open(fullUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const getStatusBadgeClass = (status) => {
@@ -413,7 +427,7 @@ const ProviderDetailsPage = () => {
 
                     <div className="flex space-x-3">
                       <button
-                        onClick={() => openFile(doc.document_url)}
+                        onClick={() => openDocument(doc.id, doc.document_url)}
                         className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                       >
                         <EyeIcon className="h-4 w-4 mr-2" />
