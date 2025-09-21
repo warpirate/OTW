@@ -12,7 +12,7 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           <div>
             <div className="flex items-center space-x-1 mb-6">
-              <Logo size="lg" alt="OMW" className="shadow-md" />
+              <Logo size="lg" alt="OMW" />
             </div>
             <p className="text-gray-400 mb-8">
               Your trusted partner for professional home services.

@@ -334,7 +334,6 @@ const LandingPage = () => {
               <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-6 md:p-8 transition-colors`}>
                 <div className="flex items-center mb-2">
                   <Logo size="xl" className="mr-3" alt="OMW" />
-                  <span className="text-yellow-400 text-2xl">👋</span>
                 </div>
                 <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-6`}>Explore our services</p>
                 
@@ -388,9 +387,6 @@ const LandingPage = () => {
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold">Popular Categories</h3>
-                    <button onClick={() => setActiveTab('maintenance')} className="text-sm text-brand flex items-center hover:underline">
-                      View all <ChevronRight className="h-4 w-4 ml-1" />
-                    </button>
                   </div>
                   
                   <div className="grid grid-cols-3 gap-3">
@@ -402,13 +398,22 @@ const LandingPage = () => {
                             if (category.id === 'driver') {
                               navigate('/driver');
                             } else {
+                              // Set the active tab and scroll to Our Services section
                               setActiveTab(category.id);
+                              // Scroll to the Our Services section
+                              const servicesSection = document.querySelector('#our-services-section');
+                              if (servicesSection) {
+                                servicesSection.scrollIntoView({ 
+                                  behavior: 'smooth',
+                                  block: 'start'
+                                });
+                              }
                             }
                           }}
-                          className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600 border border-gray-600' : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer`}
+                          className={`${darkMode ? 'bg-gray-700 hover:bg-gray-600 border border-gray-600' : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'} rounded-lg p-3 flex flex-col items-center text-center transition-all duration-200 cursor-pointer hover:shadow-lg transform hover:-translate-y-0.5`}
                         >
                           {/* icon tile */}
-                          <InfographicIcon src={getTypeImageSrc(category.id)} alt={`${category.name} icon`} size="xl" tone="neutral" className="mb-2 shadow-md" />
+                          <InfographicIcon src={getTypeImageSrc(category.id)} alt={`${category.name} icon`} size="2xl" tone="brand" className="mb-2" />
                           <span className={`text-sm font-medium ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>{category.name}</span>
                         </div>
                       ))
@@ -430,7 +435,7 @@ const LandingPage = () => {
       </section>
 
       {/* Service Categories Section */}
-      <section className={`py-16 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors`}>
+      <section id="our-services-section" className={`py-16 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} transition-colors`}>
         <div className="container-custom">
           {/* Section Title */}
           <div className="text-center mb-12">
@@ -486,7 +491,7 @@ const LandingPage = () => {
                 </button>
               </div>
               <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                {selectedCategory.name} Services
+                {selectedCategory.name}
               </h2>
               
               {loadingSubcategories ? (
@@ -503,14 +508,14 @@ const LandingPage = () => {
                   >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
-                            <InfographicIcon src={getServiceImageSrc(subcategory)} alt={`${subcategory.name} icon`} size="xl" tone="brand" className="shadow-md" />
+                            <InfographicIcon src={getServiceImageSrc(subcategory)} alt={`${subcategory.name} icon`} size="3xl" tone="brand" />
                           </div>
                           <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{subcategory.name}</h3>
                           <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                             {subcategory.description || `Professional ${subcategory.name} services`}
                           </p>
                           <div className="flex justify-between items-center">
-                            <span className={`font-semibold ${darkMode ? 'text-brand-light' : 'text-brand'}`}>{`Starting ₹${subcategory.base_price || 199}`}</span>
+                            <span className={`font-semibold ${darkMode ? 'text-brand-light' : 'text-brand'}`}>{`₹${subcategory.base_price || 199}`}</span>
                             <button className={`btn-sm ${darkMode ? 'bg-brand-dark hover:bg-brand-darker' : ''}`}>Book</button>
                           </div>
                         </div>
@@ -616,7 +621,7 @@ const LandingPage = () => {
                             return (
                               <div 
                                 key={cat.id}
-                                className={`service-card cursor-pointer ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}
+                                className={`service-card cursor-pointer ${darkMode ? 'border-gray-700' : 'border-gray-200'} transition transform hover:shadow-lg hover:-translate-y-0.5`}
                                 onClick={() => {
                                   // Navigate to the category services page instead of showing subcategories inline
                                   navigate(`/category/${cat.id}/${cat.name}`);
@@ -624,7 +629,7 @@ const LandingPage = () => {
                               >
                                 <div className="p-6">
                                   <div className="mb-4">
-                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="xl" tone="brand" className="shadow-md" />
+                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="3xl" tone="brand" />
                                   </div>
                                   <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
                                   <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>
