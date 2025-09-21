@@ -20,7 +20,7 @@ const Booking = () => {
   const [darkMode, setDarkMode] = useState(isDarkMode());
   
   // Booking flow steps
-  const [currentStep, setCurrentStep] = useState('datetime'); // 'datetime', 'address', 'payment', 'confirmation'
+  const [currentStep, setCurrentStep] = useState('address'); // 'address', 'datetime', 'payment', 'confirmation'
   
   // DateTime selection
   const [selectedDate, setSelectedDate] = useState('');
@@ -28,6 +28,15 @@ const Booking = () => {
   const [availableDates, setAvailableDates] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  
+  // Worker preference
+  const [workerPreference, setWorkerPreference] = useState('any'); // 'any', 'male', 'female'
+  const [workerAvailability, setWorkerAvailability] = useState({
+    male: false,
+    female: false,
+    any: true
+  });
+  const [loadingWorkerAvailability, setLoadingWorkerAvailability] = useState(false);
   
   // Address management
   const [addresses, setAddresses] = useState([]);
@@ -178,11 +187,72 @@ const Booking = () => {
       setLoadingSlots(false);
     }, 300);
   };
+
+  // Check worker availability for selected time slot
+  const checkWorkerAvailability = async (date, timeSlot) => {
+    if (!selectedAddress || !date || !timeSlot) {
+      return;
+    }
+
+    setLoadingWorkerAvailability(true);
+    try {
+      // Call backend API to check worker availability
+      const availabilityData = await BookingService.checkWorkerAvailability({
+        date: date,
+        time: timeSlot,
+        address_id: selectedAddress.address_id,
+        services: cart.items.map(item => ({
+          subcategory_id: item.subcategory_id || item.id,
+          quantity: item.quantity
+        }))
+      });
+
+      // If slot is not available due to capacity or past time, mark it unavailable and notify
+      if (availabilityData && availabilityData.slot_available === false) {
+        setTimeSlots(prev => prev.map(s => s.time === timeSlot ? { ...s, available: false } : s));
+        setSelectedTimeSlot(null);
+        setWorkerAvailability({ male: false, female: false, any: false });
+        toast.warn(availabilityData.reason || 'Selected time slot is not available. Please pick another slot.');
+        return;
+      }
+
+      setWorkerAvailability({
+        male: availabilityData.male_available || false,
+        female: availabilityData.female_available || false,
+        any: availabilityData.any_available || true
+      });
+
+      // Reset preference if current preference is not available
+      if (workerPreference === 'male' && !availabilityData.male_available) {
+        setWorkerPreference('any');
+      } else if (workerPreference === 'female' && !availabilityData.female_available) {
+        setWorkerPreference('any');
+      }
+
+    } catch (error) {
+      console.error('Error checking worker availability:', error);
+      toast.error('Failed to check worker availability');
+      // Set default availability
+      setWorkerAvailability({
+        male: true,
+        female: true,
+        any: true
+      });
+    } finally {
+      setLoadingWorkerAvailability(false);
+    }
+  };
   
   // Handle date selection
   const handleDateSelect = (date) => {
     setSelectedDate(date);
     setSelectedTimeSlot(null);
+    setWorkerPreference('any');
+    setWorkerAvailability({
+      male: false,
+      female: false,
+      any: true
+    });
     loadTimeSlots(date);
   };
   
@@ -190,6 +260,8 @@ const Booking = () => {
   const handleTimeSlotSelect = (slot) => {
     if (slot.available) {
       setSelectedTimeSlot(slot);
+      // Check worker availability for this time slot
+      checkWorkerAvailability(selectedDate, slot.time);
     }
   };
   
@@ -331,15 +403,34 @@ const Booking = () => {
   
   // Proceed to next step
   const proceedToNextStep = () => {
-    if (currentStep === 'datetime') {
+    if (currentStep === 'address') {
+      if (!selectedAddress) {
+        toast.error('Please select an address');
+        return;
+      }
+      setCurrentStep('datetime');
+    } else if (currentStep === 'datetime') {
       if (!selectedDate || !selectedTimeSlot) {
         toast.error('Please select date and time');
         return;
       }
-      setCurrentStep('address');
-    } else if (currentStep === 'address') {
-      if (!selectedAddress) {
-        toast.error('Please select an address');
+      if (!selectedTimeSlot.available) {
+        toast.error('Selected time slot is not available. Please choose a different slot.');
+        return;
+      }
+      if (!workerPreference) {
+        toast.error('Please select a worker preference');
+        return;
+      }
+      // Ensure preferred worker gender is available for this slot
+      const avail = workerAvailability;
+      const ok = workerPreference === 'any'
+        ? !!avail.any
+        : workerPreference === 'male'
+          ? !!avail.male
+          : !!avail.female;
+      if (!ok) {
+        toast.error('Selected worker preference is not available for this time slot. Please adjust preference or pick another time.');
         return;
       }
       setCurrentStep('payment');
@@ -350,10 +441,10 @@ const Booking = () => {
   
   // Go back to previous step
   const goToPreviousStep = () => {
-    if (currentStep === 'address') {
-      setCurrentStep('datetime');
-    } else if (currentStep === 'payment') {
+    if (currentStep === 'datetime') {
       setCurrentStep('address');
+    } else if (currentStep === 'payment') {
+      setCurrentStep('datetime');
     } else {
       navigate('/cart');
     }
@@ -425,7 +516,8 @@ const Booking = () => {
         scheduled_time: scheduledAt,
         address_id: selectedAddress.address_id,
         notes: bookingNotes,
-        payment_method: 'online'
+        payment_method: 'online',
+        worker_preference: workerPreference
       };
 
       // Send to backend
@@ -496,14 +588,14 @@ const Booking = () => {
 
           {/* Step indicator */}
           <div className="flex items-center space-x-4 mb-6">
-            <div className={`flex items-center ${currentStep === 'datetime' ? 'text-purple-600' : darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              <Calendar className="h-5 w-5 mr-2" />
-              <span className="font-medium">Date & Time</span>
-            </div>
-            <div className={`w-8 h-px ${currentStep === 'address' || currentStep === 'payment' ? 'bg-purple-600' : darkMode ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
-            <div className={`flex items-center ${currentStep === 'address' ? 'text-purple-600' : (currentStep === 'payment' ? 'text-green-600' : darkMode ? 'text-gray-400' : 'text-gray-500')}`}>
+            <div className={`flex items-center ${currentStep === 'address' ? 'text-purple-600' : darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
               <MapPin className="h-5 w-5 mr-2" />
               <span className="font-medium">Address</span>
+            </div>
+            <div className={`w-8 h-px ${currentStep === 'datetime' || currentStep === 'payment' ? 'bg-purple-600' : darkMode ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
+            <div className={`flex items-center ${currentStep === 'datetime' ? 'text-purple-600' : (currentStep === 'payment' ? 'text-green-600' : darkMode ? 'text-gray-400' : 'text-gray-500')}`}>
+              <Calendar className="h-5 w-5 mr-2" />
+              <span className="font-medium">Date & Time</span>
             </div>
             <div className={`w-8 h-px ${currentStep === 'payment' ? 'bg-purple-600' : darkMode ? 'bg-gray-600' : 'bg-gray-300'}`}></div>
             <div className={`flex items-center ${currentStep === 'payment' ? 'text-purple-600' : darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -517,86 +609,6 @@ const Booking = () => {
           {/* Main content */}
           <div className="lg:w-2/3">
             <div className={`rounded-lg shadow-md ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} border overflow-hidden`}>
-              {/* Date & Time Selection */}
-              {currentStep === 'datetime' && (
-                <div className="p-6">
-                  <h2 className={`text-2xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    Select Date & Time
-                  </h2>
-
-                  {/* Date Selection */}
-                  <div className="mb-8">
-                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      Choose Date
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                      {availableDates.map((dateOption, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleDateSelect(dateOption.date)}
-                          className={`p-3 rounded-lg border text-center transition-colors ${
-                            selectedDate === dateOption.date
-                              ? 'border-purple-600 bg-purple-100 text-purple-700'
-                              : darkMode
-                                ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
-                                : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
-                          }`}
-                        >
-                          <div className="font-medium">{dateOption.shortDate}</div>
-                          <div className="text-sm opacity-75">
-                            {dateOption.isToday ? 'Today' : dateOption.isTomorrow ? 'Tomorrow' : ''}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Time Slot Selection */}
-                  {selectedDate && (
-                    <div>
-                      <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        Choose Time Slot
-                      </h3>
-                      {loadingSlots ? (
-                        <div className="flex justify-center py-8">
-                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                          {timeSlots.map((slot, index) => (
-                            <button
-                              key={index}
-                              onClick={() => handleTimeSlotSelect(slot)}
-                              disabled={!slot.available}
-                              className={`p-3 rounded-lg border text-center transition-colors ${
-                                selectedTimeSlot?.time === slot.time
-                                  ? 'border-purple-600 bg-purple-100 text-purple-700'
-                                  : slot.available
-                                    ? darkMode
-                                      ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
-                                    : darkMode
-                                      ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
-                                      : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                              }`}
-                            >
-                              <div className="font-medium">
-                                {formatTimeSlot(slot.time)}
-                              </div>
-                              {!slot.available && (
-                                <div className="text-xs mt-1">
-                                  {slot.isPast ? 'Past' : 'Booked'}
-                                </div>
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Address Selection */}
               {currentStep === 'address' && (
                 <div className="p-6">
@@ -798,7 +810,174 @@ const Booking = () => {
                   )}
                 </div>
               )}
-              
+
+              {/* Date & Time Selection with Preferences */}
+              {currentStep === 'datetime' && (
+                <div className="p-6">
+                  <h2 className={`text-2xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Select Date & Time
+                  </h2>
+
+                  {/* Date Selection */}
+                  <div className="mb-8">
+                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      Choose Date
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {availableDates.map((dateOption, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleDateSelect(dateOption.date)}
+                          className={`p-3 rounded-lg border text-center transition-colors ${
+                            selectedDate === dateOption.date
+                              ? 'border-purple-600 bg-purple-100 text-purple-700'
+                              : darkMode
+                                ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
+                          }`}
+                        >
+                          <div className="font-medium">{dateOption.shortDate}</div>
+                          <div className="text-sm opacity-75">
+                            {dateOption.isToday ? 'Today' : dateOption.isTomorrow ? 'Tomorrow' : ''}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Time Slot Selection */}
+                  {selectedDate && (
+                    <div>
+                      <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        Choose Time Slot
+                      </h3>
+                      {loadingSlots ? (
+                        <div className="flex justify-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                          {timeSlots.map((slot, index) => (
+                            <button
+                              key={index}
+                              onClick={() => handleTimeSlotSelect(slot)}
+                              disabled={!slot.available}
+                              className={`p-3 rounded-lg border text-center transition-colors ${
+                                selectedTimeSlot?.time === slot.time
+                                  ? 'border-purple-600 bg-purple-100 text-purple-700'
+                                  : slot.available
+                                    ? darkMode
+                                      ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
+                                      : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
+                                    : darkMode
+                                      ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
+                                      : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                              }`}
+                            >
+                              <div className="font-medium">
+                                {formatTimeSlot(slot.time)}
+                              </div>
+                              {!slot.available && (
+                                <div className="text-xs mt-1">
+                                  {slot.isPast ? 'Past' : 'Booked'}
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Worker Preference Selection */}
+                  {selectedTimeSlot && (
+                    <div className="mt-8">
+                      <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        Worker Preference
+                      </h3>
+                      
+                      {loadingWorkerAvailability ? (
+                        <div className="flex justify-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
+                          <span className={`ml-3 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                            Checking worker availability...
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-3">
+                          <button
+                            onClick={() => setWorkerPreference('any')}
+                            disabled={!workerAvailability.any}
+                            className={`p-4 rounded-lg border text-center transition-colors ${
+                              workerPreference === 'any'
+                                ? 'border-purple-600 bg-purple-100 text-purple-700'
+                                : workerAvailability.any
+                                  ? darkMode
+                                    ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
+                                  : darkMode
+                                    ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
+                                    : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="font-medium">Any</div>
+                            <div className="text-sm opacity-75">
+                              {workerAvailability.any ? 'No preference' : 'Not available'}
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => setWorkerPreference('male')}
+                            disabled={!workerAvailability.male}
+                            className={`p-4 rounded-lg border text-center transition-colors ${
+                              workerPreference === 'male'
+                                ? 'border-purple-600 bg-purple-100 text-purple-700'
+                                : workerAvailability.male
+                                  ? darkMode
+                                    ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
+                                  : darkMode
+                                    ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
+                                    : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="font-medium">Male</div>
+                            <div className="text-sm opacity-75">
+                              {workerAvailability.male ? 'Male worker' : 'Not available'}
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => setWorkerPreference('female')}
+                            disabled={!workerAvailability.female}
+                            className={`p-4 rounded-lg border text-center transition-colors ${
+                              workerPreference === 'female'
+                                ? 'border-purple-600 bg-purple-100 text-purple-700'
+                                : workerAvailability.female
+                                  ? darkMode
+                                    ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
+                                  : darkMode
+                                    ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
+                                    : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="font-medium">Female</div>
+                            <div className="text-sm opacity-75">
+                              {workerAvailability.female ? 'Female worker' : 'Not available'}
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                      
+                      {!loadingWorkerAvailability && !workerAvailability.male && !workerAvailability.female && !workerAvailability.any && (
+                        <div className={`text-center py-4 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
+                          <p>No workers available for this time slot. Please select a different time.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Payment & Confirmation */}
               {currentStep === 'payment' && (
                 <div className="p-6">
@@ -834,6 +1013,13 @@ const Booking = () => {
                           <div>{selectedAddress?.address}</div>
                           <div>{selectedAddress?.city}, {selectedAddress?.state} - {selectedAddress?.pin_code}</div>
                         </div>
+                      </div>
+                      
+                      <div className="flex items-center">
+                        <User className="h-5 w-5 text-purple-600 mr-3" />
+                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          Worker Preference: {workerPreference === 'any' ? 'Any' : workerPreference === 'male' ? 'Male' : 'Female'}
+                        </span>
                       </div>
                     </div>
                   </div>

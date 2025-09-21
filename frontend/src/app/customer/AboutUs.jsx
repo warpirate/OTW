@@ -25,10 +25,10 @@ const AboutUs = () => {
       <div className="container-custom py-12">
         <div className="flex flex-col items-center justify-center px-4 py-12">
           <h1 className={`text-4xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-            About OTW
+            About OMW
           </h1>
           <p className={`text-lg max-w-2xl mb-6 text-center ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            OTW is your trusted partner for professional home services. Our mission is to make your life easier by connecting you with skilled, vetted professionals for all your household needs.
+            OMW is your trusted partner for professional home services. Our mission is to make your life easier by connecting you with skilled, vetted professionals for all your household needs.
           </p>
           <h2 className={`text-2xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
             Our Vision
@@ -40,7 +40,7 @@ const AboutUs = () => {
             Our Story
           </h2>
           <p className={`max-w-xl text-center ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            Founded in 2024, OTW was born out of the need for trustworthy and hassle-free home services. We believe in empowering both customers and service providers through technology, transparency, and a commitment to excellence.
+            Founded in 2024, OMW was born out of the need for trustworthy and hassle-free home services. We believe in empowering both customers and service providers through technology, transparency, and a commitment to excellence.
           </p>
         </div>
       </div>

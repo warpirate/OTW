@@ -3,9 +3,9 @@ import React, { useState } from 'react';
 // Mock system settings data
 const initialSettings = {
   general: {
-    siteName: 'UrbanGo',
+    siteName: 'OMW',
     siteDescription: 'On-demand home services and rides platform',
-    supportEmail: 'support@urbango.ca',
+    supportEmail: 'support@omwhub.com',
     supportPhone: '+91 9876543210',
     timeZone: 'Asia/Kolkata',
     defaultLanguage: 'English'

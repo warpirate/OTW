@@ -225,6 +225,21 @@ const WorkerDocuments = () => {
     }
   };
 
+  // Download/View Document via presigned URL
+  const downloadDocument = async (id) => {
+    try {
+      const resp = await WorkerDocumentsService.getDocumentPresignedUrl(id);
+      const url = resp?.url;
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        setMessage({ type: 'error', text: 'Unable to get document link' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Failed to get document link' });
+    }
+  };
+
   // Delete Qualification
   const deleteQualification = async (id) => {
     if (!window.confirm('Are you sure you want to delete this qualification?')) return;
@@ -561,14 +576,25 @@ const WorkerDocuments = () => {
                     <div key={doc.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start mb-2">
                         <h3 className="font-semibold text-sm">{getDocumentTypeLabel(doc.document_type)}</h3>
-                        <button
-                          onClick={() => deleteDocument(doc.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => downloadDocument(doc.id)}
+                            className="text-blue-600 hover:text-blue-800 text-sm"
+                          >
+                            Download
+                          </button>
+                          {!(doc.status && (doc.status.toLowerCase() === 'approved' || doc.status.toLowerCase() === 'verified')) && (
+                            <button
+                              onClick={() => deleteDocument(doc.id)}
+                              className="text-red-600 hover:text-red-800"
+                              title="Delete"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(doc.status)}`}>
                         {doc.status.replace('_', ' ')}

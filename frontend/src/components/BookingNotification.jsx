@@ -15,7 +15,7 @@ const BookingNotification = () => {
       
       setLoading(true);
       try {
-        const response = await BookingService.bookings.getHistory(1, 3);
+        const response = await BookingService.bookings.getHistory({ limit: 3 });
         const bookings = response.bookings || [];
         // Filter for recent active bookings (last 7 days)
         const recent = bookings.filter(booking => {

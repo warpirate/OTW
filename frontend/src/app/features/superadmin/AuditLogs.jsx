@@ -6,7 +6,7 @@ const initialAuditLogs = [
     id: 1,
     user: {
       name: 'Sneha Kumar',
-      email: 'sneha@urbango.ca',
+      email: 'sneha@omwhub.com',
       role: 'Admin'
     },
     action: 'USER_APPROVE',
@@ -19,7 +19,7 @@ const initialAuditLogs = [
     id: 2,
     user: {
       name: 'Rahul Verma',
-      email: 'rahul@urbango.ca',
+      email: 'rahul@omwhub.com',
       role: 'Admin'
     },
     action: 'CATEGORY_UPDATE',
@@ -32,7 +32,7 @@ const initialAuditLogs = [
     id: 3,
     user: {
       name: 'Priya Singh',
-      email: 'priya@urbango.ca',
+      email: 'priya@omwhub.com',
       role: 'Admin'
     },
     action: 'DISPUTE_RESOLVE',
@@ -45,7 +45,7 @@ const initialAuditLogs = [
     id: 4,
     user: {
       name: 'Vikram Malhotra',
-      email: 'vikram@urbango.ca',
+      email: 'vikram@omwhub.com',
       role: 'Admin'
     },
     action: 'CATEGORY_CREATE',
@@ -58,7 +58,7 @@ const initialAuditLogs = [
     id: 5,
     user: {
       name: 'Neha Patel',
-      email: 'neha@urbango.ca',
+      email: 'neha@omwhub.com',
       role: 'Admin'
     },
     action: 'USER_REJECT',
@@ -71,7 +71,7 @@ const initialAuditLogs = [
     id: 6,
     user: {
       name: 'Sameer Khan',
-      email: 'sameer@urbango.ca',
+      email: 'sameer@omwhub.com',
       role: 'SuperAdmin'
     },
     action: 'ADMIN_CREATE',
@@ -84,7 +84,7 @@ const initialAuditLogs = [
     id: 7,
     user: {
       name: 'Sameer Khan',
-      email: 'sameer@urbango.ca',
+      email: 'sameer@omwhub.com',
       role: 'SuperAdmin'
     },
     action: 'SETTINGS_UPDATE',
@@ -97,7 +97,7 @@ const initialAuditLogs = [
     id: 8,
     user: {
       name: 'System',
-      email: 'system@urbango.ca',
+      email: 'system@omwhub.com',
       role: 'System'
     },
     action: 'BACKUP_CREATED',
@@ -110,7 +110,7 @@ const initialAuditLogs = [
     id: 9,
     user: {
       name: 'Sneha Kumar',
-      email: 'sneha@urbango.ca',
+      email: 'sneha@omwhub.com',
       role: 'Admin'
     },
     action: 'LOGIN',
@@ -123,7 +123,7 @@ const initialAuditLogs = [
     id: 10,
     user: {
       name: 'Vikram Malhotra',
-      email: 'vikram@urbango.ca',
+      email: 'vikram@omwhub.com',
       role: 'Admin'
     },
     action: 'PASSWORD_RESET',
@@ -136,7 +136,7 @@ const initialAuditLogs = [
     id: 11,
     user: {
       name: 'System',
-      email: 'system@urbango.ca',
+      email: 'system@omwhub.com',
       role: 'System'
     },
     action: 'PAYMENT_PROCESSED',

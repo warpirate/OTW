@@ -107,7 +107,167 @@ router.get('/available-slots', verifyToken, async (req, res) => {
   }
 });
 
-// POST /create - Create a new booking
+// POST /check-worker-availability - Check worker availability for a specific date/time and services
+router.post('/check-worker-availability', verifyToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const { date, time, address_id, services } = req.body || {};
+
+    // Basic validation
+    if (!date || !time || !address_id || !Array.isArray(services) || services.length === 0) {
+      return res.status(400).json({ message: 'date, time, address_id, and services[] are required' });
+    }
+
+    // Validate formats
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const timeRegex = /^\d{2}:\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+    if (!timeRegex.test(time)) {
+      return res.status(400).json({ message: 'Invalid time format. Use HH:MM (24h)' });
+    }
+
+    const scheduledTime = `${date} ${time}:00`;
+    const scheduledUtc = new Date((scheduledTime + 'Z').replace(' ', 'T'));
+    if (isNaN(scheduledUtc.getTime())) {
+      return res.status(400).json({ message: 'Invalid date/time provided' });
+    }
+    const nowUtc = new Date();
+    if (scheduledUtc <= nowUtc) {
+      return res.json({
+        date,
+        time,
+        male_available: false,
+        female_available: false,
+        any_available: false,
+        slot_available: false,
+        reason: 'Selected time is in the past'
+      });
+    }
+
+    // Verify the address belongs to the customer and get coordinates
+    const [addrRows] = await pool.query(
+      'SELECT address_id, customer_id, location_lat, location_lng FROM customer_addresses WHERE address_id = ? AND customer_id = ? AND is_active = 1',
+      [address_id, customerId]
+    );
+    if (addrRows.length === 0) {
+      return res.status(400).json({ message: 'Invalid address' });
+    }
+    const customerLat = addrRows[0].location_lat;
+    const customerLng = addrRows[0].location_lng;
+
+    // Enforce per-slot capacity (match logic from /available-slots)
+    const [slotCntRows] = await pool.query(
+      `SELECT COUNT(*) AS booking_count
+       FROM bookings
+       WHERE scheduled_time = ?
+         AND service_status NOT IN ('cancelled','completed')`,
+      [scheduledTime]
+    );
+    const maxConcurrentBookings = 3;
+    const currentCount = slotCntRows[0]?.booking_count ? parseInt(slotCntRows[0].booking_count) : 0;
+    const slotAvailable = currentCount < maxConcurrentBookings;
+    if (!slotAvailable) {
+      return res.json({
+        date,
+        time,
+        male_available: false,
+        female_available: false,
+        any_available: false,
+        slot_available: false,
+        reason: 'Time slot is fully booked'
+      });
+    }
+
+    // Collect subcategory IDs from services
+    const subcategoryIds = services
+      .map(s => (typeof s === 'object' ? (s.subcategory_id || s.id) : s))
+      .filter(id => id !== undefined && id !== null)
+      .map(id => parseInt(id, 10))
+      .filter(id => !isNaN(id));
+    if (subcategoryIds.length === 0) {
+      return res.status(400).json({ message: 'services must include valid subcategory_id values' });
+    }
+
+    // Find candidate providers by service and active/verified status
+    const placeholders = subcategoryIds.map(() => '?').join(',');
+    const [providers] = await pool.query(
+      `SELECT DISTINCT p.id AS provider_id, p.service_radius_km, p.location_lat, p.location_lng, u.gender
+       FROM providers p
+       INNER JOIN provider_services ps ON p.id = ps.provider_id
+       INNER JOIN users u ON u.id = p.user_id
+       WHERE ps.subcategory_id IN (${placeholders})
+         AND p.active = 1
+         AND p.verified = 1
+         AND p.location_lat IS NOT NULL AND p.location_lng IS NOT NULL`,
+      subcategoryIds
+    );
+
+    // Filter by radius from customer address (if coords exist)
+    let inRadius = providers;
+    if (customerLat !== null && customerLat !== undefined && customerLng !== null && customerLng !== undefined) {
+      inRadius = providers.filter(p => {
+        try {
+          const dist = haversineDistance(
+            parseFloat(customerLat),
+            parseFloat(customerLng),
+            parseFloat(p.location_lat),
+            parseFloat(p.location_lng)
+          );
+          return dist <= parseFloat(p.service_radius_km || 0);
+        } catch (e) {
+          return false;
+        }
+      });
+    }
+
+    if (inRadius.length === 0) {
+      return res.json({
+        date,
+        time,
+        male_available: false,
+        female_available: false,
+        any_available: false,
+        slot_available: true,
+        reason: 'No providers found within service radius'
+      });
+    }
+
+    // Exclude providers already busy at that scheduled_time
+    const [busyRows] = await pool.query(
+      `SELECT DISTINCT provider_id
+       FROM bookings
+       WHERE scheduled_time = ?
+         AND provider_id IS NOT NULL
+         AND service_status IN ('assigned','accepted','in_progress')`,
+      [scheduledTime]
+    );
+    const busySet = new Set(busyRows.map(r => r.provider_id));
+    const availableProviders = inRadius.filter(p => !busySet.has(p.provider_id));
+
+    const maleCount = availableProviders.filter(p => (p.gender || '').toLowerCase() === 'male').length;
+    const femaleCount = availableProviders.filter(p => (p.gender || '').toLowerCase() === 'female').length;
+
+    return res.json({
+      date,
+      time,
+      male_available: maleCount > 0,
+      female_available: femaleCount > 0,
+      any_available: maleCount + femaleCount > 0,
+      slot_available: true,
+      counts: {
+        male: maleCount,
+        female: femaleCount,
+        total: maleCount + femaleCount
+      }
+    });
+  } catch (err) {
+    console.error('Error checking worker availability:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // POST /create - Create a new booking
 router.post('/create', verifyToken, async (req, res) => {
   try {
@@ -117,7 +277,8 @@ router.post('/create', verifyToken, async (req, res) => {
       scheduled_time,
       address_id,
       notes,
-      payment_method = 'online'
+      payment_method = 'online',
+      worker_preference = 'any'
     } = req.body;
     console.log(req.body);
     // Validate required fields
@@ -149,8 +310,27 @@ router.post('/create', verifyToken, async (req, res) => {
     }
     const customerAddress = addressResult[0];
 
+    // Fetch customer's discount percentage from customer_types
+    let discountPercentage = 0;
+    try {
+      const [[discRow]] = await pool.query(
+        `SELECT COALESCE(ct.discount_percentage, 0) AS discount_percentage
+         FROM customers c
+         LEFT JOIN customer_types ct ON ct.id = c.customer_type_id
+         WHERE c.id = ?
+         LIMIT 1`,
+        [customerId]
+      );
+      discountPercentage = parseFloat(discRow?.discount_percentage || 0) || 0;
+    } catch (e) {
+      discountPercentage = 0;
+    }
+
     // UTC timestamp for created_at in MySQL format
     const createdAtUTC = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    // Normalize and validate worker preference
+    const prefRaw = (worker_preference || 'any').toString().toLowerCase();
+    const preference = ['any', 'male', 'female'].includes(prefRaw) ? prefRaw : 'any';
 
     // Start transaction
     await pool.query('START TRANSACTION');
@@ -184,10 +364,12 @@ router.post('/create', verifyToken, async (req, res) => {
         // For now, provider_id is null
         const provider_id = null;
 
-        // Calculate prices
+        // Calculate prices with customer-type discount before GST
         const itemPrice = price * quantity;
-        const gst = Math.round(itemPrice * 0.18); // 18% GST
-        const totalPrice = itemPrice + gst;
+        const discountAmount = Math.round((itemPrice * discountPercentage) / 100);
+        const discountedPrice = Math.max(itemPrice - discountAmount, 0);
+        const gst = Math.round(discountedPrice * 0.18); // 18% GST
+        const totalPrice = discountedPrice + gst;
         totalAmount += totalPrice;
 
         // Create booking with explicit UTC created_at
@@ -241,9 +423,10 @@ router.post('/create', verifyToken, async (req, res) => {
         console.log("bookingId", bookingId);
         console.log("scheduled_time", scheduled_time);
         const [providers] = await pool.query(`
-          SELECT p.id as provider_id, p.service_radius_km, p.location_lat, p.location_lng
+          SELECT p.id as provider_id, p.service_radius_km, p.location_lat, p.location_lng, u.gender
           FROM providers p
           INNER JOIN provider_services ps ON p.id = ps.provider_id
+          INNER JOIN users u ON u.id = p.user_id
           WHERE ps.subcategory_id = ? 
             AND p.active = 1 
             AND p.verified = 1
@@ -251,6 +434,16 @@ router.post('/create', verifyToken, async (req, res) => {
             AND p.location_lng IS NOT NULL
         `, [subcategory_id]);
         console.log("providers", providers);
+        // Exclude providers already busy at this scheduled_time
+        const [busyRows] = await pool.query(`
+          SELECT DISTINCT provider_id
+          FROM bookings
+          WHERE scheduled_time = ?
+            AND provider_id IS NOT NULL
+            AND service_status IN ('assigned','accepted','in_progress')
+        `, [scheduled_time]);
+        const busySet = new Set(busyRows.map(r => r.provider_id));
+
         const availableProviderIds = [];
         for (const provider of providers) {
           if (provider.location_lat && provider.location_lng) {
@@ -261,6 +454,15 @@ router.post('/create', verifyToken, async (req, res) => {
               provider.location_lng
             );
             if (distance <= provider.service_radius_km) {
+              // Gender filter
+              const gender = (provider.gender || '').toLowerCase();
+              if (preference !== 'any' && gender !== preference) {
+                continue;
+              }
+              // Busy filter
+              if (busySet.has(provider.provider_id)) {
+                continue;
+              }
               availableProviderIds.push(provider.provider_id);
             }
           }
@@ -335,7 +537,7 @@ router.post('/create', verifyToken, async (req, res) => {
 router.get('/history', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
-    const { page, limit = 10, status, lastId } = req.query;
+    const { limit = 10, status, lastId } = req.query;
 
     // Common WHERE clause
     let whereClause = 'WHERE b.user_id = ?';
@@ -345,55 +547,7 @@ router.get('/history', verifyToken, async (req, res) => {
       baseParams.push(status);
     }
 
-    // If page is provided, keep backward compatibility with offset pagination
-    if (page !== undefined) {
-      const pageNum = parseInt(page);
-      const perPage = parseInt(limit);
-      const offset = (pageNum - 1) * perPage;
-
-      const [bookings] = await pool.query(
-        `SELECT b.*, 
-                COALESCE(s.name, 'Ride Service') as service_name, 
-                COALESCE(s.description, 'Driver transportation service') as service_description,
-                CASE WHEN b.provider_id IS NOT NULL THEN 
-                  (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
-                ELSE 'Not Assigned' END as provider_name,
-                CASE 
-                  WHEN b.booking_type = 'ride' THEN 
-                    CONCAT(rb.pickup_address, ' → ', rb.drop_address)
-                  ELSE sb.address 
-                END as display_address,
-                CASE 
-                  WHEN b.booking_type = 'ride' THEN b.estimated_cost
-                  ELSE b.price 
-                END as display_price
-         FROM bookings b
-         LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
-         LEFT JOIN subcategories s ON s.id = b.subcategory_id
-         LEFT JOIN service_bookings sb ON sb.booking_id = b.id
-         ${whereClause}
-         ORDER BY b.created_at DESC
-         LIMIT ? OFFSET ?`,
-        [...baseParams, perPage, offset]
-      );
-
-      const [countResult] = await pool.query(
-        `SELECT COUNT(*) as total FROM bookings b ${whereClause}`,
-        baseParams
-      );
-
-      return res.json({
-        bookings,
-        pagination: {
-          current_page: pageNum,
-          per_page: perPage,
-          total: countResult[0].total,
-          total_pages: Math.ceil(countResult[0].total / perPage)
-        }
-      });
-    }
-
-    // Cursor-based pagination (default): order by id DESC and use lastId cursor
+    // Cursor-based pagination only: order by id DESC and use lastId cursor
     const perPage = parseInt(limit);
     const fetchLimit = perPage + 1; // fetch one extra to know if there's more
 
@@ -478,11 +632,15 @@ try {
 
   const [bookings] = await pool.query(
     `SELECT b.*, 
+          
             COALESCE(s.name, 'Ride Service') as service_name, 
             COALESCE(s.description, 'Driver transportation service') as service_description,
             CASE WHEN b.provider_id IS NOT NULL THEN 
               (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
             ELSE 'Not Assigned' END as provider_name,
+            CASE WHEN b.provider_id IS NOT NULL THEN 
+              (SELECT u.phone_number FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
+            ELSE NULL END as provider_phone,
             CASE 
               WHEN b.booking_type = 'ride' THEN 
                 CONCAT(rb.pickup_address, ' → ', rb.drop_address)
@@ -493,6 +651,7 @@ try {
               ELSE b.price 
             END as display_price
      FROM bookings b
+     
      LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
      LEFT JOIN service_bookings sb ON sb.booking_id = b.id
      LEFT JOIN subcategories s ON s.id = b.subcategory_id

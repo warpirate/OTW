@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import Header from '../../components/Header';
+import Logo from '../../components/Logo';
 
 const CustomerLogin = () => {
   const navigate = useNavigate();
@@ -106,7 +107,7 @@ const CustomerLogin = () => {
                 Back to Home
               </Link>
               <h2 className="text-3xl font-bold text-[var(--text-primary)]">Welcome Back</h2>
-              <p className="mt-2 text-[var(--text-secondary)]">Sign in to your OTW - On The Way account</p>
+              <p className="mt-2 text-[var(--text-secondary)]">Sign in to your OMW account</p>
             </div>
           </div>
 
@@ -114,14 +115,9 @@ const CustomerLogin = () => {
           <div className="lg:w-1/2">
             {/* Login Form */}
             <div className="bg-[var(--bg-primary)] rounded-xl shadow-lg p-8 border border-[var(--border-color)]">
-              {/* OTW Logo */}
+              {/* Logo */}
               <div className="flex items-center mb-6">
-                <div className="flex items-center space-x-1 mr-3">
-                  <span className="text-3xl font-bold text-orange-500">O</span>
-                  <span className="text-3xl font-bold text-blue-500">T</span>
-                  <span className="text-3xl font-bold text-green-500">W</span>
-                </div>
-                <span className="text-yellow-400 text-2xl">👋</span>
+                <Logo size="xl" alt="OMW" className="mr-3" />
               </div>
               <form onSubmit={handleLogin} className="space-y-6">
                 {/* Login Method Toggle */}
@@ -131,7 +127,7 @@ const CustomerLogin = () => {
                     onClick={() => setLoginMethod('email')}
                     className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                       loginMethod === 'email'
-                        ? 'bg-white text-blue-600 shadow-sm'
+                        ? 'bg-white text-purple-600 shadow-sm'
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
@@ -143,7 +139,7 @@ const CustomerLogin = () => {
                     onClick={() => setLoginMethod('phone')}
                     className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                       loginMethod === 'phone'
-                        ? 'bg-white text-blue-600 shadow-sm'
+                        ? 'bg-white text-purple-600 shadow-sm'
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
@@ -166,7 +162,7 @@ const CustomerLogin = () => {
                         required
                         value={formData.email}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                        className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
                         placeholder="Enter your email"
                       />
                     </div>
@@ -182,7 +178,7 @@ const CustomerLogin = () => {
                           required
                           value={formData.password}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-12 bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                          className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent pr-12 bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
                           placeholder="Enter your password"
                         />
                         <button
@@ -216,7 +212,7 @@ const CustomerLogin = () => {
                           required
                           value={formData.phone}
                           onChange={handleInputChange}
-                          className="flex-1 px-4 py-3 border border-l-0 border-[var(--border-color)] rounded-r-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-[var(--bg-primary)] text-[var(--text-primary)]"
+                          className="flex-1 px-4 py-3 border border-l-0 border-[var(--border-color)] rounded-r-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-[var(--bg-primary)] text-[var(--text-primary)]"
                           placeholder="Enter phone number"
                         />
                       </div>
@@ -226,7 +222,7 @@ const CustomerLogin = () => {
                       <button
                         type="button"
                         onClick={handleSendOtp}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors"
+                        className="w-full btn-brand"
                       >
                         Send OTP
                       </button>
@@ -242,7 +238,7 @@ const CustomerLogin = () => {
                           required
                           value={formData.otp}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                          className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-primary)]"
                           placeholder="Enter 6-digit OTP"
                           maxLength="6"
                         />
@@ -261,7 +257,7 @@ const CustomerLogin = () => {
                 {(loginMethod === 'email' || isOtpSent) && (
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors"
+                    className="w-full btn-brand"
                   >
                     Sign In
                   </button>

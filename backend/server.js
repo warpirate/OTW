@@ -22,6 +22,8 @@ const cartRoute = require('./routes/category_management/cart');
 const addressRoute = require('./routes/customer_management/addresses');
 const bookingRoute = require('./routes/customer_management/bookings');
 const driverRoute = require('./routes/customer_management/driver_booking');
+const customerVerificationsRoute = require('./routes/customer_management/customer_verifications');
+const customerAdminRoute = require('./routes/admin_management/customerAdmin');
 const baseURL = process.env.BASE_URL1 || '/api';
 
 app.use(`${baseURL}/categories`, categoryRoute); 
@@ -31,8 +33,10 @@ app.use(`${baseURL}/customer/driver`, driverRoute);
 app.use(`${baseURL}/customer/cart`, cartRoute);
 app.use(`${baseURL}/customer/addresses`, addressRoute);
 app.use(`${baseURL}/customer/bookings`, bookingRoute);
+app.use(`${baseURL}/customer/verifications`, customerVerificationsRoute);
 app.use(`${baseURL}/superadmin`, superAdminRoute);
 app.use(`${baseURL}/admin`, providerAdminRoute);
+app.use(`${baseURL}/admin`, customerAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker`, workerDocsRoute);
 // Create HTTP server and attach Socket.IO

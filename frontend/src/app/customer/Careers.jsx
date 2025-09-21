@@ -25,7 +25,7 @@ const Careers = () => {
       <div className="container-custom py-12">
         <div className="flex flex-col items-center justify-center px-4 py-12">
           <h1 className={`text-4xl font-bold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-            Careers at OTW
+            Careers at OMW
           </h1>
           <p className={`text-lg max-w-2xl mb-6 text-center ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
             Join our growing team and help us revolutionize the home services industry! We're always looking for passionate, talented individuals.

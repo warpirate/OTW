@@ -3,6 +3,14 @@ const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 const authorizeRole = require('../middlewares/authorizeRole');
+const AWS = require('aws-sdk');
+const fs = require('fs');
+const path = require('path');
+
+// AWS S3 setup for presigned GET URLs (admin viewing)
+const S3_REGION = process.env.AWS_REGION;
+const S3_BUCKET = process.env.S3_BUCKET || process.env.S3_BUCKET_PROVIDER_DOCS || process.env.AWS_BUCKET_NAME;
+const s3 = new AWS.S3({ region: S3_REGION });
 
 /**
  * Get all providers with pagination, search and filters
@@ -58,43 +66,42 @@ router.get('/providers', verifyToken, authorizeRole(['admin', 'superadmin']), as
     // Get providers with pagination
     const dataQuery = `
       SELECT 
-  u.id as user_id,
-  u.name,
-  u.email,
-  u.phone_number,
-  u.created_at as user_created_at,
-  p.id as provider_id,
-  p.experience_years,
-  p.rating,
-  p.bio,
-  p.verified,
-  p.active,
-  p.last_active_at,
-  p.service_radius_km,
-  p.location_lat,
-  p.location_lng,
-  p.alternate_email,
-  p.alternate_phone_number,
-  p.emergency_contact_name,
-  p.emergency_contact_relationship,
-  p.emergency_contact_phone,
-  p.created_at as provider_created_at,
-  p.updated_at as provider_updated_at,
-  ANY_VALUE(pa.street_address) AS street_address,
-  ANY_VALUE(pa.city) AS city,
-  ANY_VALUE(pa.state) AS state,
-  ANY_VALUE(pa.zip_code) AS zip_code,
-  ANY_VALUE(pa.address_type) AS address_type,
-  GROUP_CONCAT(DISTINCT ps.subcategory_id) as subcategory_ids
-FROM users u
-INNER JOIN providers p ON u.id = p.user_id
-LEFT JOIN provider_services ps ON p.id = ps.provider_id
-LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
-${whereClause}
-GROUP BY u.id, p.id
-ORDER BY p.created_at DESC
-LIMIT ? OFFSET ?
-
+        u.id as user_id,
+        u.name,
+        u.email,
+        u.phone_number,
+        u.created_at as user_created_at,
+        p.id as provider_id,
+        p.experience_years,
+        p.rating,
+        p.bio,
+        p.verified,
+        p.active,
+        p.last_active_at,
+        p.service_radius_km,
+        p.location_lat,
+        p.location_lng,
+        p.alternate_email,
+        p.alternate_phone_number,
+        p.emergency_contact_name,
+        p.emergency_contact_relationship,
+        p.emergency_contact_phone,
+        p.created_at as provider_created_at,
+        p.updated_at as provider_updated_at,
+        ANY_VALUE(pa.street_address) AS street_address,
+        ANY_VALUE(pa.city) AS city,
+        ANY_VALUE(pa.state) AS state,
+        ANY_VALUE(pa.zip_code) AS zip_code,
+        ANY_VALUE(pa.address_type) AS address_type,
+        GROUP_CONCAT(DISTINCT ps.subcategory_id) as subcategory_ids
+      FROM users u
+      INNER JOIN providers p ON u.id = p.user_id
+      LEFT JOIN provider_services ps ON p.id = ps.provider_id
+      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
+      ${whereClause}
+      GROUP BY u.id, p.id
+      ORDER BY p.created_at DESC
+      LIMIT ? OFFSET ?
     `;
 
     queryParams.push(limit, offset);
@@ -782,6 +789,10 @@ router.get('/providers/:id/documents', verifyToken, authorizeRole(['admin', 'sup
       message: 'Failed to fetch documents',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
+    // AWS S3 setup for presigned GET URLs for private documents
+    const S3_REGION = process.env.AWS_REGION;
+    const S3_BUCKET = process.env.S3_BUCKET || process.env.S3_BUCKET_PROVIDER_DOCS || process.env.AWS_BUCKET_NAME;
+    const s3 = new AWS.S3({ region: S3_REGION });
   }
 });
 
@@ -1011,6 +1022,81 @@ router.patch('/providers/banking/:bankingId/verify', verifyToken, authorizeRole(
       message: 'Failed to verify banking details',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
+  }
+});
+
+/**
+ * Get presigned GET URL to view a provider document (admin)
+ * GET /api/admin/providers/documents/:documentId/presign
+ */
+router.get('/providers/documents/:documentId/presign', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const { documentId } = req.params;
+
+    const [docs] = await pool.query(
+      'SELECT provider_id, document_url FROM provider_documents WHERE id = ?',
+      [documentId]
+    );
+
+    if (docs.length === 0) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+
+    let key = docs[0].document_url;
+    const providerId = docs[0].provider_id;
+    if (!key) {
+      return res.status(400).json({ success: false, message: 'Document key is empty' });
+    }
+
+    // If document is stored locally, migrate it to S3 on-demand, then return S3 URL
+    if (key.startsWith('/uploads/')) {
+      try {
+        if (!S3_BUCKET || !S3_REGION) {
+          // As a last resort, return the local URL (may 404 if not served statically)
+          const baseUrl = `${req.protocol}://${req.get('host')}`;
+          return res.json({ success: true, url: `${baseUrl}${key}`, storage: 'local' });
+        }
+
+        const relPath = key.startsWith('/') ? key.slice(1) : key;
+        const absPath = path.join(process.cwd(), relPath);
+        if (!fs.existsSync(absPath)) {
+          return res.status(404).json({ success: false, message: 'Local document not found for migration' });
+        }
+
+        const fileName = path.basename(absPath);
+        // Place migrated files under provider-specific prefix
+        const migrateKey = `provider_documents/${providerId}/${Date.now()}_${fileName}`;
+
+        await s3.upload({
+          Bucket: S3_BUCKET,
+          Key: migrateKey,
+          Body: fs.createReadStream(absPath)
+        }).promise();
+
+        // Update DB to point to S3 key so future requests go directly to S3
+        await pool.query(
+          'UPDATE provider_documents SET document_url = ? WHERE id = ?',
+          [migrateKey, documentId]
+        );
+
+        key = migrateKey; // continue to sign and return S3 URL below
+      } catch (migrateErr) {
+        console.error('Error migrating local document to S3:', migrateErr);
+        return res.status(500).json({ success: false, message: 'Failed to migrate local document to S3' });
+      }
+    }
+
+    // S3 private object presign
+    if (!S3_BUCKET || !S3_REGION) {
+      return res.status(500).json({ success: false, message: 'S3 is not configured on the server' });
+    }
+
+    const params = { Bucket: S3_BUCKET, Key: key, Expires: 300 };
+    const url = await s3.getSignedUrlPromise('getObject', params);
+    return res.json({ success: true, url, storage: 's3', expiresIn: 300 });
+  } catch (error) {
+    console.error('Error generating presigned GET URL:', error);
+    return res.status(500).json({ success: false, message: 'Failed to generate presigned URL', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
   }
 });
 

@@ -83,7 +83,7 @@ class WorkerService {
    */
   static async getDashboardStats() {
     try {
-      const response = await apiClient.get('/worker/dashboard/stats');
+      const response = await apiClient.get('/worker/dashboard-stats');
       return response.data;
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -298,7 +298,7 @@ class WorkerService {
    */
   static async getDashboardStats() {
     try {
-      const response = await WorkerService._client.get('/worker/dashboard/stats');
+      const response = await WorkerService._client.get('/worker/dashboard-stats');
       return response.data;
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -325,6 +325,20 @@ class WorkerService {
     } catch (error) {
       console.error('Error fetching assigned bookings:', error);
       throw new Error(error.response?.data?.message || 'Failed to load assigned bookings');
+    }
+  }
+
+  /**
+   * Get recent bookings related to the provider's categories
+   */
+  static async getRecentBookings(limit = 5) {
+    try {
+      const params = new URLSearchParams({ limit: String(limit) });
+      const response = await WorkerService._client.get(`/worker/recent-bookings?${params}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching recent bookings:', error);
+      throw new Error(error.response?.data?.message || 'Failed to load recent bookings');
     }
   }
 

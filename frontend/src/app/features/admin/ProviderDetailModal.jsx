@@ -1,4 +1,6 @@
 import React from 'react';
+import AdminService from '../../services/admin.service';
+import config from '../../environments';
 
 const ProviderDetailModal = ({ 
   selectedProvider, 
@@ -22,6 +24,24 @@ const ProviderDetailModal = ({
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const openDocument = async (documentId, fallbackFileUrl) => {
+    try {
+      const resp = await AdminService.getDocumentPresignedUrl(documentId);
+      const url = resp?.url;
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    } catch (e) {
+      // Silent fallback
+    }
+    if (fallbackFileUrl) {
+      const isAbsolute = /^(http|https):\/\//i.test(fallbackFileUrl);
+      const fullUrl = isAbsolute ? fallbackFileUrl : `${config.backend?.uploadsUrl ? config.backend.uploadsUrl + '/' : ''}${fallbackFileUrl}`;
+      window.open(fullUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const getStatusBadgeClass = (status) => {
@@ -227,7 +247,7 @@ const ProviderDetailModal = ({
                                 )}
                               </div>
                               <div className="ml-4">
-                                <button className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 border border-blue-300 rounded">
+                                <button onClick={() => openDocument(doc.id, doc.document_url)} className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 border border-blue-300 rounded">
                                   View File
                                 </button>
                               </div>

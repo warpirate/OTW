@@ -433,7 +433,7 @@ const WorkerSignup = () => {
         last_name: formData.lastName,
         email: formData.email,
         password: formData.password,
-        phone_number: formData.phone,
+        phone: formData.phone,
         gender: formData.gender,
         provider_data: {
           phone: formData.phone,
@@ -572,7 +572,7 @@ const WorkerSignup = () => {
                 value={formData.gender}
                 onChange={handleInputChange}
                 required
-                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                 }`}
               >
@@ -720,7 +720,7 @@ const WorkerSignup = () => {
                     onClick={() => handleServiceTypeChange({ target: { value: type.id } })}
                     className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                       serviceType === type.id
-                        ? darkMode ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 shadow-sm'
+                        ? darkMode ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 shadow-sm'
                         : darkMode ? 'text-gray-300' : 'text-gray-500'
                     }`}
                   >
@@ -758,7 +758,7 @@ const WorkerSignup = () => {
               </label>
               {isLoadingCategories ? (
                 <div className="flex items-center space-x-2">
-                  <div className="w-5 h-5 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-t-transparent border-purple-500 rounded-full animate-spin"></div>
                   <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading categories...</span>
                 </div>
               ) : (
@@ -770,7 +770,7 @@ const WorkerSignup = () => {
                           key={category.id} 
                           className={`flex items-center p-3 rounded-lg cursor-pointer transition-colors ${
                             selectedCategories.includes(category.id)
-                              ? darkMode ? 'bg-blue-800 border-blue-700' : 'bg-blue-50 border-blue-200'
+                              ? darkMode ? 'bg-purple-800 border-purple-700' : 'bg-purple-50 border-purple-200'
                               : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-50 border-gray-200'
                           } border`}
                           onClick={() => handleCategoryToggle(category)}
@@ -817,7 +817,7 @@ const WorkerSignup = () => {
                         <div className="font-medium mb-2">{category ? category.name : categoryId}</div>
                         {isLoadingSubcategories && !subcategories[categoryId] ? (
                           <div className="flex items-center space-x-2">
-                            <div className="w-4 h-4 border-2 border-t-transparent border-blue-500 rounded-full animate-spin"></div>
+                            <div className="w-4 h-4 border-2 border-t-transparent border-purple-500 rounded-full animate-spin"></div>
                             <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading...</span>
                           </div>
                         ) : subcategories[categoryId] && subcategories[categoryId].length > 0 ? (
@@ -831,7 +831,7 @@ const WorkerSignup = () => {
                                   key={subcategory.id} 
                                   className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${
                                     isSelected
-                                      ? darkMode ? 'bg-blue-900 border-blue-800' : 'bg-blue-50 border-blue-200'
+                                      ? darkMode ? 'bg-purple-900 border-purple-800' : 'bg-purple-50 border-purple-200'
                                       : darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50 border-gray-200'
                                   } border`}
                                   onClick={() => handleSubcategoryToggle(categoryId, subcategory.id)}
@@ -871,7 +871,7 @@ const WorkerSignup = () => {
                 value={formData.bio}
                 onChange={handleInputChange}
                 required
-                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                 }`}
                 placeholder="Tell customers about yourself, your experience, and what makes you special..."
@@ -1045,13 +1045,13 @@ const WorkerSignup = () => {
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Branding */}
-      <div className={`hidden lg:flex lg:w-1/2 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-600 to-purple-700'} relative overflow-hidden`}>
+      <div className={`hidden lg:flex lg:w-1/2 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-purple-600 to-purple-700'} relative overflow-hidden`}>
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative z-10 flex flex-col justify-center px-12 text-white">
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-4">Become a Worker</h1>
-            <p className="text-xl text-blue-100 mb-8">
-              Join thousands of professionals earning with OTW
+            <p className="text-xl text-purple-100 mb-8">
+              Join thousands of professionals earning with OMW
             </p>
             
             {/* Steps indicator */}
@@ -1060,7 +1060,7 @@ const WorkerSignup = () => {
                 {[1, 2, 3].map((step) => (
                   <div key={step} className="flex flex-col items-center flex-1">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${
-                      currentStep >= step ? 'bg-white text-blue-600' : 'bg-white/30 text-white'
+                      currentStep >= step ? 'bg-white text-purple-600' : 'bg-white/30 text-white'
                     }`}>
                       {currentStep > step ? <CheckCircle className="w-5 h-5" /> : step}
                     </div>
@@ -1148,7 +1148,7 @@ const WorkerSignup = () => {
                 <button
                   type="button"
                   onClick={handleNextStep}
-                  className="ml-auto bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  className="ml-auto btn-brand"
                 >
                   Next
                 </button>
@@ -1156,7 +1156,7 @@ const WorkerSignup = () => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="ml-auto bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="ml-auto btn-brand disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? 'Creating Account...' : 'Create Account'}
                 </button>
