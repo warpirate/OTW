@@ -266,6 +266,8 @@ const BookingService = {
         subcategory_name: backendBooking.service_description,
         status: backendBooking.service_status,
         payment_status: backendBooking.payment_status,
+        payment_method: backendBooking.payment_method,
+        payment_completed_at: backendBooking.payment_completed_at,
         // scheduled_time is stored in UTC (YYYY-MM-DD HH:mm:ss). Parse to local for UI.
         booking_date: backendBooking.scheduled_time ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T')) : null,
         time_slot: backendBooking.scheduled_time ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T')).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '',
@@ -275,7 +277,11 @@ const BookingService = {
         provider_name: backendBooking.provider_name || 'Not Assigned',
         provider_phone: backendBooking.provider_phone,
         created_at: backendBooking.created_at,
-        notes: backendBooking.notes
+        notes: backendBooking.notes,
+        // Rating and review fields
+        rating: backendBooking.rating,
+        review: backendBooking.review,
+        rating_submitted_at: backendBooking.rating_submitted_at
       };
     },
 

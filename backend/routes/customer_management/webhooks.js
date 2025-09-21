@@ -108,12 +108,26 @@ async function handlePaymentCaptured(payment) {
       [JSON.stringify(payment), transaction.id]
     );
 
-    // Update booking payment status if booking_id exists
+    // Update booking payment status and service status if booking_id exists
     if (transaction.booking_id) {
       await pool.query(
-        'UPDATE bookings SET payment_status = "paid" WHERE id = ?',
+        'UPDATE bookings SET payment_status = "paid", payment_method = "UPI Payment", payment_completed_at = NOW(), service_status = "completed", updated_at = NOW() WHERE id = ?',
         [transaction.booking_id]
       );
+
+      // Emit Socket.IO event to notify customer and worker that service is completed
+      try {
+        const io = require('../../server').get('io');
+        if (io) {
+          io.to(`booking_${transaction.booking_id}`).emit('status_update', {
+            booking_id: transaction.booking_id,
+            status: 'completed',
+            message: 'Service completed after payment'
+          });
+        }
+      } catch (socketError) {
+        console.error('Socket error in webhook payment processing:', socketError);
+      }
     }
 
     // Create or update payment record in main payments table

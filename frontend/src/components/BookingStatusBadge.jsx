@@ -48,6 +48,30 @@ const BookingStatusBadge = ({ status, showIcon = true, size = 'default' }) => {
           colors: 'bg-red-100 text-red-800 border-red-200',
           text: 'REJECTED'
         };
+      case 'started':
+        return {
+          icon: <Clock className="h-4 w-4 text-indigo-500" />,
+          colors: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+          text: 'EN ROUTE'
+        };
+      case 'en_route':
+        return {
+          icon: <Clock className="h-4 w-4 text-indigo-500" />,
+          colors: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+          text: 'EN ROUTE'
+        };
+      case 'arrived':
+        return {
+          icon: <CheckCircle className="h-4 w-4 text-green-500" />,
+          colors: 'bg-green-100 text-green-800 border-green-200',
+          text: 'ARRIVED'
+        };
+      case 'in_progress':
+        return {
+          icon: <Clock className="h-4 w-4 text-purple-500" />,
+          colors: 'bg-purple-100 text-purple-800 border-purple-200',
+          text: 'IN PROGRESS'
+        };
       default:
         return {
           icon: <Clock className="h-4 w-4 text-gray-500" />,

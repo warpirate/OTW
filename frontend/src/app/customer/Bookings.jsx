@@ -18,8 +18,10 @@ import {
   User,
   CalendarDays,
   TrendingUp,
+  Star,
   Shield,
-  CreditCard
+  CreditCard,
+  Navigation
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import AuthService from '../services/auth.service';
@@ -445,6 +447,24 @@ const Bookings = () => {
                     
                     {/* Actions */}
                     <div className="flex items-center space-x-2">
+                      {/* Track Booking Button for Active Bookings */}
+                      {(booking.status === 'accepted' || booking.status === 'started' || booking.status === 'en_route' || booking.status === 'arrived' || booking.status === 'in_progress') && (
+                        <button
+                          onClick={() => {
+                            // Navigate to appropriate tracking page based on booking type
+                            if (booking.booking_type === 'ride') {
+                              navigate(`/booking-tracking/${booking.booking_id}`);
+                            } else {
+                              navigate(`/service-tracking/${booking.booking_id}`);
+                            }
+                          }}
+                          className="btn-outline text-blue-600 border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center space-x-2"
+                        >
+                          <Navigation className="h-4 w-4" />
+                          <span>Track</span>
+                        </button>
+                      )}
+                      
                       <button
                         onClick={() => handleViewDetails(booking)}
                         className="btn-outline flex items-center space-x-2"
@@ -662,6 +682,100 @@ const Bookings = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Payment Details - Show only for completed services */}
+                {selectedBooking.status === 'completed' && (
+                  <div className="card p-6 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-700">
+                    <h4 className={`text-xl font-semibold mb-4 flex items-center ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <CreditCard className="h-5 w-5 mr-2 text-indigo-600" />
+                      Payment Details
+                    </h4>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex justify-between items-center py-2 border-b border-indigo-200 dark:border-indigo-700">
+                          <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Payment Method:</span>
+                          <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {selectedBooking.payment_method || 'Cash Payment'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-indigo-200 dark:border-indigo-700">
+                          <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Payment Status:</span>
+                          <span className={`font-medium ${selectedBooking.payment_status === 'paid' ? 'text-green-600' : 'text-orange-600'}`}>
+                            {selectedBooking.payment_status === 'paid' ? '✅ Paid' : '⏳ Pending'}
+                          </span>
+                        </div>
+                        {selectedBooking.payment_completed_at && (
+                          <div className="flex justify-between items-center py-2 border-b border-indigo-200 dark:border-indigo-700">
+                            <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Payment Date:</span>
+                            <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {new Date(selectedBooking.payment_completed_at).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center py-2">
+                          <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Amount Paid:</span>
+                          <span className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {formatPrice(selectedBooking.total_amount)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rating & Review - Show only for completed services */}
+                {selectedBooking.status === 'completed' && (
+                  <div className="card p-6 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border border-yellow-200 dark:border-yellow-700">
+                    <h4 className={`text-xl font-semibold mb-4 flex items-center ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <Star className="h-5 w-5 mr-2 text-yellow-600" />
+                      Your Rating & Review
+                    </h4>
+                    {selectedBooking.rating ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star
+                                key={star}
+                                className={`h-6 w-6 ${
+                                  star <= selectedBooking.rating
+                                    ? 'text-yellow-400 fill-current'
+                                    : 'text-gray-300 dark:text-gray-600'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {selectedBooking.rating}/5
+                          </span>
+                        </div>
+                        {selectedBooking.review && (
+                          <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} border border-yellow-200 dark:border-yellow-700`}>
+                            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-2`}>Your Review:</p>
+                            <p className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              "{selectedBooking.review}"
+                            </p>
+                          </div>
+                        )}
+                        {selectedBooking.rating_submitted_at && (
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Rated on {new Date(selectedBooking.rating_submitted_at).toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Star className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                        <p className={`text-lg ${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-2`}>
+                          No rating provided yet
+                        </p>
+                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          You can rate this service from the service tracking page
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 {/* Actions */}
                 <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">

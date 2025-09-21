@@ -46,8 +46,10 @@ app.use(`${baseURL}/admin/pricing`, pricingAdminRoute);
 app.use(`${baseURL}/admin/payouts`, payoutAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker-management`, require('./routes/worker_management/cash_payments'));
+app.use(`${baseURL}/worker-management`, require('./routes/worker_management/wallet'));
 app.use(`${baseURL}/worker`, workerDocsRoute);
 app.use(`${baseURL}/worker/trip`, tripTrackingRoute);
+app.use(`${baseURL}/admin`, require('./routes/admin_management/wallet'));
 
 // Health check endpoint
 app.get(`${baseURL}/health`, async (req, res) => {
@@ -124,6 +126,43 @@ io.use(async (socket, next) => {
 io.on('connection', (socket) => {
   const { id: userId, role } = socket.user || {};
   console.log(`🔌 Socket connected: user=${userId} role=${role} socket=${socket.id}`);
+
+  // Handle worker room joins
+  socket.on('join_worker_room', (bookingId) => {
+    console.log(`Worker ${userId} joining room for booking ${bookingId}`);
+    socket.join(`booking_${bookingId}`);
+  });
+
+  // Handle customer booking room joins
+  socket.on('join_booking_room', (bookingId) => {
+    console.log(`Customer ${userId} joining room for booking ${bookingId}`);
+    socket.join(`booking_${bookingId}`);
+  });
+
+  // Handle OTP sending from worker to customer
+  socket.on('send_otp', async (data) => {
+    try {
+      const { booking_id, otp } = data;
+      console.log(`Sending OTP ${otp} for booking ${booking_id}`);
+      
+      // Get customer user_id from booking
+      const [customerData] = await pool.query(
+        'SELECT user_id FROM bookings WHERE id = ?',
+        [booking_id]
+      );
+      
+      if (customerData.length) {
+        // Send OTP to customer
+        io.to(`user:${customerData[0].user_id}`).emit('otp_code', {
+          booking_id,
+          otp,
+          message: 'Your service provider has arrived. Please verify with this OTP.'
+        });
+      }
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+    }
+  });
 
   socket.on('disconnect', (reason) => {
     console.log(`🔌 Socket disconnected: user=${userId} reason=${reason}`);

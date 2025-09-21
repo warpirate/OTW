@@ -9,8 +9,6 @@ const db = mysql.createPool({
   port: process.env.DB_PORT || 3306,
   connectionLimit: process.env.NODE_ENV === 'production' ? 25 : 15,
   queueLimit: 0,
-  acquireTimeout: 60000,
-  timeout: 60000,
   // Return DATE/DATETIME as strings to avoid timezone conversion to UTC
   dateStrings: true,
   // Enable multiple statements for migrations

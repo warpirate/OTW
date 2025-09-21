@@ -89,7 +89,7 @@ const WorkerDashboard = () => {
       const statsResponse = await WorkerService.getDashboardStats();
       setStats({
         totalJobs: statsResponse.total_jobs || 0,
-        completedJobs: statsResponse.total_jobs || 0,
+        completedJobs: statsResponse.completed_jobs || 0,
         pendingJobs: statsResponse.active_jobs || 0,
         totalEarnings: statsResponse.total_earnings || 0,
         rating: statsResponse.rating || 0,
@@ -106,7 +106,9 @@ const WorkerDashboard = () => {
         time: booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A',
         status: booking.service_status || 'pending',
         amount: booking.display_price || booking.estimated_cost || 0,
-        address: booking.display_address || booking.address || 'Address not available'
+        address: booking.display_address || booking.address || 'Address not available',
+        rating: booking.rating,
+        review: booking.review
       })) || [];
       
       setRecentJobs(formattedJobs);
@@ -122,7 +124,7 @@ const WorkerDashboard = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return 'text-green-600 bg-green-100';
+        return 'text-blue-600 bg-blue-100';
       case 'pending':
         return 'text-yellow-600 bg-yellow-100';
       case 'cancelled':
@@ -143,6 +145,33 @@ const WorkerDashboard = () => {
       default:
         return <Clock className="w-4 h-4" />;
     }
+  };
+
+  const renderStars = (rating) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+    
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(
+        <Star key={i} className="w-3 h-3 text-yellow-400 fill-current" />
+      );
+    }
+    
+    if (hasHalfStar) {
+      stars.push(
+        <Star key="half" className="w-3 h-3 text-yellow-400 fill-current opacity-50" />
+      );
+    }
+    
+    const emptyStars = 5 - Math.ceil(rating);
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(
+        <Star key={`empty-${i}`} className="w-3 h-3 text-gray-300" />
+      );
+    }
+    
+    return stars;
   };
 
   return (
@@ -218,102 +247,117 @@ const WorkerDashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
-            <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Briefcase className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          {/* Total Jobs Card */}
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 shadow-sm border transition-all duration-200 hover:shadow-md`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-1`}>
                   Total Jobs
                 </p>
-                <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                <p className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   {stats.totalJobs}
                 </p>
               </div>
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+                <Briefcase className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
             </div>
           </div>
 
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          {/* Completed Jobs Card */}
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 shadow-sm border transition-all duration-200 hover:shadow-md`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-1`}>
                   Completed
                 </p>
-                <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                <p className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   {stats.completedJobs}
                 </p>
               </div>
+              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
+                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+              </div>
             </div>
           </div>
 
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
-            <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-              </div>
-              <div className="ml-4">
-                <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          {/* Total Earnings Card */}
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 shadow-sm border transition-all duration-200 hover:shadow-md`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-1`}>
                   Total Earnings
                 </p>
-                <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {stats.totalEarnings.toLocaleString()}
+                <p className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  ₹{stats.totalEarnings.toLocaleString()}
                 </p>
+              </div>
+              <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl">
+                <DollarSign className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
               </div>
             </div>
           </div>
 
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
-            <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Star className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          {/* Rating Card */}
+          <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl p-6 shadow-sm border transition-all duration-200 hover:shadow-md`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-sm font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-1`}>
                   Rating
                 </p>
-                <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {stats.rating} <span className="text-sm font-normal">({stats.totalReviews})</span>
+                <div className="flex items-center space-x-2">
+                  <p className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    {stats.rating > 0 ? stats.rating.toFixed(1) : '0.0'}
+                  </p>
+                  {stats.rating > 0 && (
+                    <div className="flex items-center space-x-1">
+                      {renderStars(stats.rating)}
+                    </div>
+                  )}
+                </div>
+                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'} mt-1`}>
+                  {stats.totalReviews} review{stats.totalReviews !== 1 ? 's' : ''}
                 </p>
+              </div>
+              <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
+                <Star className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Recent Jobs */}
-        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm`}>
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-xl shadow-sm border`}>
+          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
             <div className="flex justify-between items-center">
-              <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              <h3 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 Recent Jobs
               </h3>
               <Link
                 to="/worker/jobs"
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
               >
-                View All
+                View All →
               </Link>
             </div>
           </div>
           
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {recentJobs.map((job) => (
-              <div key={job.id} className="px-6 py-4">
+              <div key={job.id} className="px-6 py-5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Briefcase className="w-6 h-6 text-blue-600" />
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                      <Briefcase className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <div>
-                      <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    <div className="flex-1">
+                      <h4 className={`font-semibold text-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                         {job.title}
                       </h4>
-                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-2`}>
                         {job.customer}
                       </p>
-                      <div className="flex items-center space-x-4 mt-1">
+                      <div className="flex items-center space-x-4 mb-2">
                         <div className="flex items-center space-x-1">
                           <Calendar className="w-4 h-4 text-gray-400" />
                           <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -326,27 +370,33 @@ const WorkerDashboard = () => {
                             {job.time}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-1">
-                          <MapPin className="w-4 h-4 text-gray-400" />
-                          <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            {job.address}
+                      </div>
+                      
+                      {/* Rating display for completed jobs */}
+                      {job.status === 'completed' && job.rating && (
+                        <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1">
+                            {renderStars(job.rating)}
+                          </div>
+                          <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {job.rating}/5
                           </span>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                   
                   <div className="flex items-center space-x-4">
                     <div className="text-right">
-                      <p className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <p className={`font-bold text-lg ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                         ₹{job.amount}
                       </p>
-                      <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(job.status)}`}>
+                      <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(job.status)} mt-1`}>
                         {getStatusIcon(job.status)}
                         <span className="ml-1 capitalize">{job.status}</span>
                       </div>
                     </div>
-                    <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                    <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'} transition-colors`}>
                       <MessageCircle className="w-5 h-5" />
                     </button>
                   </div>
@@ -357,81 +407,96 @@ const WorkerDashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link
-            to="/worker/jobs"
-            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
-          >
-            <div className="text-center">
-              <Briefcase className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                View Jobs
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Manage your jobs
-              </p>
-            </div>
-          </Link>
+        <div className="mt-8">
+          <h3 className={`text-xl font-semibold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+            Quick Actions
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <Link
+              to="/worker/jobs"
+              className={`${darkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} p-6 rounded-xl shadow-sm border transition-all duration-200 hover:shadow-md group`}
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <Briefcase className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
+                  View Jobs
+                </h3>
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Manage your jobs
+                </p>
+              </div>
+            </Link>
 
-          <Link
-            to="/worker/assigned-bookings"
-            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
-          >
-            <div className="text-center">
-              <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                My Bookings
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Assigned bookings
-              </p>
-            </div>
-          </Link>
+            <Link
+              to="/worker/assigned-bookings"
+              className={`${darkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} p-6 rounded-xl shadow-sm border transition-all duration-200 hover:shadow-md group`}
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
+                  My Bookings
+                </h3>
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Assigned bookings
+                </p>
+              </div>
+            </Link>
 
-          <Link
-            to="/worker/schedule"
-            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
-          >
-            <div className="text-center">
-              <Calendar className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Schedule
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Manage availability
-              </p>
-            </div>
-          </Link>
+            <Link
+              to="/worker/schedule"
+              className={`${darkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} p-6 rounded-xl shadow-sm border transition-all duration-200 hover:shadow-md group`}
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
+                  Schedule
+                </h3>
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Manage availability
+                </p>
+              </div>
+            </Link>
 
-          <Link
-            to="/worker/payments"
-            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
-          >
-            <div className="text-center">
-              <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Cash Payments
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Manage "Pay After Service" payments
-              </p>
-            </div>
-          </Link>
+            <Link
+              to="/worker/payments"
+              className={`${darkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} p-6 rounded-xl shadow-sm border transition-all duration-200 hover:shadow-md group`}
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <DollarSign className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
+                  Cash Payments
+                </h3>
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Manage payments
+                </p>
+              </div>
+            </Link>
 
-          <Link
-            to="/worker/profile"
-            className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'} p-6 rounded-lg shadow-sm transition-colors`}
-          >
-            <div className="text-center">
-              <Settings className="w-8 h-8 text-purple-600 mx-auto mb-3" />
-              <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Profile
-              </h3>
-              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Edit profile
-              </p>
-            </div>
-          </Link>
+            <Link
+              to="/worker/profile"
+              className={`${darkMode ? 'bg-gray-800 border-gray-700 hover:bg-gray-700' : 'bg-white border-gray-200 hover:bg-gray-50'} p-6 rounded-xl shadow-sm border transition-all duration-200 hover:shadow-md group`}
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <Settings className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                </div>
+                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} mb-1`}>
+                  Profile
+                </h3>
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Edit profile
+                </p>
+              </div>
+            </Link>
+          </div>
         </div>
       </div>
     </div>
