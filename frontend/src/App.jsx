@@ -42,6 +42,8 @@ const AdminLogin = lazy(() => import('./app/auth/AdminLogin'));
 const AdminDashboard = lazy(() => import('./app/features/admin/Dashboard'));
 const UserManagement = lazy(() => import('./app/features/admin/UserManagement'));
 const ProviderDetailsPage = lazy(() => import('./app/features/admin/ProviderDetailsPage'));
+const CustomerManagement = lazy(() => import('./app/features/admin/CustomerManagement'));
+const CustomerDetailsPage = lazy(() => import('./app/features/admin/CustomerDetailsPage'));
 const CategoryManagement = lazy(() => import('./app/features/admin/CategoryManagement'));
 const DisputeManagement = lazy(() => import('./app/features/admin/DisputeManagement'));
 const PricingManagement = lazy(() => import('./app/features/admin/PricingManagement'));
@@ -444,6 +446,8 @@ function App() {
             }>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="customers" element={<CustomerManagement />} />
+              <Route path="customer/:customerId" element={<CustomerDetailsPage />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="provider/:providerId" element={<ProviderDetailsPage />} />
               <Route path="categories" element={<CategoryManagement />} />

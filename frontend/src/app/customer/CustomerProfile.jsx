@@ -4,6 +4,8 @@ import { User, Edit2, Save, X, Mail, Phone, MapPin, Calendar, Shield, CreditCard
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import AuthService from '../services/auth.service';
 import ProfileService from '../services/profile.service';
+import CustomerVerificationsService from '../services/customerVerifications.service';
+
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
@@ -28,6 +30,13 @@ const CustomerProfile = () => {
     location_lng: '',
     gender: ''
   });
+
+  // Verification docs state
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [documents, setDocuments] = useState([]);
+  const [docType, setDocType] = useState('student_id');
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   // Listen for theme changes
   useEffect(() => {
@@ -58,15 +67,82 @@ const CustomerProfile = () => {
         setProfile(profileData);
         setOriginalProfile(profileData);
         setLoading(false);
+        // After profile load, load verification documents
+        await loadDocuments();
       } catch (error) {
         console.error('Error loading profile:', error);
         toast.error('Failed to load profile');
         setLoading(false);
+        setDocsLoading(false);
       }
     };
 
     loadProfile();
   }, [navigate]);
+
+  const loadDocuments = async () => {
+    try {
+      setDocsLoading(true);
+      const resp = await CustomerVerificationsService.list();
+      setDocuments(resp.documents || []);
+    } catch (e) {
+      console.error('Failed to load verification documents', e);
+    } finally {
+      setDocsLoading(false);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['image/jpeg','image/jpg','image/png','application/pdf'];
+    if (!allowed.includes(file.type)) {
+      toast.error('Only JPG, PNG, or PDF files are allowed');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File must be 5MB or smaller');
+      e.target.value = '';
+      return;
+    }
+    setSelectedFile(file);
+  };
+
+  const uploadVerification = async () => {
+    if (!selectedFile) {
+      toast.info('Please select a file');
+      return;
+    }
+    setUploading(true);
+    try {
+      // 1) Presign
+      const presign = await CustomerVerificationsService.presignUpload({
+        file_name: selectedFile.name,
+        content_type: selectedFile.type,
+        document_type: docType
+      });
+      // 2) PUT to S3
+      await fetch(presign.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': selectedFile.type },
+        body: selectedFile
+      });
+      // 3) Confirm
+      await CustomerVerificationsService.confirmUpload({
+        document_type: docType,
+        object_key: presign.objectKey
+      });
+      toast.success('Document uploaded successfully');
+      setSelectedFile(null);
+      await loadDocuments();
+    } catch (e) {
+      console.error('Upload failed', e);
+      toast.error(e?.response?.data?.message || 'Failed to upload document');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -521,6 +597,106 @@ const CustomerProfile = () => {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Verification Documents */}
+          <div className={`card p-8 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className={`text-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Verification</h2>
+                <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Upload a document to get verified and unlock discounts.</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <select
+                  value={docType}
+                  onChange={(e) => setDocType(e.target.value)}
+                  className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                >
+                  <option value="student_id">Student ID</option>
+                  <option value="aadhaar">Aadhaar</option>
+                  <option value="pan">PAN</option>
+                  <option value="other">Other</option>
+                </select>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="docUploadInput"
+                />
+                <label
+                  htmlFor="docUploadInput"
+                  className="btn-outline cursor-pointer"
+                >
+                  Choose File
+                </label>
+                <button
+                  onClick={uploadVerification}
+                  disabled={!selectedFile || uploading}
+                  className="btn-brand disabled:opacity-50"
+                >
+                  {uploading ? 'Uploading...' : 'Upload'}
+                </button>
+              </div>
+            </div>
+
+            {/* Documents List */}
+            <div className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              {docsLoading ? (
+                <div className="py-8 flex items-center justify-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-purple-500 border-t-transparent"></div>
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="text-center py-10">
+                  <p>No verification documents uploaded yet.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Type</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Uploaded</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`${darkMode ? 'bg-gray-800' : 'bg-white'} divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                      {documents.map((doc) => (
+                        <tr key={doc.id}>
+                          <td className="px-4 py-3 capitalize">{(doc.document_type || '').replace('_',' ')}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                              doc.verification_status === 'verified' ? 'bg-green-100 text-green-800' :
+                              doc.verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {doc.verification_status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">{new Date(doc.uploaded_at).toLocaleString()}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const resp = await CustomerVerificationsService.presignView(doc.id);
+                                  if (resp?.url) window.open(resp.url, '_blank', 'noopener,noreferrer');
+                                } catch (e) {
+                                  toast.error('Unable to open document');
+                                }
+                              }}
+                              className="btn-outline"
+                            >
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -110,12 +110,12 @@ const WorkerLogin = () => {
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Branding */}
-      <div className={`hidden lg:flex lg:w-1/2 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-600 to-purple-700'} relative overflow-hidden`}>
+      <div className={`hidden lg:flex lg:w-1/2 ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-purple-600 to-purple-700'} relative overflow-hidden`}>
         <div className="absolute inset-0 bg-black/20"></div>
         <div className="relative z-10 flex flex-col justify-center px-12 text-white">
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-4">Join Our Worker Network</h1>
-            <p className="text-xl text-blue-100 mb-6">
+            <p className="text-xl text-purple-100 mb-6">
               Start earning with your skills and grow your business with OMW
             </p>
             <div className="space-y-4">
@@ -172,8 +172,8 @@ const WorkerLogin = () => {
                 className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   loginMethod === 'email'
                     ? darkMode 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-white text-blue-600 shadow-sm'
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-white text-purple-600 shadow-sm'
                     : darkMode 
                       ? 'text-gray-300' 
                       : 'text-gray-500'
@@ -192,8 +192,8 @@ const WorkerLogin = () => {
                 className={`flex-1 flex items-center justify-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   loginMethod === 'phone'
                     ? darkMode 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-white text-blue-600 shadow-sm'
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-white text-purple-600 shadow-sm'
                     : darkMode 
                       ? 'text-gray-300' 
                       : 'text-gray-500'
@@ -225,7 +225,7 @@ const WorkerLogin = () => {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                     darkMode 
                       ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -244,7 +244,7 @@ const WorkerLogin = () => {
                   value={formData.phone}
                   onChange={handleInputChange}
                   required
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                     darkMode 
                       ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -259,7 +259,7 @@ const WorkerLogin = () => {
                 type="button"
                 onClick={handleSendOtp}
                 disabled={!formData.phone || isLoading}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full btn-brand disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Sending...' : 'Send OTP'}
               </button>
@@ -277,7 +277,7 @@ const WorkerLogin = () => {
                   onChange={handleInputChange}
                   required
                   maxLength="6"
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                     darkMode 
                       ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
                       : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -299,7 +299,7 @@ const WorkerLogin = () => {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10 ${
+                    className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 pr-10 ${
                       darkMode 
                         ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
                         : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
@@ -320,7 +320,7 @@ const WorkerLogin = () => {
             <button
               type="submit"
               disabled={isLoading || (loginMethod === 'phone' && !isOtpSent && !formData.phone)}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full btn-brand disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Signing In...' : 'Sign In'}
             </button>

@@ -58,7 +58,7 @@ const ResetPassword = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
                 placeholder="Enter new password"
               />
             </div>
@@ -72,14 +72,14 @@ const ResetPassword = () => {
                 required
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
                 placeholder="Confirm new password"
               />
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
+              className="w-full btn-brand disabled:opacity-50"
             >
               {loading ? 'Resetting...' : 'Reset Password'}
             </button>

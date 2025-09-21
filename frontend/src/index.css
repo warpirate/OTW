@@ -89,7 +89,8 @@
   }
   
   .btn-accent {
-    @apply bg-secondary-500 hover:bg-secondary-600 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95;
+    /* Unified with brand buttons for consistent color across the app */
+    @apply bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95;
   }
   
   .btn-outline {

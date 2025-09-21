@@ -187,7 +187,6 @@ const CustomerSignup = () => {
             {/* Logo */}
             <div className="flex items-center mb-6">
               <Logo size="xl" alt="OMW" className="mr-3" />
-              <span className="text-yellow-400 text-2xl">👋</span>
             </div>
             
             {/* Progress Indicator */}
@@ -424,7 +423,7 @@ const CustomerSignup = () => {
                   <button
                     type="button"
                     onClick={handleNextStep}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors"
+                    className="w-full btn-brand"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Processing...' : 'Continue'}
@@ -452,7 +451,7 @@ const CustomerSignup = () => {
                     <button
                       type="button"
                       onClick={handleSendOtp}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors"
+                      className="w-full btn-brand"
                       disabled={isLoading}
                     >
                       {isLoading ? 'Sending...' : 'Send Verification Code'}
@@ -492,7 +491,7 @@ const CustomerSignup = () => {
                         </button>
                         <button
                           type="submit"
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors"
+                          className="flex-1 btn-brand"
                           disabled={isLoading}
                         >
                           {isLoading ? 'Creating Account...' : 'Create Account'}
