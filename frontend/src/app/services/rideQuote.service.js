@@ -185,7 +185,9 @@ const RideQuoteService = {
       } else {
         const pickupTime = new Date(quoteData.pickup_time);
         const now = new Date();
-        if (pickupTime < now) {
+        const bufferMinutes = 2; // Allow 2 minutes buffer for timing issues
+        const bufferTime = new Date(now.getTime() - bufferMinutes * 60 * 1000);
+        if (pickupTime < bufferTime) {
           errors.pickup_time = 'Pickup time cannot be in the past';
         }
       }

@@ -1,14 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-
-// Fix for default markers in Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+import React, { useEffect, useRef, useState } from 'react';
+import { loadGoogleMaps } from '../utils/googleMapsLoader';
 
 const LocationMap = ({ 
   pickupLocation, 
@@ -18,99 +9,184 @@ const LocationMap = ({
   height = '400px' 
 }) => {
   const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markersRef = useRef([]);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [googleMaps, setGoogleMaps] = useState(null);
+  const [map, setMap] = useState(null);
+  const [directionsService, setDirectionsService] = useState(null);
+  const [directionsRenderer, setDirectionsRenderer] = useState(null);
 
+  // Load Google Maps API
   useEffect(() => {
-    if (!mapRef.current) return;
+    loadGoogleMaps()
+      .then((maps) => {
+        setGoogleMaps(maps);
+        setMapLoaded(true);
+      })
+      .catch((error) => {
+        console.error('Failed to load Google Maps:', error);
+      });
+  }, []);
 
-    // Initialize map
-    if (!mapInstanceRef.current) {
-      mapInstanceRef.current = L.map(mapRef.current).setView([20.5937, 78.9629], 5);
+  // Initialize map
+  useEffect(() => {
+    if (!mapLoaded || !googleMaps || !mapRef.current || map) return;
+
+    const mapInstance = new googleMaps.Map(mapRef.current, {
+      center: { lat: 17.2473, lng: 80.1514 }, // Khammam coordinates
+      zoom: 12,
+      mapTypeControl: true,
+      streetViewControl: false,
+      fullscreenControl: true,
+      zoomControl: true,
+    });
+
+    const directionsServiceInstance = new googleMaps.DirectionsService();
+    const directionsRendererInstance = new googleMaps.DirectionsRenderer({
+      suppressMarkers: false,
+      polylineOptions: {
+        strokeColor: '#3B82F6',
+        strokeWeight: 4,
+        strokeOpacity: 0.8,
+      },
+    });
+
+    directionsRendererInstance.setMap(mapInstance);
+
+    setMap(mapInstance);
+    setDirectionsService(directionsServiceInstance);
+    setDirectionsRenderer(directionsRendererInstance);
+
+    // Add click listener for location selection
+    mapInstance.addListener('click', (event) => {
+      const lat = event.latLng.lat();
+      const lng = event.latLng.lng();
       
-      // Add tile layer
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(mapInstanceRef.current);
-    }
-
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
-
-    // Add pickup marker
-    if (pickupLocation && pickupLocation.lat && pickupLocation.lon) {
-      const pickupMarker = L.marker([pickupLocation.lat, pickupLocation.lon], {
-        icon: L.divIcon({
-          className: 'custom-marker pickup-marker',
-          html: '<div class="w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>',
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        })
-      }).addTo(mapInstanceRef.current);
-      
-      pickupMarker.bindPopup('<b>Pickup Location</b><br>' + pickupLocation.display_name);
-      markersRef.current.push(pickupMarker);
-    }
-
-    // Add drop marker
-    if (dropLocation && dropLocation.lat && dropLocation.lon) {
-      const dropMarker = L.marker([dropLocation.lat, dropLocation.lon], {
-        icon: L.divIcon({
-          className: 'custom-marker drop-marker',
-          html: '<div class="w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg"></div>',
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
-        })
-      }).addTo(mapInstanceRef.current);
-      
-      dropMarker.bindPopup('<b>Drop Location</b><br>' + dropLocation.display_name);
-      markersRef.current.push(dropMarker);
-    }
-
-    // Fit bounds if both locations are set
-    if (pickupLocation?.lat && dropLocation?.lat) {
-      const bounds = L.latLngBounds([
-        [pickupLocation.lat, pickupLocation.lon],
-        [dropLocation.lat, dropLocation.lon]
-      ]);
-      mapInstanceRef.current.fitBounds(bounds, { padding: [20, 20] });
-    }
-
-    // Handle map clicks for location selection
-    const handleMapClick = (e) => {
-      const { lat, lng } = e.latlng;
-      
-      // Reverse geocode to get address
-      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
-        .then(response => response.json())
-        .then(data => {
-          if (data.display_name) {
-            const locationData = {
-              display_name: data.display_name,
-              lat: lat,
-              lon: lng,
-              place_id: Date.now()
-            };
-            
-            if (onLocationSelect) {
-              onLocationSelect(locationData);
-            }
+      // Use Google Geocoding API for reverse geocoding
+      const geocoder = new googleMaps.Geocoder();
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          const locationData = {
+            display_name: results[0].formatted_address,
+            lat: lat,
+            lon: lng,
+            place_id: results[0].place_id || Date.now()
+          };
+          
+          if (onLocationSelect) {
+            onLocationSelect(locationData);
           }
-        })
-        .catch(error => {
-          console.error('Error reverse geocoding:', error);
-        });
-    };
+        }
+      });
+    });
+  }, [mapLoaded, googleMaps, onLocationSelect, map]);
 
-    mapInstanceRef.current.on('click', handleMapClick);
+  // Update map with locations and route
+  useEffect(() => {
+    if (!map || !directionsService || !directionsRenderer) return;
+
+    // Clear existing route
+    directionsRenderer.setDirections({ routes: [] });
+
+    // Add markers for pickup and drop locations
+    const markers = [];
+
+    if (pickupLocation && pickupLocation.lat && pickupLocation.lon) {
+      const pickupMarker = new googleMaps.Marker({
+        position: { lat: pickupLocation.lat, lng: pickupLocation.lon },
+        map: map,
+        title: 'Pickup Location',
+        icon: {
+          path: googleMaps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: '#3B82F6',
+          fillOpacity: 1,
+          strokeColor: '#FFFFFF',
+          strokeWeight: 2,
+        },
+        label: {
+          text: 'A',
+          color: '#FFFFFF',
+          fontWeight: 'bold',
+        }
+      });
+
+      const pickupInfoWindow = new googleMaps.InfoWindow({
+        content: `<div class="p-2"><strong>Pickup Location</strong><br>${pickupLocation.display_name}</div>`
+      });
+
+      pickupMarker.addListener('click', () => {
+        pickupInfoWindow.open(map, pickupMarker);
+      });
+
+      markers.push(pickupMarker);
+    }
+
+    if (dropLocation && dropLocation.lat && dropLocation.lon) {
+      const dropMarker = new googleMaps.Marker({
+        position: { lat: dropLocation.lat, lng: dropLocation.lon },
+        map: map,
+        title: 'Drop Location',
+        icon: {
+          path: googleMaps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: '#EF4444',
+          fillOpacity: 1,
+          strokeColor: '#FFFFFF',
+          strokeWeight: 2,
+        },
+        label: {
+          text: 'B',
+          color: '#FFFFFF',
+          fontWeight: 'bold',
+        }
+      });
+
+      const dropInfoWindow = new googleMaps.InfoWindow({
+        content: `<div class="p-2"><strong>Drop Location</strong><br>${dropLocation.display_name}</div>`
+      });
+
+      dropMarker.addListener('click', () => {
+        dropInfoWindow.open(map, dropMarker);
+      });
+
+      markers.push(dropMarker);
+    }
+
+    // Draw route if both locations are available
+    if (pickupLocation?.lat && dropLocation?.lat) {
+      const request = {
+        origin: { lat: pickupLocation.lat, lng: pickupLocation.lon },
+        destination: { lat: dropLocation.lat, lng: dropLocation.lon },
+        travelMode: googleMaps.TravelMode.DRIVING,
+        unitSystem: googleMaps.UnitSystem.METRIC,
+      };
+
+      directionsService.route(request, (result, status) => {
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+          
+          // Fit map to show the entire route
+          const bounds = new googleMaps.LatLngBounds();
+          result.routes[0].legs.forEach(leg => {
+            bounds.extend(leg.start_location);
+            bounds.extend(leg.end_location);
+          });
+          map.fitBounds(bounds);
+        } else {
+          console.error('Directions request failed:', status);
+        }
+      });
+    } else if (markers.length > 0) {
+      // Fit map to show all markers
+      const bounds = new googleMaps.LatLngBounds();
+      markers.forEach(marker => bounds.extend(marker.getPosition()));
+      map.fitBounds(bounds);
+    }
 
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.off('click', handleMapClick);
-      }
+      markers.forEach(marker => marker.setMap(null));
     };
-  }, [pickupLocation, dropLocation, onLocationSelect]);
+  }, [map, directionsService, directionsRenderer, pickupLocation, dropLocation]);
 
   return (
     <div 

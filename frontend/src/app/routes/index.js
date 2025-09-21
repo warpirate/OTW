@@ -5,6 +5,7 @@ import WorkerLogin from '../auth/WorkerLogin';
 import WorkerSignup from '../auth/WorkerSignup';
 import WorkerDashboard from '../features/worker/WorkerDashboard';
 import WorkerJobs from '../features/worker/WorkerJobs';
+import WorkerJobTracking from '../features/worker/WorkerJobTracking';
 import WorkerAssignedBookings from '../features/worker/WorkerAssignedBookings';
 import WorkerSchedule from '../features/worker/WorkerSchedule';
 import WorkerProfile from '../features/worker/WorkerProfile';
@@ -69,6 +70,10 @@ export const workerRoutes = [
       {
         path: "jobs",
         element: <WorkerJobs />
+      },
+      {
+        path: "job-tracking/:bookingId",
+        element: <WorkerJobTracking />
       },
       {
         path: "schedule",

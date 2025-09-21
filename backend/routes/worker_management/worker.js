@@ -773,6 +773,9 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.duration,
           b.cost_type,
           b.subcategory_id,
+          b.rating,
+          b.review,
+          b.rating_submitted_at,
           u.name as customer_name,
           u.phone_number as customer_phone,
           s.name as service_name,
@@ -792,10 +795,17 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
       // Exclude cancelled bookings from general lists
       query += " AND b.service_status != 'cancelled'";
-      // Filter by specific booking_request status if provided (pending, accepted, rejected)
+      // Filter by specific status if provided
       if (status && status !== 'all') {
-        query += ' AND br.status = ?';
-        params.push(status);
+        if (status === 'completed') {
+          // For completed, we need accepted booking_requests with completed service_status
+          query += ' AND br.status = ? AND b.service_status = ?';
+          params.push('accepted', 'completed');
+        } else {
+          // For other statuses, filter by booking_request status
+          query += ' AND br.status = ?';
+          params.push(status);
+        }
       }
 
       if (cursor) {
@@ -845,6 +855,9 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.duration,
           b.cost_type,
           b.subcategory_id,
+          b.rating,
+          b.review,
+          b.rating_submitted_at,
           u.name as customer_name,
           u.phone_number as customer_phone,
           s.name as service_name,
@@ -864,10 +877,17 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
       // Exclude cancelled bookings from general lists
       query += " AND b.service_status != 'cancelled'";
-      // Filter by specific booking_request status if provided (pending, accepted, rejected)
+      // Filter by specific status if provided
       if (status && status !== 'all') {
-        query += ' AND br.status = ?';
-        queryParams.push(status);
+        if (status === 'completed') {
+          // For completed, we need accepted booking_requests with completed service_status
+          query += ' AND br.status = ? AND b.service_status = ?';
+          queryParams.push('accepted', 'completed');
+        } else {
+          // For other statuses, filter by booking_request status
+          query += ' AND br.status = ?';
+          queryParams.push(status);
+        }
       }
 
       query += ' ORDER BY br.requested_at DESC LIMIT ? OFFSET ?';
@@ -889,8 +909,15 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
       countQuery += " AND b.service_status != 'cancelled'";
       // Apply status filter if provided
       if (status && status !== 'all') {
-        countQuery += ' AND br.status = ?';
-        countParams.push(status);
+        if (status === 'completed') {
+          // For completed, we need accepted booking_requests with completed service_status
+          countQuery += ' AND br.status = ? AND b.service_status = ?';
+          countParams.push('accepted', 'completed');
+        } else {
+          // For other statuses, filter by booking_request status
+          countQuery += ' AND br.status = ?';
+          countParams.push(status);
+        }
       }
 
       const [countResult] = await pool.query(countQuery, countParams);
@@ -950,9 +977,14 @@ router.get('/worker/booking-requests/counts', verifyToken, async (req, res) => {
       `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'pending'`,
       [providerId]
     );
-    // Accepted (non-cancelled bookings)
+    // Accepted (non-cancelled bookings that are not completed)
     const [acceptedRows] = await pool.query(
-      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'accepted'`,
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'accepted' AND b.service_status != 'completed'`,
+      [providerId]
+    );
+    // Completed (accepted bookings that are completed)
+    const [completedRows] = await pool.query(
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'accepted' AND b.service_status = 'completed'`,
       [providerId]
     );
     // Rejected (from booking_requests)
@@ -965,6 +997,7 @@ router.get('/worker/booking-requests/counts', verifyToken, async (req, res) => {
       all: allRows[0]?.total || 0,
       pending: pendingRows[0]?.total || 0,
       accepted: acceptedRows[0]?.total || 0,
+      completed: completedRows[0]?.total || 0,
       rejected: rejectedRows[0]?.total || 0
     });
   } catch (error) {
@@ -1405,9 +1438,24 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
       [providerId]
     );
 
-    // Get rating and reviews count (from providers aggregates)
+    // Get completed jobs count
+    const [completedStats] = await pool.query(
+      `SELECT COUNT(*) as completed_jobs
+       FROM bookings b
+       WHERE b.provider_id = ? 
+       AND b.service_status = 'completed'`,
+      [providerId]
+    );
+
+    // Get rating and reviews count (from actual bookings)
     const [ratingResult] = await pool.query(
-      'SELECT COALESCE(average_rating, 0) AS average_rating, COALESCE(rating_count, 0) AS rating_count FROM providers WHERE id = ?',
+      `SELECT 
+        COALESCE(AVG(b.rating), 0) AS average_rating,
+        COUNT(b.rating) AS rating_count
+       FROM bookings b
+       WHERE b.provider_id = ? 
+       AND b.rating IS NOT NULL
+       AND b.service_status = 'completed'`,
       [providerId]
     );
 
@@ -1427,6 +1475,7 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
       this_week_jobs: parseInt(weekStats[0].this_week_jobs || 0),
       total_earnings: parseFloat(totalStats[0].total_earnings || 0),
       total_jobs: parseInt(totalStats[0].total_jobs || 0),
+      completed_jobs: parseInt(completedStats[0].completed_jobs || 0),
       rating: parseFloat(ratingResult[0]?.average_rating || 0),
       total_reviews: parseInt(ratingResult[0]?.rating_count || 0),
       active_jobs: parseInt(activeJobsResult[0].active_jobs || 0)
@@ -1440,6 +1489,451 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
       message: 'Failed to fetch dashboard stats',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
+  }
+});
+
+/**
+ * PUT /bookings/:bookingId/status - Update booking status (Worker)
+ */
+router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { status } = req.body;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can update booking status' });
+  }
+
+  const validStatuses = ['started', 'en_route', 'arrived', 'in_progress', 'completed', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ 
+      message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+    });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify the worker is assigned to this booking
+    const [bookingCheck] = await connection.query(`
+      SELECT b.id, b.provider_id, b.service_status, b.customer_id
+      FROM bookings b
+      WHERE b.id = ? AND b.booking_type != 'ride'
+    `, [bookingId]);
+
+    if (!bookingCheck.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Service booking not found' });
+    }
+
+    const booking = bookingCheck[0];
+
+    // Get provider_id for this worker
+    const [providerData] = await connection.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [user_id]
+    );
+
+    if (!providerData.length) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Worker profile not found' });
+    }
+
+    const provider_id = providerData[0].id;
+
+    if (booking.provider_id !== provider_id) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You are not assigned to this booking' });
+    }
+
+    // Validate status transition
+    const currentStatus = booking.service_status;
+    const validTransitions = {
+      'assigned': ['started', 'cancelled'],
+      'accepted': ['started', 'cancelled'],
+      'started': ['en_route', 'arrived', 'cancelled'],
+      'en_route': ['arrived', 'cancelled'],
+      'arrived': ['in_progress', 'cancelled'],
+      'in_progress': ['payment_required', 'cancelled'],
+      'payment_required': ['completed', 'cancelled'],
+      'completed': [],
+      'cancelled': []
+    };
+
+    if (!validTransitions[currentStatus]?.includes(status)) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        message: `Cannot transition from ${currentStatus} to ${status}` 
+      });
+    }
+
+    // Special validation for completion status
+    if (status === 'completed') {
+      // Check if payment is required and has been completed
+      const [paymentCheck] = await connection.query(`
+        SELECT payment_method, payment_status 
+        FROM bookings 
+        WHERE id = ?
+      `, [bookingId]);
+
+      if (paymentCheck.length > 0) {
+        const { payment_method, payment_status } = paymentCheck[0];
+        
+        // If payment method is UPI and not paid, prevent completion
+        if (payment_method === 'UPI Payment' && payment_status !== 'paid') {
+          await connection.rollback();
+          return res.status(400).json({ 
+            message: 'Cannot complete service. Payment is required before completion.',
+            requires_payment: true,
+            payment_method: payment_method
+          });
+        }
+      }
+    }
+
+    // Update booking status
+    await connection.query(
+      'UPDATE bookings SET service_status = ?, updated_at = NOW() WHERE id = ?',
+      [status, bookingId]
+    );
+
+    // Generate OTP when arrived
+    if (status === 'arrived') {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      await connection.query(
+        'UPDATE bookings SET otp_code = ? WHERE id = ?',
+        [otp, bookingId]
+      );
+    }
+
+    await connection.commit();
+
+    // Emit Socket.IO event to notify customer
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`booking_${bookingId}`).emit('status_update', {
+          booking_id: bookingId,
+          status: status,
+          message: `Status updated to ${status}`
+        });
+
+        // Send OTP to customer when arrived
+        if (status === 'arrived') {
+          const [otpResult] = await connection.query(
+            'SELECT otp_code FROM bookings WHERE id = ?',
+            [bookingId]
+          );
+          if (otpResult.length > 0) {
+            io.to(`booking_${bookingId}`).emit('otp_code', {
+              booking_id: bookingId,
+              otp: otpResult[0].otp_code
+            });
+          }
+        }
+      }
+    } catch (socketError) {
+      console.error('Socket error in status update:', socketError);
+      // Don't fail the request if socket fails
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Status updated to ${status}`,
+      status: status
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating booking status:', error);
+    res.status(500).json({ message: 'Server error while updating booking status' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /bookings/:bookingId/generate-otp - Generate OTP for customer
+ */
+router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can generate OTP' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify the worker is assigned to this booking
+    const [bookingCheck] = await connection.query(`
+      SELECT b.id, b.provider_id, b.service_status, b.customer_id
+      FROM bookings b
+      WHERE b.id = ? AND b.booking_type != 'ride'
+    `, [bookingId]);
+
+    if (!bookingCheck.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Service booking not found' });
+    }
+
+    const booking = bookingCheck[0];
+
+    // Get provider_id for this worker
+    const [providerData] = await connection.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [user_id]
+    );
+
+    if (!providerData.length) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Worker profile not found' });
+    }
+
+    const provider_id = providerData[0].id;
+
+    if (booking.provider_id !== provider_id) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You are not assigned to this booking' });
+    }
+
+    // Check if booking is in arrived status
+    if (booking.service_status !== 'arrived') {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Booking must be in arrived status to generate OTP' });
+    }
+
+    // Generate new OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await connection.query(
+      'UPDATE bookings SET otp_code = ?, updated_at = NOW() WHERE id = ?',
+      [otp, bookingId]
+    );
+
+    await connection.commit();
+
+    // Emit Socket.IO event to send OTP to customer
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`booking_${bookingId}`).emit('otp_code', {
+          booking_id: bookingId,
+          otp: otp,
+          message: 'Your service provider has arrived. Please share this OTP with them.'
+        });
+      }
+    } catch (socketError) {
+      console.error('Socket error in OTP generation:', socketError);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'OTP generated and sent to customer successfully.'
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error generating OTP:', error);
+    res.status(500).json({ message: 'Server error while generating OTP' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /bookings/:bookingId/verify-otp - Verify OTP from customer
+ */
+router.post('/bookings/:bookingId/verify-otp', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { otp } = req.body;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can verify OTP' });
+  }
+
+  if (!otp || otp.length !== 6) {
+    return res.status(400).json({ message: 'Invalid OTP format' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify the worker is assigned to this booking
+    const [bookingCheck] = await connection.query(`
+      SELECT b.id, b.provider_id, b.service_status, b.otp_code
+      FROM bookings b
+      WHERE b.id = ? AND b.booking_type != 'ride'
+    `, [bookingId]);
+
+    if (!bookingCheck.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Service booking not found' });
+    }
+
+    const booking = bookingCheck[0];
+
+    // Get provider_id for this worker
+    const [providerData] = await connection.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [user_id]
+    );
+
+    if (!providerData.length) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Worker profile not found' });
+    }
+
+    const provider_id = providerData[0].id;
+
+    if (booking.provider_id !== provider_id) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You are not assigned to this booking' });
+    }
+
+    // Check if booking is in arrived status
+    if (booking.service_status !== 'arrived') {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Booking is not in arrived status' });
+    }
+
+    // Verify OTP
+    if (booking.otp_code !== otp) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    // Update status to in_progress
+    await connection.query(
+      'UPDATE bookings SET service_status = ?, updated_at = NOW() WHERE id = ?',
+      ['in_progress', bookingId]
+    );
+
+    await connection.commit();
+
+    // Emit Socket.IO event to notify customer
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`booking_${bookingId}`).emit('status_update', {
+          booking_id: bookingId,
+          status: 'in_progress',
+          message: 'Service has started'
+        });
+      }
+    } catch (socketError) {
+      console.error('Socket error in OTP verification:', socketError);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'OTP verified successfully. Service started.'
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({ message: 'Server error while verifying OTP' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * GET /bookings/:bookingId - Get booking details for worker
+ */
+router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can view booking details' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    // Get provider_id for this worker
+    const [providerData] = await connection.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [user_id]
+    );
+
+    if (!providerData.length) {
+      return res.status(403).json({ message: 'Worker profile not found' });
+    }
+
+    const provider_id = providerData[0].id;
+
+    // Get booking details including rating and review
+    const [bookingResult] = await connection.query(`
+      SELECT 
+        b.*,
+        u.name as customer_name,
+        u.phone_number as customer_phone,
+        u.email as customer_email,
+        sb.address,
+        b.rating,
+        b.review,
+        b.rating_submitted_at
+      FROM bookings b
+      LEFT JOIN users u ON b.user_id = u.id
+      LEFT JOIN service_bookings sb ON b.id = sb.booking_id
+      WHERE b.id = ? AND b.provider_id = ? AND b.booking_type != 'ride'
+    `, [bookingId, provider_id]);
+
+    if (!bookingResult.length) {
+      return res.status(404).json({ message: 'Booking not found or not assigned to you' });
+    }
+
+    const booking = bookingResult[0];
+
+    // Get service details (since each booking is a single service item)
+    const [serviceDetails] = await connection.query(`
+      SELECT 
+        s.name as subcategory_name,
+        s.description as service_description,
+        s.base_price as price,
+        sc.name as category_name
+      FROM subcategories s
+      LEFT JOIN service_categories sc ON s.category_id = sc.id
+      WHERE s.id = ?
+    `, [booking.subcategory_id]);
+
+    // Create a single cart item from the booking
+    const cartItems = serviceDetails.length > 0 ? [{
+      subcategory_id: booking.subcategory_id,
+      subcategory_name: serviceDetails[0].subcategory_name,
+      service_description: serviceDetails[0].service_description,
+      price: serviceDetails[0].price,
+      category_name: serviceDetails[0].category_name,
+      quantity: 1
+    }] : [];
+
+    // Get customer details
+    const customer = {
+      name: booking.customer_name,
+      phone: booking.customer_phone,
+      email: booking.customer_email
+    };
+
+    res.json({
+      success: true,
+      booking: {
+        ...booking,
+        cart_items: cartItems
+      },
+      customer: customer
+    });
+
+  } catch (error) {
+    console.error('Error fetching booking details:', error);
+    res.status(500).json({ message: 'Server error while fetching booking details' });
+  } finally {
+    connection.release();
   }
 });
 

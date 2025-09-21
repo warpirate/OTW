@@ -29,6 +29,8 @@ const Contact = lazy(() => import('./app/customer/Contact'));
 const Terms = lazy(() => import('./app/customer/Terms'));
 const Privacy = lazy(() => import('./app/customer/Privacy'));
 const DriverBooking = lazy(() => import('./app/customer/DriverBooking'));
+const BookingTracking = lazy(() => import('./app/customer/BookingTracking'));
+const ServiceTracking = lazy(() => import('./app/customer/ServiceTracking'));
 const PaymentMethods = lazy(() => import('./app/customer/PaymentMethods'));
 const AddUPIMethod = lazy(() => import('./app/customer/AddUPIMethod'));
 const PaymentHistory = lazy(() => import('./app/customer/PaymentHistory'));
@@ -61,6 +63,7 @@ const WorkerLogin = lazy(() => import('./app/auth/WorkerLogin'));
 const WorkerSignup = lazy(() => import('./app/auth/WorkerSignup'));
 const WorkerDashboard = lazy(() => import('./app/features/worker/WorkerDashboard'));
 const WorkerJobs = lazy(() => import('./app/features/worker/WorkerJobs'));
+const WorkerJobTracking = lazy(() => import('./app/features/worker/WorkerJobTracking'));
 const WorkerSchedule = lazy(() => import('./app/features/worker/WorkerSchedule'));
 const WorkerProfile = lazy(() => import('./app/features/worker/WorkerProfile'));
 const WorkerSettings = lazy(() => import('./app/features/worker/WorkerSettings'));
@@ -400,6 +403,16 @@ function App() {
                 <DriverBooking />
               </CustomerProtectedRoute>
             } />
+            <Route path="booking-tracking/:bookingId" element={
+              <CustomerProtectedRoute>
+                <BookingTracking />
+              </CustomerProtectedRoute>
+            } />
+            <Route path="service-tracking/:bookingId" element={
+              <CustomerProtectedRoute>
+                <ServiceTracking />
+              </CustomerProtectedRoute>
+            } />
             <Route path="payment-methods" element={
               <CustomerProtectedRoute>
                 <PaymentMethods />
@@ -468,6 +481,7 @@ function App() {
               <Route index element={<Navigate to="/worker/dashboard" replace />} />
               <Route path="dashboard" element={<WorkerDashboard />} />
               <Route path="jobs" element={<WorkerJobs />} />
+              <Route path="job-tracking/:bookingId" element={<WorkerJobTracking />} />
               <Route path="schedule" element={<WorkerSchedule />} />
               <Route path="payments" element={<WorkerPayments />} />
               <Route path="profile" element={<WorkerProfile />} />

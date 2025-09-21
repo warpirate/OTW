@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 const FareCalculator = require('../../utils/fareCalculator');
+require('dotenv').config();
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
   const toRad = deg => (deg * Math.PI) / 180;
@@ -13,6 +14,101 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
             Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+// GET /location-search - Search for locations using Google Maps API
+router.get('/location-search', async (req, res) => {
+  try {
+    const { query, country = 'in' } = req.query;
+    
+    if (!query || query.length < 3) {
+      return res.json({
+        success: true,
+        suggestions: []
+      });
+    }
+
+    const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+    
+    if (!googleApiKey) {
+      // Fallback to mock data if Google Maps API key is not configured
+      const mockSuggestions = [
+        {
+          place_id: `mock_${Date.now()}_1`,
+          formatted_address: `${query}, India`,
+          geometry: {
+            location: {
+              lat: 17.2473 + (Math.random() - 0.5) * 0.1,
+              lng: 80.1514 + (Math.random() - 0.5) * 0.1
+            }
+          },
+          name: query,
+          types: ['locality', 'political']
+        }
+      ];
+      
+      return res.json({
+        success: true,
+        suggestions: mockSuggestions
+      });
+    }
+
+    // Use Google Places API for location search
+    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&components=country:${country}&key=${googleApiKey}`;
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.status === 'OK' && data.predictions) {
+      // Get detailed information for each prediction
+      const detailedSuggestions = await Promise.all(
+        data.predictions.slice(0, 5).map(async (prediction) => {
+          try {
+            const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=formatted_address,geometry,name,types&key=${googleApiKey}`;
+            const detailsResponse = await fetch(detailsUrl);
+            const detailsData = await detailsResponse.json();
+            
+            if (detailsData.status === 'OK' && detailsData.result) {
+              return {
+                place_id: prediction.place_id,
+                formatted_address: detailsData.result.formatted_address,
+                geometry: detailsData.result.geometry,
+                name: detailsData.result.name || prediction.description,
+                types: detailsData.result.types || prediction.types
+              };
+            }
+          } catch (error) {
+            console.error('Error fetching place details:', error);
+          }
+          
+          // Fallback to basic prediction data
+          return {
+            place_id: prediction.place_id,
+            formatted_address: prediction.description,
+            geometry: null,
+            name: prediction.structured_formatting?.main_text || prediction.description,
+            types: prediction.types
+          };
+        })
+      );
+      
+      res.json({
+        success: true,
+        suggestions: detailedSuggestions
+      });
+    } else {
+      res.json({
+        success: true,
+        suggestions: []
+      });
+    }
+  } catch (error) {
+    console.error('Error in location search:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search locations'
+    });
+  }
+});
 
 // POST /search - Search for nearby available drivers
 router.post('/search', async (req, res) => {
@@ -162,6 +258,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     });
   }
 
+  // Handle new booking type 'ride' (defaults to without_car for now)
   const with_vehicle = booking_type === 'with_car' ? 1 : 0;
 
   const connection = await pool.getConnection();
@@ -214,6 +311,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     }
 
     // 1. Insert into bookings table (main booking record)
+    console.log('Inserting into bookings table...');
     const [mainBookingResult] = await connection.query(
       `INSERT INTO bookings (
           user_id, booking_type, scheduled_time, estimated_cost, 
@@ -226,14 +324,16 @@ router.post('/book-ride', verifyToken, async (req, res) => {
         finalEstimatedCost,
         'pending',
         'pending',
-        cost_type,
-        duration
+        cost_type || 'per_hour',
+        duration || 1
       ]
     );
 
     const bookingId = mainBookingResult.insertId;
+    console.log('Booking ID created:', bookingId);
 
     // 2. Insert into ride_bookings table (ride-specific data)
+    console.log('Inserting into ride_bookings table...');
     await connection.query(
       `INSERT INTO ride_bookings (
           booking_id, with_vehicle, vehicle_id, pickup_address, pickup_lat, pickup_lon,
@@ -251,13 +351,17 @@ router.post('/book-ride', verifyToken, async (req, res) => {
         drop_lon
       ]
     );
+    console.log('Ride booking data inserted successfully');
 
     // 3. Store fare breakdown if using new quote system
     if (fareBreakdown && quote_id) {
+      console.log('Storing fare breakdown...');
       await FareCalculator.storeFareQuote(fareBreakdown, bookingId);
+      console.log('Fare breakdown stored successfully');
     }
 
     // 4. Get ride category id
+    console.log('Getting ride category...');
     const [rideCategory] = await connection.query(
       `SELECT id FROM service_categories WHERE category_type = 'driver' AND is_active = 1`
     );
@@ -268,6 +372,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     }
 
     const rideCategoryId = rideCategory[0].id;
+    console.log('Ride category ID:', rideCategoryId);
 
     // 5. Fetch provider permanent addresses and convert to coordinates
     const [providers] = await connection.query(`
@@ -397,6 +502,200 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     await connection.rollback();
     console.error('Transaction error in /book-ride:', error);
     res.status(500).json({ message: 'Server error while creating driver booking' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /verify-otp/:bookingId - Verify OTP for provider arrival
+ */
+router.post('/verify-otp/:bookingId', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { otp } = req.body;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'customer') {
+    return res.status(403).json({ message: 'Only customers can verify OTP' });
+  }
+
+  if (!otp || otp.length !== 6) {
+    return res.status(400).json({ message: 'Valid 6-digit OTP is required' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify the customer owns this booking
+    const [bookingCheck] = await connection.query(`
+      SELECT b.id, b.customer_id, b.service_status, rb.otp_code
+      FROM bookings b
+      JOIN ride_bookings rb ON b.id = rb.booking_id
+      WHERE b.id = ? AND b.booking_type = 'ride'
+    `, [bookingId]);
+
+    if (!bookingCheck.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    const booking = bookingCheck[0];
+
+    if (booking.customer_id !== user_id) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You are not authorized to verify OTP for this booking' });
+    }
+
+    if (booking.service_status !== 'arrived') {
+      await connection.rollback();
+      return res.status(400).json({ 
+        message: `Cannot verify OTP. Current status: ${booking.service_status}` 
+      });
+    }
+
+    // Verify OTP
+    if (booking.otp_code !== otp) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Invalid OTP code' });
+    }
+
+    // Update booking status to in_progress
+    await connection.query(
+      'UPDATE bookings SET service_status = ? WHERE id = ?',
+      ['in_progress', bookingId]
+    );
+
+    // Clear OTP after successful verification
+    await connection.query(
+      'UPDATE ride_bookings SET otp_code = NULL WHERE booking_id = ?',
+      [bookingId]
+    );
+
+    await connection.commit();
+
+    // Emit Socket.IO event to notify provider
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`booking_${bookingId}`).emit('otp_verified', {
+          booking_id: bookingId,
+          status: 'in_progress',
+          message: 'OTP verified successfully. Service can now begin.'
+        });
+      }
+    } catch (socketError) {
+      console.error('Socket error in OTP verification:', socketError);
+      // Don't fail the request if socket fails
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'OTP verified successfully. Service can now begin.',
+      status: 'in_progress'
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in OTP verification:', error);
+    res.status(500).json({ message: 'Server error while verifying OTP' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /rate/:bookingId - Rate and review completed service
+ */
+router.post('/rate/:bookingId', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { rating, review } = req.body;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'customer') {
+    return res.status(403).json({ message: 'Only customers can rate services' });
+  }
+
+  if (!rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify the customer owns this booking and it's completed
+    const [bookingCheck] = await connection.query(`
+      SELECT b.id, b.customer_id, b.service_status, b.provider_id
+      FROM bookings b
+      WHERE b.id = ? AND b.booking_type = 'ride'
+    `, [bookingId]);
+
+    if (!bookingCheck.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    const booking = bookingCheck[0];
+
+    if (booking.customer_id !== user_id) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You are not authorized to rate this booking' });
+    }
+
+    if (booking.service_status !== 'completed') {
+      await connection.rollback();
+      return res.status(400).json({ 
+        message: `Cannot rate booking. Current status: ${booking.service_status}` 
+      });
+    }
+
+    // Check if already rated
+    const [existingRating] = await connection.query(`
+      SELECT id FROM booking_ratings 
+      WHERE booking_id = ? AND customer_id = ?
+    `, [bookingId, user_id]);
+
+    if (existingRating.length > 0) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'You have already rated this booking' });
+    }
+
+    // Insert rating
+    await connection.query(`
+      INSERT INTO booking_ratings (booking_id, customer_id, provider_id, rating, review, created_at)
+      VALUES (?, ?, ?, ?, ?, NOW())
+    `, [bookingId, user_id, booking.provider_id, rating, review || null]);
+
+    // Update provider's average rating
+    const [ratingStats] = await connection.query(`
+      SELECT AVG(rating) as avg_rating, COUNT(*) as total_ratings
+      FROM booking_ratings 
+      WHERE provider_id = ?
+    `, [booking.provider_id]);
+
+    if (ratingStats.length > 0) {
+      const { avg_rating, total_ratings } = ratingStats[0];
+      await connection.query(`
+        UPDATE providers 
+        SET rating = ?, total_ratings = ?
+        WHERE id = ?
+      `, [avg_rating, total_ratings, booking.provider_id]);
+    }
+
+    await connection.commit();
+
+    res.json({ 
+      success: true, 
+      message: 'Thank you for your feedback!',
+      rating: rating,
+      review: review
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in rating submission:', error);
+    res.status(500).json({ message: 'Server error while submitting rating' });
   } finally {
     connection.release();
   }

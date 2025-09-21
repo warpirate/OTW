@@ -16,13 +16,15 @@ import {
   Plus,
   AlertCircle,
   Settings,
-  Bell
+  Bell,
+  Star
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
 import WorkerService from '../../services/worker.service';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../../config';
+import { toast } from 'react-toastify';
 
 const WorkerJobs = () => {
   const navigate = useNavigate();
@@ -158,6 +160,8 @@ const WorkerJobs = () => {
     switch (status) {
       case 'accepted':
         return 'text-green-600 bg-green-100 border-green-200';
+      case 'completed':
+        return 'text-blue-600 bg-blue-100 border-blue-200';
       case 'pending':
         return 'text-yellow-600 bg-yellow-100 border-yellow-200';
       case 'rejected':
@@ -172,6 +176,8 @@ const WorkerJobs = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'accepted':
+        return <CheckCircle className="w-4 h-4" />;
+      case 'completed':
         return <CheckCircle className="w-4 h-4" />;
       case 'pending':
         return <Clock className="w-4 h-4" />;
@@ -202,6 +208,42 @@ const WorkerJobs = () => {
     return `₹${cost.toLocaleString('en-IN')}`;
   };
 
+  const getDisplayStatus = (request) => {
+    // If the service is completed, show completed status regardless of booking_request status
+    if (request.service_status === 'completed') {
+      return 'completed';
+    }
+    // Otherwise, use the booking_request status
+    return request.status;
+  };
+
+  const renderStars = (rating) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+    
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(
+        <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+      );
+    }
+    
+    if (hasHalfStar) {
+      stars.push(
+        <Star key="half" className="w-4 h-4 text-yellow-400 fill-current opacity-50" />
+      );
+    }
+    
+    const emptyStars = 5 - Math.ceil(rating);
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(
+        <Star key={`empty-${i}`} className="w-4 h-4 text-gray-300" />
+      );
+    }
+    
+    return stars;
+  };
+
   const filteredRequests = bookingRequests.filter(request => {
     const matchesSearch =
       request.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -215,6 +257,7 @@ const WorkerJobs = () => {
     all: 0,
     pending: 0,
     accepted: 0,
+    completed: 0,
     rejected: 0
   });
 
@@ -230,6 +273,7 @@ const WorkerJobs = () => {
         all: counts.all || 0,
         pending: counts.pending || 0,
         accepted: counts.accepted || 0,
+        completed: counts.completed || 0,
         rejected: counts.rejected || 0
       });
     } catch (error) {
@@ -241,6 +285,7 @@ const WorkerJobs = () => {
     { value: 'all', label: 'All Requests', count: statusCounts.all },
     { value: 'pending', label: 'Pending', count: statusCounts.pending },
     { value: 'accepted', label: 'Accepted', count: statusCounts.accepted },
+    { value: 'completed', label: 'Completed', count: statusCounts.completed },
     { value: 'rejected', label: 'Rejected', count: statusCounts.rejected }
   ];
 
@@ -375,9 +420,9 @@ const WorkerJobs = () => {
                         <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                           {request.booking_type === 'ride' ? 'Driver Booking' : 'Service Booking'}
                         </h3>
-                        <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(request.status)}`}>
-                          {getStatusIcon(request.status)}
-                          <span className="ml-1 capitalize">{request.status}</span>
+                        <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(getDisplayStatus(request))}`}>
+                          {getStatusIcon(getDisplayStatus(request))}
+                          <span className="ml-1 capitalize">{getDisplayStatus(request)}</span>
                         </div>
                       </div>
                       
@@ -435,10 +480,27 @@ const WorkerJobs = () => {
                       <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                         Requested: {formatDateTime(request.requested_at)}
                       </p>
+                      
+                      {/* Rating display for completed jobs */}
+                      {getDisplayStatus(request) === 'completed' && request.rating && (
+                        <div className="flex items-center space-x-2 mt-2">
+                          <div className="flex items-center space-x-1">
+                            {renderStars(request.rating)}
+                          </div>
+                          <span className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {request.rating}/5
+                          </span>
+                          {request.review && (
+                            <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              • Has review
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex items-center space-x-2">
-                      {request.status === 'pending' && (
+                      {getDisplayStatus(request) === 'pending' && (
                         <button 
                           onClick={() => handleStatusUpdate(request.request_id, 'accepted')}
                           className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm"
@@ -446,16 +508,48 @@ const WorkerJobs = () => {
                           Accept
                         </button>
                       )}
-                      {request.status === 'accepted' && (
+                      {getDisplayStatus(request) === 'accepted' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              const bookingId = request.booking_id || request.request_id;
+                              if (bookingId) {
+                                navigate(`/worker/job-tracking/${bookingId}`);
+                              } else {
+                                console.error('No booking ID found for request:', request);
+                                toast.error('Unable to track job - missing booking ID');
+                              }
+                            }}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                          >
+                            Track Job
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('Cancel this accepted request? This will stop providing service to this customer.')) {
+                                handleStatusUpdate(request.request_id, 'rejected');
+                              }
+                            }}
+                            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                      {getDisplayStatus(request) === 'completed' && (
                         <button
                           onClick={() => {
-                            if (window.confirm('Cancel this accepted request? This will stop providing service to this customer.')) {
-                              handleStatusUpdate(request.request_id, 'rejected');
+                            const bookingId = request.booking_id || request.request_id;
+                            if (bookingId) {
+                              navigate(`/worker/job-tracking/${bookingId}`);
+                            } else {
+                              console.error('No booking ID found for request:', request);
+                              toast.error('Unable to view job details - missing booking ID');
                             }
                           }}
-                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                          className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm"
                         >
-                          Cancel
+                          View Details
                         </button>
                       )}
                       <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>

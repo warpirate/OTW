@@ -23,7 +23,7 @@ const DriverBooking = () => {
   // Enhanced booking states
   const [activeTab, setActiveTab] = useState('withCar');
   const [duration, setDuration] = useState(1);
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(true);
   const [showFavorites, setShowFavorites] = useState(false);
   const [favoriteLocations, setFavoriteLocations] = useState([]);
   const [isScheduledBooking, setIsScheduledBooking] = useState(false);
@@ -250,14 +250,26 @@ const DriverBooking = () => {
     }
 
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&countrycodes=in&limit=5`;
+      // Use our backend endpoint instead of direct OpenStreetMap API
+      const url = `http://localhost:5001/api/customer/driver/location-search?query=${encodeURIComponent(query)}&country=in`;
       const response = await fetch(url);
       const data = await response.json();
-      if (data && data.length > 0) {
+      
+      if (data.success && data.suggestions && data.suggestions.length > 0) {
+        // Transform the data to match the expected format
+        const transformedSuggestions = data.suggestions.map(suggestion => ({
+          place_id: suggestion.place_id,
+          display_name: suggestion.formatted_address || suggestion.name,
+          lat: suggestion.geometry?.location?.lat || '0',
+          lon: suggestion.geometry?.location?.lng || '0',
+          name: suggestion.name || suggestion.formatted_address,
+          formatted_address: suggestion.formatted_address
+        }));
+        
         if (locationType === 'pickup') {
-          setPickupLocation(prev => ({ ...prev, suggestions: data }));
+          setPickupLocation(prev => ({ ...prev, suggestions: transformedSuggestions }));
         } else {
-          setDropLocation(prev => ({ ...prev, suggestions: data }));
+          setDropLocation(prev => ({ ...prev, suggestions: transformedSuggestions }));
         }
       } else {
         if (locationType === 'pickup') setPickupLocation(prev => ({ ...prev, suggestions: [] }));
@@ -285,7 +297,7 @@ const DriverBooking = () => {
     try {
       const pickupDateTime = isScheduledBooking 
         ? new Date(`${scheduledDate} ${scheduledTime}:00`)
-        : new Date();
+        : new Date(Date.now() + 5 * 60 * 1000); // Add 5 minutes buffer for "Book Now"
       
       const quoteData = {
         pickup: {
@@ -1219,59 +1231,18 @@ const DriverBooking = () => {
                   : 'bg-white border border-gray-200'
               }`}>
                 {/* Header */}
-                <div className="text-center mb-8">
-                  <h1 className={`text-3xl font-bold mb-2 ${
+                <div className="text-center mb-6">
+                  <h1 className={`text-2xl font-bold mb-2 ${
                     darkMode ? 'text-white' : 'text-gray-900'
                   }`}>
-                    Book a Driver
+                    Book a Ride
                   </h1>
-                  <p className={`text-lg ${
-                    darkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>
-                    Choose your preferred booking type and provide the necessary details
-                  </p>
                 </div>
 
-                {/* Interactive Map */}
-                {showMap && (
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className={`text-lg font-semibold ${
-                        darkMode ? 'text-white' : 'text-gray-900'
-                      }`}>
-                        Interactive Map
-                      </h3>
-                      <button
-                        onClick={() => setShowMap(false)}
-                        className="p-2 rounded-lg hover:bg-gray-100"
-                      >
-                        <XCircle className="h-5 w-5" />
-                      </button>
-                    </div>
-                    <LocationMap
-                      pickupLocation={pickupLocation.selected}
-                      dropLocation={dropLocation.selected}
-                      onLocationSelect={(location) => {
-                        if (!pickupLocation.selected) {
-                          setPickupLocation({ query: location.display_name, suggestions: [], selected: location });
-                        } else if (!dropLocation.selected) {
-                          setDropLocation({ query: location.display_name, suggestions: [], selected: location });
-                        }
-                      }}
-                      darkMode={darkMode}
-                      height="400px"
-                    />
-                  </div>
-                )}
 
-                {/* Vehicle Type Selection */}
-                <div className="mb-8">
-                  <h3 className={`text-lg font-semibold mb-4 ${
-                    darkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Choose Vehicle Type
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Vehicle Type Selection - Simplified */}
+                <div className="mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {vehicleTypes.map((vehicle) => (
                       <div
                         key={vehicle.id}
@@ -1279,7 +1250,7 @@ const DriverBooking = () => {
                           setSelectedVehicleType(vehicle);
                           setCurrentQuote(null); // Clear quote to trigger recalculation
                         }}
-                        className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
                           selectedVehicleType?.id === vehicle.id
                             ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20'
                             : darkMode
@@ -1287,8 +1258,8 @@ const DriverBooking = () => {
                               : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
                             <span className="text-2xl">{RideQuoteService.utils.getVehicleTypeIcon(vehicle.name)}</span>
                             <div>
                               <h4 className={`font-semibold ${
@@ -1299,25 +1270,9 @@ const DriverBooking = () => {
                               <p className={`text-sm ${
                                 darkMode ? 'text-gray-400' : 'text-gray-600'
                               }`}>
-                                {vehicle.description}
+                                Starting at ₹{vehicle.pricing.base_fare}
                               </p>
                             </div>
-                          </div>
-                        </div>
-                        <div className={`text-sm ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
-                          <div className="flex justify-between">
-                            <span>Base Fare:</span>
-                            <span>₹{vehicle.pricing.base_fare}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Per KM:</span>
-                            <span>₹{vehicle.pricing.rate_per_km}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Per Min:</span>
-                            <span>₹{vehicle.pricing.rate_per_min}</span>
                           </div>
                         </div>
                       </div>
@@ -1532,43 +1487,32 @@ const DriverBooking = () => {
                   </div>
                 </div>
 
-                {/* Dynamic Fare Breakdown */}
-                <div className="mb-6">
-                  <h3 className={`text-lg font-semibold mb-4 ${
-                    darkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Fare Estimate
-                  </h3>
-                  
-                  {quoteLoading && (
-                    <div className={`p-6 rounded-xl border-2 border-dashed ${
-                      darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-gray-50'
-                    }`}>
-                      <div className="flex items-center justify-center space-x-3">
-                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-purple-600 border-t-transparent"></div>
-                        <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
-                          Calculating fare...
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {quoteError && (
-                    <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                      <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
-                        <AlertTriangle className="h-5 w-5" />
-                        <span className="font-medium">Error calculating fare</span>
-                      </div>
-                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">{quoteError}</p>
-                    </div>
-                  )}
-                  
-                  {currentQuote && fareBreakdown && !quoteLoading && (
-                    <div className={`p-6 rounded-xl border-2 ${
+                {/* Interactive Map - Below Location Selection */}
+                {showMap && (
+                  <div className="mb-6">
+                    <LocationMap
+                      pickupLocation={pickupLocation.selected}
+                      dropLocation={dropLocation.selected}
+                      onLocationSelect={(location) => {
+                        if (!pickupLocation.selected) {
+                          setPickupLocation({ query: location.display_name, suggestions: [], selected: location });
+                        } else if (!dropLocation.selected) {
+                          setDropLocation({ query: location.display_name, suggestions: [], selected: location });
+                        }
+                      }}
+                      darkMode={darkMode}
+                      height="300px"
+                    />
+                  </div>
+                )}
+
+                {/* Simplified Fare Display */}
+                {currentQuote && fareBreakdown && !quoteLoading && !quoteError && (
+                  <div className="mb-6">
+                    <div className={`p-4 rounded-lg border-2 ${
                       darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'
                     }`}>
-                      {/* Trip Summary */}
-                      <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
                             <Navigation className="h-4 w-4" />
@@ -1594,131 +1538,12 @@ const DriverBooking = () => {
                           )}
                         </div>
                       </div>
-                      
-                      {/* Fare Breakdown */}
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm">
-                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                            Base Fare
-                          </span>
-                          <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
-                            ₹{fareBreakdown.base}
-                          </span>
-                        </div>
-                        
-                        {parseFloat(fareBreakdown.distance) > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                              Distance ({currentQuote.billable_distance} km)
-                            </span>
-                            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
-                              ₹{fareBreakdown.distance}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {parseFloat(fareBreakdown.time) > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                              Time ({currentQuote.duration_min} min)
-                            </span>
-                            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
-                              ₹{fareBreakdown.time}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {parseFloat(fareBreakdown.surge) > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-orange-600 dark:text-orange-400">
-                              Surge ({currentQuote.surge_multiplier}x)
-                            </span>
-                            <span className="text-orange-600 dark:text-orange-400">
-                              ₹{fareBreakdown.surge}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {parseFloat(fareBreakdown.night) > 0 && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-blue-600 dark:text-blue-400">
-                              Night Charges
-                            </span>
-                            <span className="text-blue-600 dark:text-blue-400">
-                              ₹{fareBreakdown.night}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {currentQuote.vehicle_multiplier !== 1 && (
-                          <div className="flex justify-between text-sm">
-                            <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                              Vehicle Multiplier ({currentQuote.vehicle_multiplier}x)
-                            </span>
-                            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
-                              Applied
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Quote Expiry Warning */}
-                      {RideQuoteService.utils.isQuoteExpiring(currentQuote.expires_at) && (
-                        <div className="mt-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                          <div className="flex items-center space-x-2 text-yellow-600 dark:text-yellow-400">
-                            <Clock className="h-4 w-4" />
-                            <span className="text-sm font-medium">
-                              Quote expires soon! Book now to secure this price.
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Breakdown Details */}
-                      {currentQuote.breakdown_details && (
-                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                          <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                            {currentQuote.breakdown_details.base_fare_description && (
-                              <p>• {currentQuote.breakdown_details.base_fare_description}</p>
-                            )}
-                            {currentQuote.breakdown_details.distance_description && (
-                              <p>• {currentQuote.breakdown_details.distance_description}</p>
-                            )}
-                            {currentQuote.breakdown_details.time_description && (
-                              <p>• {currentQuote.breakdown_details.time_description}</p>
-                            )}
-                            {currentQuote.breakdown_details.surge_description && (
-                              <p>• {currentQuote.breakdown_details.surge_description}</p>
-                            )}
-                            {currentQuote.breakdown_details.night_description && (
-                              <p>• {currentQuote.breakdown_details.night_description}</p>
-                            )}
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  )}
-                  
-                  {!currentQuote && !quoteLoading && !quoteError && (
-                    <div className={`p-6 rounded-xl border-2 border-dashed text-center ${
-                      darkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-gray-50'
-                    }`}>
-                      <div className="flex flex-col items-center space-y-2">
-                        <Car className={`h-8 w-8 ${
-                          darkMode ? 'text-gray-500' : 'text-gray-400'
-                        }`} />
-                        <p className={`text-sm ${
-                          darkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          Select pickup and drop locations to see fare estimate
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Enhanced Date and Time Selection */}
-                {isScheduledBooking && (
+                {/* Scheduling removed for simplified UI */}
+                {false && (
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className={`text-lg font-semibold ${
@@ -2132,221 +1957,30 @@ const DriverBooking = () => {
                   </div>
                 )}
 
-                {/* Schedule Later Toggle */}
-                {!isScheduledBooking && (
-                  <div className="mb-6">
-                    <div className={`flex items-center justify-between p-4 rounded-xl border-2 border-dashed ${
-                      darkMode 
-                        ? 'border-gray-600 bg-gray-800/30' 
-                        : 'border-gray-300 bg-gray-50'
-                    }`}>
-                      <div>
-                        <h4 className={`text-lg font-semibold mb-1 ${
-                          darkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
-                          Instant Booking
-                        </h4>
-                        <p className={`text-sm ${
-                          darkMode ? 'text-gray-400' : 'text-gray-600'
-                        }`}>
-                          Your driver will be assigned immediately
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setIsScheduledBooking(true)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          darkMode
-                            ? 'bg-purple-600 text-white hover:bg-purple-700'
-                            : 'bg-purple-600 text-white hover:bg-purple-700'
-                        }`}
-                      >
-                        <Calendar className="h-4 w-4 inline mr-2" />
-                        Schedule Later
-                      </button>
-                    </div>
-                  </div>
-                )}
 
-                {/* Duration and Estimated Cost */}
-                <div className="mb-8">
-                  <label className={`block text-sm font-medium mb-2 ${
-                    darkMode ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    {activeTab === 'withCar' ? 'Number of Hours' : 'Number of Days'}
-                  </label>
-                  <div className="flex items-center space-x-4">
-                    <input
-                      type="number"
-                      min="1"
-                      value={duration}
-                      onChange={(e) => setDuration(Number(e.target.value))}
-                      className={`w-32 p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
-                        darkMode 
-                          ? 'bg-gray-700 border-gray-600 text-white' 
-                          : 'bg-white border-gray-300 text-gray-900'
-                      }`}
-                      disabled={loading}
-                    />
-                    <div className={`text-lg font-semibold ${
-                      darkMode ? 'text-green-400' : 'text-green-600'
-                    }`}>
-                      Estimated Cost: ₹{activeTab === 'withCar' ? duration * RATE_PER_HOUR : duration * RATE_PER_DAY}
-                    </div>
-                  </div>
-                </div>
 
-                {/* Preferences Section */}
-                <div className="mb-8">
-                  <h3 className={`text-lg font-semibold mb-4 ${
-                    darkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Preferences
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* <div>
-                      <label className={`block text-sm font-medium mb-2 ${
-                        darkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                        AC Preference
-                      </label>
-                      <select
-                        value={acPreference}
-                        onChange={(e) => setAcPreference(e.target.value)}
-                        className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
-                          darkMode 
-                            ? 'bg-gray-700 border-gray-600 text-white' 
-                            : 'bg-white border-gray-300 text-gray-900'
-                        }`}
-                      >
-                        <option value="any">Any</option>
-                        <option value="ac">AC Only</option>
-                        <option value="non-ac">Non-AC Only</option>
-                      </select>
-                    </div> */}
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${
-                        darkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                        Vehicle Type
-                      </label>
-                      <select
-                        value={vehicleType}
-                        onChange={(e) => setVehicleType(e.target.value)}
-                        className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
-                          darkMode 
-                            ? 'bg-gray-700 border-gray-600 text-white' 
-                            : 'bg-white border-gray-300 text-gray-900'
-                        }`}
-                      >
-                        <option value="any">Any</option>
-                        <option value="sedan">Sedan</option>
-                        <option value="suv">SUV</option>
-                        <option value="luxury">Luxury</option>
-                      </select>
-                    </div>
-                    {/* <div>
-                      <label className={`block text-sm font-medium mb-2 ${
-                        darkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                        Preferred Driver (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={preferredDriver || ''}
-                        onChange={(e) => setPreferredDriver(e.target.value)}
-                        className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
-                          darkMode 
-                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                        }`}
-                        placeholder="Driver name or ID"
-                      />
-                    </div> */}
-                  </div>
-                </div>
 
-                {/* Special Requests */}
-                <div className="mb-8">
-                  <label className={`block text-sm font-medium mb-2 ${
-                    darkMode ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    Special Requests
-                  </label>
-                  <textarea
-                    value={bookingNotes}
-                    onChange={(e) => setBookingNotes(e.target.value)}
-                    className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
-                      darkMode 
-                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                    }`}
-                    placeholder="Any special requests or instructions for the driver..."
-                    rows="3"
-                  />
-                </div>
 
-                {/* Payment Method Selection */}
-                <div className="mb-8">
-                  <h3 className={`text-lg font-semibold mb-4 ${
-                    darkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Payment Method
-                  </h3>
+                {/* Simplified Payment Method */}
+                <div className="mb-6">
                   
-                  {/* Selected Payment Method */}
-                  <div className="mb-4">
+                  {/* Simplified Payment Method */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <span className="text-purple-600 font-semibold text-sm">💰</span>
+                      </div>
+                      <span className={`font-medium ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {selectedPaymentMethod ? selectedPaymentMethod.provider_name : 'Cash Payment'}
+                      </span>
+                    </div>
                     <button
                       onClick={() => setShowPaymentMethods(true)}
-                      className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
-                        darkMode
-                          ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
+                      className="text-purple-600 hover:text-purple-700 text-sm"
                     >
-                      <div className="flex items-center space-x-3">
-                        {selectedPaymentMethod ? (
-                          <>
-                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                              <span className="text-purple-600 font-semibold">
-                                {selectedPaymentMethod.provider_name.charAt(0)}
-                              </span>
-                            </div>
-                            <div className="text-left">
-                              <p className={`font-medium ${
-                                darkMode ? 'text-white' : 'text-gray-900'
-                              }`}>
-                                {selectedPaymentMethod.provider_name}
-                              </p>
-                              <p className={`text-sm ${
-                                darkMode ? 'text-gray-400' : 'text-gray-600'
-                              }`}>
-                                {selectedPaymentMethod.upi_id}
-                              </p>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                              <span className="text-gray-600 font-semibold">💰</span>
-                            </div>
-                            <div className="text-left">
-                              <p className={`font-medium ${
-                                darkMode ? 'text-white' : 'text-gray-900'
-                              }`}>
-                                Cash Payment
-                              </p>
-                              <p className={`text-sm ${
-                                darkMode ? 'text-gray-400' : 'text-gray-600'
-                              }`}>
-                                Pay with cash to driver
-                              </p>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      <ChevronRight className={`h-5 w-5 ${
-                        darkMode ? 'text-gray-400' : 'text-gray-500'
-                      }`} />
+                      Change
                     </button>
                   </div>
                   
@@ -2394,28 +2028,8 @@ const DriverBooking = () => {
                   )}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-4">
-                    <button
-                      onClick={shareTripDetails}
-                      className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                        darkMode 
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <Share2 className="h-4 w-4 mr-2" />
-                      Share Trip
-                    </button>
-                    {/* <button
-                      onClick={handleSOS}
-                      className="flex items-center px-4 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-                    >
-                      <AlertTriangle className="h-4 w-4 mr-2" />
-                      SOS
-                    </button> */}
-                  </div>
+                {/* Simplified Action Button */}
+                <div className="mt-6">
                   <button
                     onClick={handleBooking}
                     disabled={
@@ -2427,16 +2041,16 @@ const DriverBooking = () => {
                       quoteLoading ||
                       RideQuoteService.utils.isQuoteExpired(currentQuote?.expires_at)
                     }
-                    className="btn-brand flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-4 px-6 bg-purple-600 text-white rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-700 transition-colors flex items-center justify-center"
                   >
                     {loading ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-3"></div>
                         Booking...
                       </>
                     ) : quoteLoading ? (
                       <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-3"></div>
                         Calculating...
                       </>
                     ) : !currentQuote ? (
@@ -2446,7 +2060,7 @@ const DriverBooking = () => {
                     ) : (
                       <>
                         Book Ride - ₹{currentQuote.fare.total}
-                        <Car size={20} className="ml-2" />
+                        <Car size={24} className="ml-3" />
                       </>
                     )}
                   </button>

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Calendar, Clock, MapPin, Plus, Edit2, Trash2, 
   CheckCircle, Home, Briefcase, Star, User, Phone, Mail,
-  CreditCard, Building
+  CreditCard, Building, ChevronRight, XCircle, AlertTriangle
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import BookingService from '../services/booking.service';

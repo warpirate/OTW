@@ -54,7 +54,7 @@ class FareCalculator {
       const vehicle_multiplier = parseFloat(vehicleType.vehicle_multiplier);
       
       // Check for night hours
-      const is_night_hours = this.isNightHours(pickup_time);
+      const is_night_hours = await this.isNightHours(pickup_time);
       const night_multiplier = is_night_hours ? parseFloat(vehicleType.night_multiplier) : 1.0;
       const night_component = is_night_hours ? 
         (base_fare + distance_component + time_component) * (night_multiplier - 1) : 0;
@@ -297,8 +297,27 @@ class FareCalculator {
    */
   static async getDistanceAndDuration(origin, destination) {
     try {
-      // For now, use Haversine distance as fallback
-      // In production, integrate with Google Distance Matrix API
+      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+      
+      if (googleApiKey) {
+        // Use Google Distance Matrix API for accurate road distance
+        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&key=${googleApiKey}&units=metric&mode=driving`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.status === 'OK' && data.rows[0].elements[0].status === 'OK') {
+          const element = data.rows[0].elements[0];
+          return {
+            distance_km: Math.round((element.distance.value / 1000) * 100) / 100,
+            duration_min: Math.ceil(element.duration.value / 60)
+          };
+        } else {
+          console.warn('Google Distance Matrix API error, falling back to Haversine:', data.error_message || 'Unknown error');
+        }
+      }
+      
+      // Fallback to Haversine distance if Google API fails or is not configured
       const distance_km = this.haversineDistance(
         origin.lat, origin.lng, 
         destination.lat, destination.lng
@@ -311,29 +330,6 @@ class FareCalculator {
         distance_km: Math.round(distance_km * 100) / 100,
         duration_min
       };
-
-      // TODO: Implement Google Distance Matrix API integration
-      /*
-      const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
-      if (!googleApiKey) {
-        throw new Error('Google Maps API key not configured');
-      }
-
-      const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.lat},${origin.lng}&destinations=${destination.lat},${destination.lng}&key=${googleApiKey}&units=metric`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      if (data.status === 'OK' && data.rows[0].elements[0].status === 'OK') {
-        const element = data.rows[0].elements[0];
-        return {
-          distance_km: element.distance.value / 1000,
-          duration_min: Math.ceil(element.duration.value / 60)
-        };
-      } else {
-        throw new Error('Google Distance Matrix API error');
-      }
-      */
 
     } catch (error) {
       console.error('Error getting distance and duration:', error);
@@ -369,21 +365,40 @@ class FareCalculator {
     try {
       if (booking_id) {
         // Store as part of booking process
-        await pool.query(
-          `INSERT INTO ride_fare_breakdowns (
-            booking_id, quote_id, vehicle_type_id, distance_km_est, time_min_est,
-            base_fare_est, distance_component_est, time_component_est, 
-            surge_component_est, night_component_est, total_fare_est,
-            surge_multiplier_applied, night_hours_applied, quote_created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-          [
-            booking_id, fareBreakdown.quote_id, fareBreakdown.vehicle_type_id,
-            fareBreakdown.distance_km, fareBreakdown.duration_min,
-            fareBreakdown.base_fare, fareBreakdown.distance_component, fareBreakdown.time_component,
-            fareBreakdown.surge_component, fareBreakdown.night_component, fareBreakdown.total_fare,
-            fareBreakdown.surge_multiplier, fareBreakdown.night_hours_applied
-          ]
-        );
+        // Ensure all required fields have default values and resolve any promises
+        const surgeMultiplier = fareBreakdown.surge_multiplier !== undefined ? fareBreakdown.surge_multiplier : 1.0;
+        const nightHoursApplied = fareBreakdown.night_hours_applied !== undefined ? 
+          (fareBreakdown.night_hours_applied instanceof Promise ? 
+            await fareBreakdown.night_hours_applied : fareBreakdown.night_hours_applied) : 0;
+        
+        console.log('Fare breakdown data:', {
+          surge_multiplier: fareBreakdown.surge_multiplier,
+          night_hours_applied: fareBreakdown.night_hours_applied,
+          surgeMultiplier,
+          nightHoursApplied
+        });
+
+        // Use a separate connection to avoid lock conflicts
+        const connection = await pool.getConnection();
+        try {
+          await connection.query(
+            `INSERT INTO ride_fare_breakdowns (
+              booking_id, quote_id, vehicle_type_id, distance_km_est, time_min_est,
+              base_fare_est, distance_component_est, time_component_est, 
+              surge_component_est, night_component_est, total_fare_est,
+              surge_multiplier_applied, night_hours_applied, quote_created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [
+              booking_id, fareBreakdown.quote_id, fareBreakdown.vehicle_type_id,
+              fareBreakdown.distance_km, fareBreakdown.duration_min,
+              fareBreakdown.base_fare, fareBreakdown.distance_component, fareBreakdown.time_component,
+              fareBreakdown.surge_component, fareBreakdown.night_component, fareBreakdown.total_fare,
+              surgeMultiplier, nightHoursApplied
+            ]
+          );
+        } finally {
+          connection.release();
+        }
       }
 
       return fareBreakdown.quote_id;
