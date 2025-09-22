@@ -21,6 +21,7 @@ import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import AuthService from '../services/auth.service';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
+import { ChatWindow } from '../../components/Chat';
 import { toast } from 'react-toastify';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
@@ -45,6 +46,8 @@ const ServiceTracking = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [hasRated, setHasRated] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(null);
+  const [showChat, setShowChat] = useState(false);
 
   // Status flow configuration for service providers
   const statusFlow = {
@@ -132,7 +135,7 @@ const ServiceTracking = () => {
   useEffect(() => {
     const token = AuthService.getToken('customer');
     const newSocket = io(API_BASE_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       autoConnect: false,
       auth: {
         token: token
@@ -163,22 +166,19 @@ const ServiceTracking = () => {
         setShowOTPModal(true);
       }
 
-      // Handle payment required status
-      if (data.status === 'payment_required') {
-        // Show payment modal for UPI payments
-        if (booking && booking.payment_method === 'UPI Payment') {
+      // Handle service completion
+      if (data.status === 'completed') {
+        // Show payment modal for pay after service bookings
+        if (booking && booking.payment_method === 'pay_after_service') {
           setTimeout(() => {
             setShowPaymentModal(true);
           }, 1000);
+        } else {
+          // Show rating modal directly for UPI payments (already paid)
+          setTimeout(() => {
+            setShowRatingModal(true);
+          }, 2000);
         }
-      }
-
-      // Handle service completion
-      if (data.status === 'completed') {
-        // Show rating modal directly for completed services
-        setTimeout(() => {
-          setShowRatingModal(true);
-        }, 2000);
       }
     });
 
@@ -218,6 +218,15 @@ const ServiceTracking = () => {
           setCurrentStatus(data.booking.service_status || 'pending');
           // Check if service has already been rated
           setHasRated(data.booking.rating ? true : false);
+          
+          // Check if service is completed and needs payment
+          if (data.booking.service_status === 'completed' && 
+              data.booking.payment_method === 'pay_after_service' && 
+              data.booking.payment_status !== 'paid') {
+            setTimeout(() => {
+              setShowPaymentModal(true);
+            }, 1000);
+          }
         } else {
           toast.error('Failed to load booking details');
           navigate('/bookings');
@@ -233,6 +242,7 @@ const ServiceTracking = () => {
 
     if (bookingId) {
       loadBookingDetails();
+      fetchWalletBalance();
     }
   }, [bookingId, navigate]);
 
@@ -294,6 +304,29 @@ const ServiceTracking = () => {
     }
   };
 
+  const fetchWalletBalance = async () => {
+    try {
+      const token = AuthService.getToken('customer');
+      const response = await fetch(`${API_BASE_URL}/api/customer/wallet/balance`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setWalletBalance(parseFloat(data.data.current_balance));
+      } else {
+        setWalletBalance(0);
+      }
+    } catch (error) {
+      console.error('Error fetching wallet balance:', error);
+      setWalletBalance(0);
+    }
+  };
+
   const handlePayment = async () => {
     if (!booking) return;
 
@@ -303,7 +336,7 @@ const ServiceTracking = () => {
       const token = AuthService.getToken('customer');
       
       // Get selected payment method
-      const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'upi';
+      const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'wallet';
       
       let requestBody = {
         amount: booking.total_amount,
@@ -328,7 +361,17 @@ const ServiceTracking = () => {
       const data = await response.json();
       
       if (data.success) {
-        if (selectedMethod === 'upi' && data.status === 'processing') {
+        if (selectedMethod === 'wallet') {
+          // Wallet payment completed immediately
+          toast.success(`Payment processed successfully from wallet! New balance: ₹${data.new_balance}`);
+          setWalletBalance(data.new_balance);
+          setShowPaymentModal(false);
+          
+          // Show rating modal after successful payment
+          setTimeout(() => {
+            setShowRatingModal(true);
+          }, 1000);
+        } else if (selectedMethod === 'upi' && data.status === 'processing') {
           // Payment is being processed via Razorpay
           toast.info('Payment request created. Please complete payment in your UPI app.');
           setShowPaymentModal(false);
@@ -408,8 +451,15 @@ const ServiceTracking = () => {
   };
 
   const messageProvider = () => {
-    // Implement messaging functionality
-    toast.info('Messaging feature coming soon!');
+    // Allow chat in most states, but show different messages based on status
+    if (currentStatus === 'pending') {
+      toast.info('Chat will be available once a service provider is assigned to your booking.');
+      setShowChat(true); // Still allow opening chat for future messages
+    } else if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+      toast.info('Chat is no longer available for completed or cancelled services.');
+    } else {
+      setShowChat(true);
+    }
   };
 
   if (loading) {
@@ -534,12 +584,12 @@ const ServiceTracking = () => {
           </div>
 
           {/* Provider Information */}
-          {provider && (
-            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6 mb-6`}>
-              <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Service Provider Information
-              </h3>
-              
+          <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6 mb-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              Service Provider Information
+            </h3>
+            
+            {provider ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mr-4">
@@ -580,8 +630,34 @@ const ServiceTracking = () => {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mr-4">
+                    <Clock className="h-6 w-6 text-gray-400" />
+                  </div>
+                  <div>
+                    <h4 className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      Waiting for Provider Assignment
+                    </h4>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      We're finding the best service provider for your request
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <button
+                    onClick={messageProvider}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Message
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Booking Details */}
           <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6 mb-6`}>
@@ -745,8 +821,27 @@ const ServiceTracking = () => {
                   <input
                     type="radio"
                     name="paymentMethod"
-                    value="upi"
+                    value="wallet"
                     defaultChecked
+                    className="text-blue-600"
+                  />
+                  <div className="flex-1">
+                    <div className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Wallet Payment</div>
+                    <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Pay from your wallet balance
+                      {walletBalance !== null && (
+                        <span className={`ml-2 font-medium ${walletBalance >= booking?.total_amount ? 'text-green-600' : 'text-red-600'}`}>
+                          (₹{walletBalance})
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </label>
+                <label className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="upi"
                     className="text-blue-600"
                   />
                   <div>
@@ -853,6 +948,26 @@ const ServiceTracking = () => {
                 Skip
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chat Window */}
+      {showChat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-4xl h-[80vh] mx-4">
+            <ChatWindow
+              bookingId={bookingId}
+              onClose={() => setShowChat(false)}
+              isOpen={showChat}
+              onError={(error) => {
+                toast.error(error);
+                setShowChat(false);
+              }}
+              provider={provider}
+              customer={booking?.user}
+              booking={booking}
+            />
           </div>
         </div>
       )}

@@ -1,0 +1,98 @@
+/* Chat Window Styles */
+.chat-message-container {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.chat-message-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-message-container::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 3px;
+}
+
+.chat-message-container::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.chat-message-container::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+/* Status indicator animations */
+.status-online {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Message bubble animations */
+.message-bubble {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Typing indicator */
+.typing-indicator {
+  animation: typing 1.5s infinite;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .chat-window {
+    height: 100vh;
+    max-height: 100vh;
+  }
+  
+  .chat-header {
+    padding: 1rem;
+  }
+  
+  .chat-input {
+    padding: 1rem;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .chat-message-container::-webkit-scrollbar-track {
+    background: #2d3748;
+  }
+  
+  .chat-message-container::-webkit-scrollbar-thumb {
+    background: #4a5568;
+  }
+  
+  .chat-message-container::-webkit-scrollbar-thumb:hover {
+    background: #718096;
+  }
+}

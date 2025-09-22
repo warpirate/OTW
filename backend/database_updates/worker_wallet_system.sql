@@ -204,3 +204,4 @@ FROM wallet_transactions wt
 JOIN worker_wallets ww ON wt.wallet_id = ww.id
 JOIN users u ON ww.worker_id = u.id
 GROUP BY DATE(wt.created_at), wt.wallet_id, ww.worker_id, u.name;
+

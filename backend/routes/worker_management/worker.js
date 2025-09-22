@@ -1497,7 +1497,7 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
  */
 router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
   const { bookingId } = req.params;
-  const { status } = req.body;
+  const { status, location } = req.body; // Added location parameter
   const { id: user_id, role } = req.user;
 
   if (role !== 'worker') {
@@ -1555,8 +1555,7 @@ router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
       'started': ['en_route', 'arrived', 'cancelled'],
       'en_route': ['arrived', 'cancelled'],
       'arrived': ['in_progress', 'cancelled'],
-      'in_progress': ['payment_required', 'cancelled'],
-      'payment_required': ['completed', 'cancelled'],
+      'in_progress': ['completed', 'cancelled'],
       'completed': [],
       'cancelled': []
     };
@@ -1572,13 +1571,21 @@ router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
     if (status === 'completed') {
       // Check if payment is required and has been completed
       const [paymentCheck] = await connection.query(`
-        SELECT payment_method, payment_status 
+        SELECT 
+          cash_payment_id,
+          upi_payment_method_id,
+          payment_status,
+          CASE 
+            WHEN cash_payment_id IS NOT NULL THEN 'pay_after_service'
+            WHEN upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
+            ELSE 'pay_after_service'
+          END as payment_method
         FROM bookings 
         WHERE id = ?
       `, [bookingId]);
 
       if (paymentCheck.length > 0) {
-        const { payment_method, payment_status } = paymentCheck[0];
+        const { payment_method, payment_status, upi_payment_method_id } = paymentCheck[0];
         
         // If payment method is UPI and not paid, prevent completion
         if (payment_method === 'UPI Payment' && payment_status !== 'paid') {
@@ -1598,6 +1605,31 @@ router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
       [status, bookingId]
     );
 
+    // Update worker location if provided
+    if (location && location.latitude && location.longitude) {
+      // Update provider's current location
+      await connection.query(
+        'UPDATE providers SET location_lat = ?, location_lng = ?, last_active_at = NOW() WHERE id = ?',
+        [location.latitude, location.longitude, provider_id]
+      );
+
+      // Store location history for tracking
+      await connection.query(
+        `INSERT INTO worker_location_history (provider_id, booking_id, latitude, longitude, accuracy, heading, speed, status, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          provider_id,
+          bookingId,
+          location.latitude,
+          location.longitude,
+          location.accuracy || null,
+          location.heading || null,
+          location.speed || null,
+          status
+        ]
+      );
+    }
+
     // Generate OTP when arrived
     if (status === 'arrived') {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -1613,11 +1645,39 @@ router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
     try {
       const io = req.app.get('io');
       if (io) {
-        io.to(`booking_${bookingId}`).emit('status_update', {
+        const statusUpdateData = {
           booking_id: bookingId,
           status: status,
-          message: `Status updated to ${status}`
-        });
+          message: `Status updated to ${status}`,
+          timestamp: new Date().toISOString()
+        };
+
+        // Include location data if available
+        if (location && location.latitude && location.longitude) {
+          statusUpdateData.worker_location = {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            heading: location.heading,
+            speed: location.speed,
+            timestamp: new Date().toISOString()
+          };
+        }
+
+        io.to(`booking_${bookingId}`).emit('status_update', statusUpdateData);
+        
+        // Also emit location update separately for real-time tracking
+        if (location && location.latitude && location.longitude) {
+          io.to(`booking_${bookingId}`).emit('worker_location_update', {
+            booking_id: bookingId,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            heading: location.heading,
+            speed: location.speed,
+            timestamp: new Date().toISOString()
+          });
+        }
 
         // Send OTP to customer when arrived
         if (status === 'arrived') {
@@ -1648,6 +1708,123 @@ router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
     await connection.rollback();
     console.error('Error updating booking status:', error);
     res.status(500).json({ message: 'Server error while updating booking status' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /bookings/:bookingId/location - Update worker location (Real-time tracking)
+ */
+router.post('/bookings/:bookingId/location', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { latitude, longitude, accuracy, heading, speed } = req.body;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can update location' });
+  }
+
+  if (!latitude || !longitude) {
+    return res.status(400).json({ message: 'Latitude and longitude are required' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify the worker is assigned to this booking
+    const [bookingCheck] = await connection.query(`
+      SELECT b.id, b.provider_id, b.service_status, b.customer_id
+      FROM bookings b
+      WHERE b.id = ? AND b.booking_type != 'ride'
+    `, [bookingId]);
+
+    if (!bookingCheck.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Service booking not found' });
+    }
+
+    const booking = bookingCheck[0];
+
+    // Get provider_id for this worker
+    const [providerData] = await connection.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [user_id]
+    );
+
+    if (!providerData.length) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Worker profile not found' });
+    }
+
+    const provider_id = providerData[0].id;
+
+    if (booking.provider_id !== provider_id) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You are not assigned to this booking' });
+    }
+
+    // Update provider's current location
+    await connection.query(
+      'UPDATE providers SET location_lat = ?, location_lng = ?, last_active_at = NOW() WHERE id = ?',
+      [latitude, longitude, provider_id]
+    );
+
+    // Store location history for tracking
+    await connection.query(
+      `INSERT INTO worker_location_history (provider_id, booking_id, latitude, longitude, accuracy, heading, speed, status, created_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        provider_id,
+        bookingId,
+        latitude,
+        longitude,
+        accuracy || null,
+        heading || null,
+        speed || null,
+        booking.service_status
+      ]
+    );
+
+    await connection.commit();
+
+    // Emit real-time location update to customer
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`booking_${bookingId}`).emit('worker_location_update', {
+          booking_id: bookingId,
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: accuracy,
+          heading: heading,
+          speed: speed,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (socketError) {
+      console.error('Socket error in location update:', socketError);
+      // Don't fail the request if socket fails
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Location updated successfully',
+      location: {
+        latitude,
+        longitude,
+        accuracy,
+        heading,
+        speed,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating worker location:', error);
+    res.status(500).json({ message: 'Server error while updating location' });
   } finally {
     connection.release();
   }
@@ -1878,7 +2055,12 @@ router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
         sb.address,
         b.rating,
         b.review,
-        b.rating_submitted_at
+        b.rating_submitted_at,
+        CASE 
+          WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
+          WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
+          ELSE 'pay_after_service'
+        END as payment_method
       FROM bookings b
       LEFT JOIN users u ON b.user_id = u.id
       LEFT JOIN service_bookings sb ON b.id = sb.booking_id

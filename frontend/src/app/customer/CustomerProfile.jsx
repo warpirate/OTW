@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Edit2, Save, X, Mail, Phone, MapPin, Calendar, Shield, CreditCard } from 'lucide-react';
+import { User, Edit2, Save, X, Mail, Phone, MapPin, Calendar, Shield, CreditCard, Wallet } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import AuthService from '../services/auth.service';
 import ProfileService from '../services/profile.service';
 import CustomerVerificationsService from '../services/customerVerifications.service';
+import WalletSummary from '../../components/WalletSummary';
 
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
@@ -254,12 +255,38 @@ const CustomerProfile = () => {
             </div>
           </div>
 
+          {/* Wallet Section */}
+          <div className="mb-8">
+            <WalletSummary showFullView={true} />
+          </div>
+
           {/* Quick Access Menu */}
           <div className={`card p-6 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               Quick Access
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button
+                onClick={() => navigate('/wallet')}
+                className={`p-4 rounded-lg border text-left transition-colors ${
+                  darkMode 
+                    ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
+                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <Wallet className="h-6 w-6 text-green-600" />
+                  <div>
+                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      My Wallet
+                    </h3>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Manage wallet & payments
+                    </p>
+                  </div>
+                </div>
+              </button>
+
               <button
                 onClick={() => navigate('/payment-methods')}
                 className={`p-4 rounded-lg border text-left transition-colors ${

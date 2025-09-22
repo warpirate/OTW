@@ -303,8 +303,59 @@ router.post('/bookings/:bookingId/process-payment', verifyToken, async (req, res
       return res.status(400).json({ message: 'Payment amount does not match booking total' });
     }
 
+    // For wallet payments
+    if (payment_method === 'wallet') {
+      const CustomerWalletService = require('../../services/customerWalletService');
+      
+      // Check if wallet payment is enabled
+      const isEnabled = await CustomerWalletService.isWalletPaymentEnabled();
+      if (!isEnabled) {
+        await connection.rollback();
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Wallet payments are currently disabled' 
+        });
+      }
+
+      // Process wallet payment
+      const walletResult = await CustomerWalletService.processWalletPayment(
+        user_id,
+        amount,
+        bookingId,
+        `Payment for booking #${bookingId}`
+      );
+
+      // Update booking payment status
+      await connection.query(
+        'UPDATE bookings SET payment_status = ?, payment_method = ?, payment_completed_at = NOW(), service_status = ?, updated_at = NOW() WHERE id = ?',
+        ['paid', 'wallet', 'completed', bookingId]
+      );
+
+      await connection.commit();
+
+      // Emit Socket.IO event to notify worker that service is completed
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`booking_${bookingId}`).emit('status_update', {
+            booking_id: bookingId,
+            status: 'completed',
+            message: 'Service completed after payment'
+          });
+        }
+      } catch (socketError) {
+        console.error('Socket error in payment processing:', socketError);
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Payment processed successfully from wallet.',
+        payment_id: `WALLET_${bookingId}_${Date.now()}`,
+        new_balance: walletResult.newBalance
+      });
+
     // For UPI payments, use Razorpay integration
-    if (payment_method === 'upi' && upi_id) {
+    } else if (payment_method === 'upi' && upi_id) {
       // Import Razorpay functions
       const { createUPIOrder, createUPIPaymentRequest } = require('../../config/razorpay');
       
@@ -463,7 +514,7 @@ router.post('/bookings/:bookingId/rate', verifyToken, async (req, res) => {
 
     // Verify the customer owns this booking
     const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.customer_id, b.service_status, b.provider_id, b.rating
+      SELECT b.id, b.user_id, b.customer_id, b.service_status, b.provider_id, b.rating
       FROM bookings b
       WHERE b.id = ? AND b.booking_type != 'ride'
     `, [bookingId]);
@@ -475,8 +526,9 @@ router.post('/bookings/:bookingId/rate', verifyToken, async (req, res) => {
 
     const booking = bookingCheck[0];
 
-    // Check if customer owns this booking
-    if (booking.customer_id !== user_id) {
+    // Check if customer owns this booking (check both user_id and customer_id for compatibility)
+    const customerId = booking.customer_id || booking.user_id;
+    if (customerId !== user_id) {
       await connection.rollback();
       return res.status(403).json({ message: 'You are not authorized to rate this booking' });
     }
@@ -533,6 +585,101 @@ router.post('/bookings/:bookingId/rate', verifyToken, async (req, res) => {
     await connection.rollback();
     console.error('Error submitting rating:', error);
     res.status(500).json({ message: 'Server error while submitting rating' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * GET /bookings/:bookingId/driver-location - Get worker's live location
+ */
+router.get('/bookings/:bookingId/driver-location', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'customer') {
+    return res.status(403).json({ message: 'Only customers can access driver location' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    // Verify the customer owns this booking
+    const [bookingCheck] = await connection.query(`
+      SELECT b.id, b.user_id, b.customer_id, b.provider_id, b.service_status
+      FROM bookings b
+      WHERE b.id = ? AND b.booking_type != 'ride'
+    `, [bookingId]);
+
+    if (!bookingCheck.length) {
+      return res.status(404).json({ message: 'Service booking not found' });
+    }
+
+    const booking = bookingCheck[0];
+
+    // Check if customer owns this booking
+    const customerId = booking.customer_id || booking.user_id;
+    if (customerId !== user_id) {
+      return res.status(403).json({ message: 'You are not authorized to access this booking' });
+    }
+
+    // Check if worker is assigned
+    if (!booking.provider_id) {
+      return res.status(404).json({ message: 'No worker assigned to this booking yet' });
+    }
+
+    // Get worker's current location
+    const [locationData] = await connection.query(`
+      SELECT 
+        p.location_lat as latitude,
+        p.location_lng as longitude,
+        p.last_active_at,
+        u.name as worker_name,
+        u.phone_number as worker_phone
+      FROM providers p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.id = ?
+    `, [booking.provider_id]);
+
+    if (!locationData.length || !locationData[0].latitude || !locationData[0].longitude) {
+      return res.status(404).json({ message: 'Worker location not available' });
+    }
+
+    const location = locationData[0];
+
+    // Get the most recent location update from history
+    const [recentLocation] = await connection.query(`
+      SELECT 
+        latitude,
+        longitude,
+        accuracy,
+        heading,
+        speed,
+        created_at as timestamp
+      FROM worker_location_history
+      WHERE provider_id = ? AND booking_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [booking.provider_id, bookingId]);
+
+    const responseData = {
+      latitude: parseFloat(location.latitude),
+      longitude: parseFloat(location.longitude),
+      accuracy: recentLocation.length > 0 ? recentLocation[0].accuracy : null,
+      heading: recentLocation.length > 0 ? recentLocation[0].heading : null,
+      speed: recentLocation.length > 0 ? recentLocation[0].speed : null,
+      timestamp: recentLocation.length > 0 ? 
+        new Date(recentLocation[0].timestamp).getTime() : 
+        new Date(location.last_active_at).getTime(),
+      worker_name: location.worker_name,
+      worker_phone: location.worker_phone,
+      last_active: location.last_active_at
+    };
+
+    res.json(responseData);
+
+  } catch (error) {
+    console.error('Error fetching driver location:', error);
+    res.status(500).json({ message: 'Server error while fetching driver location' });
   } finally {
     connection.release();
   }
