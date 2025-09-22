@@ -11,8 +11,8 @@ import {
   CreditCard
 } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import AuthService from '../services/auth.service';
-import { API_BASE_URL } from '../config';
+import AuthService from '../app/services/auth.service';
+import { API_BASE_URL } from '../app/config';
 
 const WalletSummary = ({ showFullView = false }) => {
   const navigate = useNavigate();
