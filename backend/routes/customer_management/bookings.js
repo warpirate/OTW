@@ -648,7 +648,12 @@ try {
             CASE 
               WHEN b.booking_type = 'ride' THEN b.estimated_cost
               ELSE b.price 
-            END as display_price
+            END as display_price,
+            CASE 
+              WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
+              WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
+              ELSE 'pay_after_service'
+            END as payment_method
      FROM bookings b
      LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
      LEFT JOIN service_bookings sb ON sb.booking_id = b.id

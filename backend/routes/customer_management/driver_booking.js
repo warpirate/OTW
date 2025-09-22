@@ -626,7 +626,7 @@ router.post('/rate/:bookingId', verifyToken, async (req, res) => {
 
     // Verify the customer owns this booking and it's completed
     const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.customer_id, b.service_status, b.provider_id
+      SELECT b.id, b.user_id, b.customer_id, b.service_status, b.provider_id
       FROM bookings b
       WHERE b.id = ? AND b.booking_type = 'ride'
     `, [bookingId]);
@@ -638,7 +638,9 @@ router.post('/rate/:bookingId', verifyToken, async (req, res) => {
 
     const booking = bookingCheck[0];
 
-    if (booking.customer_id !== user_id) {
+    // Check if customer owns this booking (check both user_id and customer_id for compatibility)
+    const customerId = booking.customer_id || booking.user_id;
+    if (customerId !== user_id) {
       await connection.rollback();
       return res.status(403).json({ message: 'You are not authorized to rate this booking' });
     }

@@ -24,6 +24,7 @@ import {
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
 import WorkerService from '../../services/worker.service';
+import { ChatWindow } from '../../../components/Chat';
 import { toast } from 'react-toastify';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../../config';
@@ -41,6 +42,7 @@ const WorkerJobTracking = () => {
   const [socket, setSocket] = useState(null);
   const [serviceProgress, setServiceProgress] = useState(0);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   // Status flow configuration for workers
   const statusFlow = {
@@ -77,15 +79,6 @@ const WorkerJobTracking = () => {
       color: 'text-orange-600', 
       bgColor: 'bg-orange-100',
       description: 'You are currently providing the service.',
-      nextAction: 'Request Payment',
-      nextStatus: 'payment_required'
-    },
-    payment_required: { 
-      label: 'Payment Required', 
-      icon: DollarSign, 
-      color: 'text-yellow-600', 
-      bgColor: 'bg-yellow-100',
-      description: 'Service completed. Waiting for customer payment before finalizing.',
       nextAction: 'Complete Service',
       nextStatus: 'completed'
     },
@@ -250,8 +243,13 @@ const WorkerJobTracking = () => {
   };
 
   const messageCustomer = () => {
-    // Implement messaging functionality
-    toast.info('Messaging feature coming soon!');
+    // Only allow chat when job is accepted or in progress
+    if (currentStatus === 'accepted' || currentStatus === 'started' || 
+        currentStatus === 'arrived' || currentStatus === 'in_progress') {
+      setShowChat(true);
+    } else {
+      toast.info('Chat is only available when you have an active job.');
+    }
   };
 
   const generateOTP = async () => {
@@ -699,6 +697,25 @@ const WorkerJobTracking = () => {
                 Verify OTP
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chat Window */}
+      {showChat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-4xl h-[80vh] mx-4">
+            <ChatWindow
+              bookingId={bookingId}
+              onClose={() => setShowChat(false)}
+              isOpen={showChat}
+              onError={(error) => {
+                toast.error(error);
+                setShowChat(false);
+              }}
+              customer={customer}
+              booking={booking}
+            />
           </div>
         </div>
       )}

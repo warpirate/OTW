@@ -4,6 +4,7 @@ require('dotenv').config();
 const http = require('http');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const SocketServer = require('./socketServer');
 
 const app = express();
 app.use(cors());
@@ -28,11 +29,13 @@ const pricingAdminRoute = require('./routes/admin_management/pricing_admin');
 const payoutAdminRoute = require('./routes/admin_management/payout_admin');
 const paymentRoute = require('./routes/customer_management/payments');
 const webhookRoute = require('./routes/customer_management/webhooks');
+const chatRoute = require('./routes/chat/chat');
 const baseURL = process.env.BASE_URL1 || '/api';
 
 app.use(`${baseURL}/categories`, categoryRoute); 
 app.use(`${baseURL}/auth`, authRoute);
 app.use(`${baseURL}/customer`, customerRoute);
+app.use(`${baseURL}/customer`, require('./routes/customer_management/wallet'));
 app.use(`${baseURL}/customer/driver`, driverRoute);
 app.use(`${baseURL}/customer/ride`, rideQuoteRoute);
 app.use(`${baseURL}/customer/cart`, cartRoute);
@@ -50,6 +53,7 @@ app.use(`${baseURL}/worker-management`, require('./routes/worker_management/wall
 app.use(`${baseURL}/worker`, workerDocsRoute);
 app.use(`${baseURL}/worker/trip`, tripTrackingRoute);
 app.use(`${baseURL}/admin`, require('./routes/admin_management/wallet'));
+app.use(`${baseURL}/chat`, chatRoute);
 
 // Health check endpoint
 app.get(`${baseURL}/health`, async (req, res) => {
@@ -73,101 +77,144 @@ app.get(`${baseURL}/health`, async (req, res) => {
   }
 });
 
-// Create HTTP server and attach Socket.IO
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: process.env.SOCKET_CORS_ORIGIN || '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    credentials: true
-  }
-});
+// Initialize Socket.IO server with chat service
+let socketServer;
+let server;
 
-// Make io accessible in routes via req.app.get('io')
-app.set('io', io);
-
-// Socket.IO authentication and room joins
-io.use(async (socket, next) => {
+async function initializeServer() {
   try {
-    const authHeader = socket.handshake.headers['authorization'];
-    const tokenFromHeader = authHeader && authHeader.startsWith('Bearer ')
-      ? authHeader.split(' ')[1]
-      : null;
-    const token = socket.handshake.auth?.token || tokenFromHeader;
-    if (!token) {
-      return next(new Error('Authentication token missing'));
-    }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.user = decoded; // { id, email, role, role_id }
-
-    // Join a per-user room for direct notifications
-    socket.join(`user:${decoded.id}`);
-
-    // If worker, attempt to join provider room as well
-    if (decoded.role === 'worker') {
-      try {
-        const [rows] = await pool.query('SELECT id FROM providers WHERE user_id = ? LIMIT 1', [decoded.id]);
-        if (rows.length) {
-          const providerId = rows[0].id;
-          socket.join(`provider:${providerId}`);
-          socket.providerId = providerId;
-        }
-      } catch (e) {
-        // Do not fail connection on provider room join failure
-      }
-    }
-
-    next();
-  } catch (err) {
-    next(new Error('Invalid or expired token'));
+    // Create Socket.IO server with chat service
+    socketServer = new SocketServer(app);
+    server = await socketServer.initialize();
+    
+    // Make io accessible in routes via req.app.get('io')
+    app.set('io', socketServer.getIO());
+    app.set('chatService', socketServer.getChatService());
+    
+    console.log('✅ Socket.IO server with chat service initialized');
+  } catch (error) {
+    console.error('❌ Failed to initialize Socket.IO server:', error);
+    process.exit(1);
   }
-});
+}
 
-io.on('connection', (socket) => {
-  const { id: userId, role } = socket.user || {};
-  console.log(`🔌 Socket connected: user=${userId} role=${role} socket=${socket.id}`);
-
-  // Handle worker room joins
-  socket.on('join_worker_room', (bookingId) => {
-    console.log(`Worker ${userId} joining room for booking ${bookingId}`);
-    socket.join(`booking_${bookingId}`);
-  });
-
-  // Handle customer booking room joins
-  socket.on('join_booking_room', (bookingId) => {
-    console.log(`Customer ${userId} joining room for booking ${bookingId}`);
-    socket.join(`booking_${bookingId}`);
-  });
-
-  // Handle OTP sending from worker to customer
-  socket.on('send_otp', async (data) => {
+// Legacy Socket.IO handlers (for existing functionality)
+function setupLegacySocketHandlers(io) {
+  io.use(async (socket, next) => {
     try {
-      const { booking_id, otp } = data;
-      console.log(`Sending OTP ${otp} for booking ${booking_id}`);
-      
-      // Get customer user_id from booking
-      const [customerData] = await pool.query(
-        'SELECT user_id FROM bookings WHERE id = ?',
-        [booking_id]
-      );
-      
-      if (customerData.length) {
-        // Send OTP to customer
-        io.to(`user:${customerData[0].user_id}`).emit('otp_code', {
-          booking_id,
-          otp,
-          message: 'Your service provider has arrived. Please verify with this OTP.'
-        });
+      const authHeader = socket.handshake.headers['authorization'];
+      const tokenFromHeader = authHeader && authHeader.startsWith('Bearer ')
+        ? authHeader.split(' ')[1]
+        : null;
+      const token = socket.handshake.auth?.token || tokenFromHeader;
+      if (!token) {
+        return next(new Error('Authentication token missing'));
       }
-    } catch (error) {
-      console.error('Error sending OTP:', error);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.user = decoded; // { id, email, role, role_id }
+
+      // Join a per-user room for direct notifications
+      socket.join(`user:${decoded.id}`);
+
+      // If worker, attempt to join provider room as well
+      if (decoded.role === 'worker') {
+        try {
+          const [rows] = await pool.query('SELECT id FROM providers WHERE user_id = ? LIMIT 1', [decoded.id]);
+          if (rows.length) {
+            const providerId = rows[0].id;
+            socket.join(`provider:${providerId}`);
+            socket.providerId = providerId;
+          }
+        } catch (e) {
+          // Do not fail connection on provider room join failure
+        }
+      }
+
+      next();
+    } catch (err) {
+      next(new Error('Invalid or expired token'));
     }
   });
 
-  socket.on('disconnect', (reason) => {
-    console.log(`🔌 Socket disconnected: user=${userId} reason=${reason}`);
+  io.on('connection', (socket) => {
+    const { id: userId, role } = socket.user || {};
+    console.log(`🔌 Legacy Socket connected: user=${userId} role=${role} socket=${socket.id}`);
+
+    // Handle worker room joins
+    socket.on('join_worker_room', (bookingId) => {
+      console.log(`Worker ${userId} joining room for booking ${bookingId}`);
+      socket.join(`booking_${bookingId}`);
+    });
+
+    // Handle customer booking room joins
+    socket.on('join_booking_room', (bookingId) => {
+      console.log(`Customer ${userId} joining room for booking ${bookingId}`);
+      socket.join(`booking_${bookingId}`);
+    });
+
+    // Handle OTP sending from worker to customer
+    socket.on('send_otp', async (data) => {
+      try {
+        const { booking_id, otp } = data;
+        console.log(`Sending OTP ${otp} for booking ${booking_id}`);
+        
+        // Get customer user_id from booking
+        const [customerData] = await pool.query(
+          'SELECT user_id FROM bookings WHERE id = ?',
+          [booking_id]
+        );
+        
+        if (customerData.length) {
+          // Send OTP to customer
+          io.to(`user:${customerData[0].user_id}`).emit('otp_code', {
+            booking_id,
+            otp,
+            message: 'Your service provider has arrived. Please verify with this OTP.'
+          });
+        }
+      } catch (error) {
+        console.error('Error sending OTP:', error);
+      }
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log(`🔌 Legacy Socket disconnected: user=${userId} reason=${reason}`);
+    });
   });
+}
+
+// Start server
+async function startServer() {
+  await initializeServer();
+  
+  // Setup legacy socket handlers
+  setupLegacySocketHandlers(socketServer.getIO());
+  
+  const PORT = process.env.PORT || 5001;
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT} (with Socket.IO and Chat Service)`);
+  });
+}
+
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  if (socketServer) {
+    await socketServer.shutdown();
+  }
+  process.exit(0);
 });
 
-const PORT = process.env.PORT || 5001;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (with Socket.IO)`));
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully');
+  if (socketServer) {
+    await socketServer.shutdown();
+  }
+  process.exit(0);
+});
+
+// Start the server
+startServer().catch(error => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
