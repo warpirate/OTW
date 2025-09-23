@@ -10,7 +10,7 @@ import {
   CreditCard,
   Settings
 } from 'lucide-react';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { toast } from 'react-toastify';
 
 const WalletSecurity = () => {

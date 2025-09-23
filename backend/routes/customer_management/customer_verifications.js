@@ -8,7 +8,12 @@ const fs = require('fs');
 
 // AWS S3 setup (reusing env patterns from worker docs route)
 const S3_REGION = process.env.AWS_REGION;
-const S3_BUCKET = process.env.S3_BUCKET || process.env.S3_BUCKET_CUSTOMER_DOCS || process.env.AWS_BUCKET_NAME;
+// Support multiple env var names for the bucket to match different deployments
+const S3_BUCKET =
+  process.env.S3_BUCKET ||
+  process.env.S3_BUCKET_CUSTOMER_DOCS ||
+  process.env.AWS_BUCKET_NAME ||
+  process.env.AWS_S3_BUCKET;
 const s3 = new AWS.S3({ region: S3_REGION });
 
 const ALLOWED_DOC_TYPES = new Set(['student_id', 'aadhaar', 'pan', 'other']);

@@ -9,7 +9,7 @@ import {
   Gift,
   Shield
 } from 'lucide-react';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import AuthService from '../services/auth.service';
 import { API_BASE_URL } from '../config';
 import { toast } from 'react-toastify';
