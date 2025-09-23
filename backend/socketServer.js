@@ -19,10 +19,19 @@ class SocketServer {
             this.server = http.createServer(this.app);
 
             // Initialize Socket.IO
+            const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173,https://omwhub.com,https://www.omwhub.com')
+              .split(',')
+              .map(o => o.trim())
+              .filter(Boolean);
+
             this.io = new Server(this.server, {
                 cors: {
-                    origin: process.env.FRONTEND_URL || "http://localhost:5173",
-                    methods: ["GET", "POST"],
+                    origin: (origin, callback) => {
+                        if (!origin) return callback(null, true);
+                        if (allowedOrigins.includes(origin)) return callback(null, true);
+                        return callback(new Error(`Socket.IO CORS blocked: ${origin}`));
+                    },
+                    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
                     credentials: true
                 },
                 transports: ['websocket', 'polling']
