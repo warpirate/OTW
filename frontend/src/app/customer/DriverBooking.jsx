@@ -6,7 +6,7 @@ import { DriverService } from '../services/driver.service';
 import RideQuoteService from '../services/rideQuote.service';
 import PaymentService from '../services/payment.service';
 import Header from '../../components/Header';
-import Footer from '../../components/Footer';
+// import Footer from '../../components/Footer';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import LocationMap from '../../components/LocationMap';
 import DriverTracker from '../../components/DriverTracker';
@@ -454,6 +454,47 @@ const DriverBooking = () => {
     }
   };
 
+  // Quickly set pickup to user's current geolocation
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation is not supported');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        // Try Google Geocoder if available for a nice address; otherwise fallback
+        const setLocation = (display) => {
+          const location = { display_name: display || 'Current location', lat, lon, place_id: `${lat},${lon}` };
+          setPickupLocation({ query: location.display_name, suggestions: [], selected: location });
+          setCurrentQuote(null);
+          setFareBreakdown(null);
+          toast.success('Pickup set to current location');
+        };
+        try {
+          // eslint-disable-next-line no-undef
+          const gm = window.google && window.google.maps;
+          if (gm) {
+            const geocoder = new gm.Geocoder();
+            geocoder.geocode({ location: { lat, lng: lon } }, (results, status) => {
+              if (status === 'OK' && results && results[0]) {
+                setLocation(results[0].formatted_address);
+              } else {
+                setLocation('Current location');
+              }
+            });
+          } else {
+            setLocation('Current location');
+          }
+        } catch {
+          setLocation('Current location');
+        }
+      },
+      () => toast.error('Unable to fetch your location')
+    );
+  };
+
   // SOS function
   const handleSOS = () => {
     if (emergencyContacts.length > 0) {
@@ -724,6 +765,15 @@ const DriverBooking = () => {
                         }`}
                         placeholder="Enter pickup location"
                       />
+                      <button
+                        type="button"
+                        onClick={handleUseCurrentLocation}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-sm rounded-md border ${
+                          darkMode ? 'bg-gray-800 border-gray-600 text-gray-200 hover:border-purple-400' : 'bg-white border-gray-300 text-gray-700 hover:border-purple-300'
+                        }`}
+                      >
+                        Use current
+                      </button>
                     </div>
                       {/* Suggestions for pickup */}
                     {pickupLocation.suggestions.length > 0 && (
@@ -939,12 +989,22 @@ const DriverBooking = () => {
                     </div>
                   )}
 
-                  {/* Book Now Button */}
+                  {/* Primary Action Button */}
                   <button
-                    onClick={handleBookRide}
-                    disabled={loading || !pickupLocation.selected || !dropLocation.selected || !selectedVehicleType}
+                    onClick={() => {
+                      if (!pickupLocation.selected || !dropLocation.selected) {
+                        toast.info('Please enter pickup and drop locations first.');
+                        return;
+                      }
+                      if (!selectedVehicleType) {
+                        toast.info('Please choose a vehicle type.');
+                        return;
+                      }
+                      handleBookRide();
+                    }}
+                    disabled={loading}
                     className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl transform hover:scale-[1.02] disabled:transform-none disabled:hover:scale-100 ${
-                      loading || !pickupLocation.selected || !dropLocation.selected || !selectedVehicleType
+                      loading
                         ? 'bg-gray-400 cursor-not-allowed opacity-60'
                         : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white'
                     }`}
@@ -960,9 +1020,21 @@ const DriverBooking = () => {
                           <Car className="h-5 w-5" />
                         </div>
                         <div className="flex-1 text-center">
-                          <div>Book Ride</div>
+                          <div>
+                            {!pickupLocation.selected || !dropLocation.selected
+                              ? 'Enter locations'
+                              : !selectedVehicleType
+                                ? 'Choose vehicle'
+                                : 'Book Ride'}
+                          </div>
                           <div className="text-sm font-medium opacity-90">
-                            {currentQuote ? `₹${currentQuote.fare?.total}` : 'Calculating...'}
+                            {!pickupLocation.selected || !dropLocation.selected
+                              ? 'Pickup and drop needed'
+                              : !selectedVehicleType
+                                ? 'Select a vehicle type'
+                                : currentQuote
+                                  ? `₹${currentQuote.fare?.total}`
+                                  : 'Calculating...'}
                           </div>
                         </div>
                         <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -993,8 +1065,7 @@ const DriverBooking = () => {
               </div>
             </div>
       </main>
-
-      <Footer />
+      {/* <Footer /> */}
     </div>
   );
 };
