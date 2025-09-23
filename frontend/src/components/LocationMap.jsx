@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Navigation as NavigationIcon } from 'lucide-react';
 import { loadGoogleMaps } from '../utils/googleMapsLoader';
 
 const LocationMap = ({ 
   pickupLocation, 
   dropLocation, 
   onLocationSelect, 
+  nearbyDrivers = [],
   darkMode = false,
-  height = '400px' 
+  height = '100%'
 }) => {
   const mapRef = useRef(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -14,6 +16,10 @@ const LocationMap = ({
   const [map, setMap] = useState(null);
   const [directionsService, setDirectionsService] = useState(null);
   const [directionsRenderer, setDirectionsRenderer] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [autoLocateDone, setAutoLocateDone] = useState(false);
+  // 0 = next click sets pickup, 1 = next click sets drop
+  const [selectionStep, setSelectionStep] = useState(0);
 
   // Load Google Maps API
   useEffect(() => {
@@ -32,8 +38,9 @@ const LocationMap = ({
     if (!mapLoaded || !googleMaps || !mapRef.current || map) return;
 
     const mapInstance = new googleMaps.Map(mapRef.current, {
-      center: { lat: 17.2473, lng: 80.1514 }, // Khammam coordinates
-      zoom: 12,
+      // Start with a neutral world view; no city-specific fallback
+      center: { lat: 0, lng: 0 },
+      zoom: 2,
       mapTypeControl: true,
       streetViewControl: false,
       fullscreenControl: true,
@@ -55,9 +62,13 @@ const LocationMap = ({
     setMap(mapInstance);
     setDirectionsService(directionsServiceInstance);
     setDirectionsRenderer(directionsRendererInstance);
+  }, [mapLoaded, googleMaps, map]);
 
-    // Add click listener for location selection
-    mapInstance.addListener('click', (event) => {
+  // Add click listener for location selection (separate effect to avoid recreation)
+  useEffect(() => {
+    if (!map || !googleMaps || !onLocationSelect) return;
+
+    const handleMapClick = (event) => {
       const lat = event.latLng.lat();
       const lng = event.latLng.lng();
       
@@ -72,15 +83,63 @@ const LocationMap = ({
             place_id: results[0].place_id || Date.now()
           };
           
-          if (onLocationSelect) {
-            onLocationSelect(locationData);
+          // Determine target based on current state
+          let target;
+          if (!pickupLocation) {
+            target = 'pickup';
+          } else if (!dropLocation) {
+            target = 'drop';
+          } else {
+            // Both locations are set, allow overwriting drop location
+            target = 'drop';
           }
+          
+          onLocationSelect(locationData, target);
         }
       });
-    });
-  }, [mapLoaded, googleMaps, onLocationSelect, map]);
+    };
 
-  // Update map with locations and route
+    map.addListener('click', handleMapClick);
+
+    // Cleanup listener on unmount or when dependencies change
+    return () => {
+      googleMaps.event.clearListeners(map, 'click');
+    };
+  }, [map, googleMaps, onLocationSelect, pickupLocation, dropLocation]);
+
+  // Auto-attempt to locate once when map is ready (prompts user for permission)
+  useEffect(() => {
+    if (!map || !googleMaps || autoLocateDone) return;
+    // Attempt geolocation once to center map to real position
+    if (navigator.geolocation) {
+      setAutoLocateDone(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          map.setCenter({ lat, lng });
+          map.setZoom(15);
+        },
+        () => {
+          // If denied or failed, keep neutral world view
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
+  }, [map, googleMaps, autoLocateDone]);
+
+  // Keep selection step in sync with provided props (for UI indicators if needed)
+  useEffect(() => {
+    if (!pickupLocation && !dropLocation) {
+      setSelectionStep(0);
+    } else if (pickupLocation && !dropLocation) {
+      setSelectionStep(1);
+    } else if (pickupLocation && dropLocation) {
+      setSelectionStep(2);
+    }
+  }, [pickupLocation, dropLocation]);
+
+  // Update map with locations, drivers and route
   useEffect(() => {
     if (!map || !directionsService || !directionsRenderer) return;
 
@@ -152,6 +211,43 @@ const LocationMap = ({
       markers.push(dropMarker);
     }
 
+    // Nearby driver markers
+    if (Array.isArray(nearbyDrivers) && nearbyDrivers.length > 0) {
+      nearbyDrivers.forEach((driver, index) => {
+        const lat = parseFloat(driver.lat || driver.latitude || driver.location?.lat);
+        const lng = parseFloat(driver.lng || driver.longitude || driver.location?.lng);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          const driverMarker = new googleMaps.Marker({
+            position: { lat, lng },
+            map: map,
+            title: driver.provider_name ? `Driver: ${driver.provider_name}` : 'Nearby driver',
+            icon: {
+              path: googleMaps.SymbolPath.CIRCLE,
+              scale: 6,
+              fillColor: '#10B981',
+              fillOpacity: 1,
+              strokeColor: '#FFFFFF',
+              strokeWeight: 2,
+            },
+            label: {
+              text: 'D',
+              color: '#FFFFFF',
+              fontWeight: 'bold',
+            }
+          });
+
+          if (driver.provider_name || driver.distance_km) {
+            const info = new googleMaps.InfoWindow({
+              content: `<div class="p-2"><strong>${driver.provider_name || 'Driver'}</strong>${driver.distance_km ? `<br>${driver.distance_km.toFixed ? driver.distance_km.toFixed(1) : driver.distance_km} km away` : ''}</div>`
+            });
+            driverMarker.addListener('click', () => info.open(map, driverMarker));
+          }
+
+          markers.push(driverMarker);
+        }
+      });
+    }
+
     // Draw route if both locations are available
     if (pickupLocation?.lat && dropLocation?.lat) {
       const request = {
@@ -186,14 +282,109 @@ const LocationMap = ({
     return () => {
       markers.forEach(marker => marker.setMap(null));
     };
-  }, [map, directionsService, directionsRenderer, pickupLocation, dropLocation]);
+  }, [map, directionsService, directionsRenderer, pickupLocation, dropLocation, nearbyDrivers]);
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation || !googleMaps) {
+      console.error('Geolocation is not supported');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        if (map) {
+          map.setCenter({ lat, lng });
+          map.setZoom(15);
+        }
+
+        const geocoder = new googleMaps.Geocoder();
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          const displayName = status === 'OK' && results && results[0]
+            ? results[0].formatted_address
+            : 'Current location';
+          const placeId = status === 'OK' && results && results[0] ? (results[0].place_id || Date.now()) : Date.now();
+
+          const locationData = {
+            display_name: displayName,
+            lat,
+            lon: lng,
+            place_id: placeId
+          };
+
+          if (onLocationSelect) {
+            // Determine target based on current state, same logic as map clicks
+            let target;
+            if (!pickupLocation) {
+              target = 'pickup';
+            } else if (!dropLocation) {
+              target = 'drop';
+            } else {
+              // Both locations are set, default to pickup (user's current location)
+              target = 'pickup';
+            }
+            onLocationSelect(locationData, target);
+          }
+          setLocating(false);
+        });
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   return (
-    <div 
-      ref={mapRef} 
-      style={{ height }} 
-      className="rounded-lg overflow-hidden border border-gray-200"
-    />
+    <div className="relative h-full">
+      <div 
+        ref={mapRef} 
+        style={{ height }} 
+        className="w-full h-full"
+      />
+      <div className="absolute top-4 right-4 z-10">
+        <button
+          type="button"
+          onClick={useMyLocation}
+          className={`px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all hover:shadow-xl ${
+            darkMode
+              ? 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-600'
+              : 'bg-white text-gray-800 hover:bg-gray-50 border border-gray-200'
+          }`}
+          disabled={locating}
+        >
+          <div className="flex items-center space-x-2">
+            <NavigationIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">
+              {locating ? 'Locating…' : 'Use My Location'}
+            </span>
+          </div>
+        </button>
+      </div>
+      
+      {/* Map Controls Overlay */}
+      <div className="absolute bottom-4 left-4 z-10 space-y-2">
+        <div className={`px-3 py-2 rounded-lg shadow-lg text-xs font-medium ${
+          darkMode ? 'bg-gray-800 text-gray-300 border border-gray-600' : 'bg-white text-gray-700 border border-gray-200'
+        }`}>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+            <span>Pickup</span>
+          </div>
+        </div>
+        <div className={`px-3 py-2 rounded-lg shadow-lg text-xs font-medium ${
+          darkMode ? 'bg-gray-800 text-gray-300 border border-gray-600' : 'bg-white text-gray-700 border border-gray-200'
+        }`}>
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+            <span>Drop</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
