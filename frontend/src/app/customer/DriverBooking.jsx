@@ -252,7 +252,7 @@ const DriverBooking = () => {
 
     try {
       // Use our backend endpoint instead of direct OpenStreetMap API
-      const url = `http://localhost:5001/api/customer/driver/location-search?query=${encodeURIComponent(query)}&country=in`;
+      const url = `https://api.omwhub.com/api/customer/driver/location-search?query=${encodeURIComponent(query)}&country=in`;
       const response = await fetch(url);
       const data = await response.json();
       
@@ -491,7 +491,32 @@ const DriverBooking = () => {
           setLocation('Current location');
         }
       },
-      () => toast.error('Unable to fetch your location')
+      (error) => {
+        // Show user-friendly error messages based on error code
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            toast.error(
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="h-4 w-4" />
+                <div>
+                  <div className="font-medium">Location Access Denied</div>
+                  <div className="text-sm">Please allow location access in your browser settings to use this feature.</div>
+                </div>
+              </div>,
+              { autoClose: 8000 }
+            );
+            break;
+          case error.POSITION_UNAVAILABLE:
+            toast.error('Location information is unavailable. Please check your device settings.');
+            break;
+          case error.TIMEOUT:
+            toast.error('Location request timed out. Please try again.');
+            break;
+          default:
+            toast.error('Unable to get your location. Please try again or enter your location manually.');
+            break;
+        }
+      }
     );
   };
 

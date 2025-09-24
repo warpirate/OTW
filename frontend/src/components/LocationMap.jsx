@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Navigation as NavigationIcon } from 'lucide-react';
+import { Navigation as NavigationIcon, AlertTriangle } from 'lucide-react';
 import { loadGoogleMaps } from '../utils/googleMapsLoader';
+import { toast } from 'react-toastify';
 
 const LocationMap = ({ 
   pickupLocation, 
@@ -120,8 +121,21 @@ const LocationMap = ({
           map.setCenter({ lat, lng });
           map.setZoom(15);
         },
-        () => {
+        (error) => {
           // If denied or failed, keep neutral world view
+          // Only show error message if it's a permission denied error
+          if (error.code === error.PERMISSION_DENIED) {
+            toast.info(
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="h-4 w-4" />
+                <div>
+                  <div className="font-medium">Location Access Required</div>
+                  <div className="text-sm">Allow location access to automatically center the map on your location.</div>
+                </div>
+              </div>,
+              { autoClose: 6000 }
+            );
+          }
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -333,6 +347,31 @@ const LocationMap = ({
       (error) => {
         console.error('Geolocation error:', error);
         setLocating(false);
+        
+        // Show user-friendly error messages based on error code
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            toast.error(
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="h-4 w-4" />
+                <div>
+                  <div className="font-medium">Location Access Denied</div>
+                  <div className="text-sm">Please allow location access in your browser settings to use this feature.</div>
+                </div>
+              </div>,
+              { autoClose: 8000 }
+            );
+            break;
+          case error.POSITION_UNAVAILABLE:
+            toast.error('Location information is unavailable. Please check your device settings.');
+            break;
+          case error.TIMEOUT:
+            toast.error('Location request timed out. Please try again.');
+            break;
+          default:
+            toast.error('Unable to get your location. Please try again or enter your location manually.');
+            break;
+        }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
