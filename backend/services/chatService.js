@@ -218,9 +218,18 @@ class ChatService {
                 return;
             }
 
-            // Verify user has access to this session (support provider mapping via bookings/providers)
+            // Verify user has access to this session and determine sender type
             const [sendAccessSessions] = await pool.execute(
-                `SELECT cs.id, cs.customer_id, cs.provider_id
+                `SELECT 
+                    cs.id, cs.customer_id, cs.provider_id, cs.booking_id,
+                    b.provider_id as booking_provider_id,
+                    p.user_id as provider_user_id,
+                    CASE 
+                        WHEN cs.customer_id = ? THEN 'customer'
+                        WHEN cs.provider_id = ? THEN 'provider'
+                        WHEN p.user_id = ? THEN 'provider'
+                        ELSE NULL
+                    END as sender_type
                  FROM chat_sessions cs
                  JOIN bookings b ON b.id = cs.booking_id
                  LEFT JOIN providers p ON p.id = b.provider_id
@@ -229,34 +238,28 @@ class ChatService {
                    AND (
                         cs.customer_id = ?
                      OR cs.provider_id = ?
-                     OR (p.user_id = ?)
+                     OR p.user_id = ?
                    )`,
-                [sessionId, socket.userId, socket.userId, socket.userId]
-            );
-            // Verify user has access to this session (support provider mapping)
-            const [sendAccessSessionsDup] = await pool.execute(
-                `SELECT cs.id, cs.customer_id, cs.provider_id
-                 FROM chat_sessions cs
-                 JOIN bookings b ON b.id = cs.booking_id
-                 LEFT JOIN providers p ON p.id = b.provider_id
-                 WHERE cs.id = ?
-                   AND cs.session_status = 'active'
-                   AND (
-                        cs.customer_id = ?
-                     OR cs.provider_id = ?
-                     OR (p.user_id = ?)
-                   )`,
-                [sessionId, socket.userId, socket.userId, socket.userId]
+                [socket.userId, socket.userId, socket.userId, sessionId, socket.userId, socket.userId, socket.userId]
             );
 
-            if (sendAccessSessions.length === 0 && sendAccessSessionsDup.length === 0) {
+            if (sendAccessSessions.length === 0 || !sendAccessSessions[0].sender_type) {
                 socket.emit('error', { message: 'Access denied to this chat session' });
                 return;
             }
-            const session = (sendAccessSessions[0] || sendAccessSessionsDup[0]);
-            const senderType = socket.userId === session.customer_id ? 'customer' : 'provider';
+            
+            const session = sendAccessSessions[0];
+            const senderType = session.sender_type;
 
             // Save message to database
+            console.log('💾 Inserting message to database:', {
+                sessionId,
+                senderId: socket.userId,
+                senderType,
+                messageType,
+                content: content.substring(0, 50) + '...'
+            });
+            
             const [result] = await pool.execute(
                 `INSERT INTO chat_messages (session_id, sender_id, sender_type, message_type, content, file_url, file_name, file_size) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -271,6 +274,8 @@ class ChatService {
                     (typeof fileSize === 'number' ? fileSize : null)
                 ]
             );
+            
+            console.log('✅ Message inserted successfully, ID:', result.insertId);
 
             const messageId = result.insertId;
 
@@ -562,17 +567,20 @@ class ChatService {
                 `SELECT 
                     cs.id as session_id, cs.booking_id, cs.message_count, cs.last_message_at,
                     cu.name as customer_name, cu.phone_number as customer_phone,
-                    pu.name as provider_name, pu.phone_number as provider_phone,
+                    COALESCE(wu.name, pu.name) as provider_name, 
+                    COALESCE(wu.phone_number, pu.phone_number) as provider_phone,
                     b.service_status, b.booking_type, sc.name as service_name
                  FROM chat_sessions cs
                  JOIN users cu ON cs.customer_id = cu.id
-                 JOIN users pu ON cs.provider_id = pu.id
+                 LEFT JOIN users pu ON cs.provider_id = pu.id
+                 LEFT JOIN providers p ON p.id = (SELECT provider_id FROM bookings WHERE id = cs.booking_id)
+                 LEFT JOIN users wu ON wu.id = p.user_id
                  JOIN bookings b ON cs.booking_id = b.id
                  LEFT JOIN subcategories sc ON b.subcategory_id = sc.id
-                 WHERE (cs.customer_id = ? OR cs.provider_id = ?) 
+                 WHERE (cs.customer_id = ? OR cs.provider_id = ? OR p.user_id = ?) 
                  AND cs.session_status = 'active'
                  ORDER BY cs.last_message_at DESC`,
-                [userId, userId]
+                [userId, userId, userId]
             );
 
             return sessions;

@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 const FareCalculator = require('../../utils/fareCalculator');
+const { retryTransaction, isNoDriversError, isTemporaryServiceError } = require('../../utils/databaseRetry');
 require('dotenv').config();
 
 function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -163,19 +164,23 @@ router.post('/search', async (req, res) => {
       if (!latitude || !longitude) {
         const address = `${provider.street_address}, ${provider.city}, ${provider.state}, ${provider.zip_code}, India`;
         try {
-          const geocodeUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+          const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+          const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
           const geocodeResponse = await fetch(geocodeUrl);
           const geocodeData = await geocodeResponse.json();
-          
-          if (geocodeData && geocodeData.length > 0) {
-            latitude = parseFloat(geocodeData[0].lat);
-            longitude = parseFloat(geocodeData[0].lon);
-            
+
+          if (geocodeData && geocodeData.status === 'OK' && geocodeData.results && geocodeData.results.length > 0) {
+            const loc = geocodeData.results[0].geometry.location;
+            latitude = parseFloat(loc.lat);
+            longitude = parseFloat(loc.lng);
+
             // Update provider's location in database for future use
             await pool.query(
               'UPDATE providers SET location_lat = ?, location_lng = ? WHERE id = ?',
               [latitude, longitude, provider.provider_id]
             );
+          } else {
+            console.warn(`Google geocoding failed for provider ${provider.provider_id}:`, geocodeData?.status || 'NO_RESULTS');
           }
         } catch (error) {
           console.error(`Error geocoding address for provider ${provider.provider_id}:`, error);
@@ -261,9 +266,9 @@ router.post('/book-ride', verifyToken, async (req, res) => {
   // Handle new booking type 'ride' (defaults to without_car for now)
   const with_vehicle = booking_type === 'with_car' ? 1 : 0;
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
+    // Use retry mechanism for the entire booking transaction
+    const result = await retryTransaction(pool, async (connection) => {
 
     let finalEstimatedCost = estimated_cost || 0;
     let fareBreakdown = null;
@@ -356,8 +361,14 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     // 3. Store fare breakdown if using new quote system
     if (fareBreakdown && quote_id) {
       console.log('Storing fare breakdown...');
-      await FareCalculator.storeFareQuote(fareBreakdown, bookingId);
-      console.log('Fare breakdown stored successfully');
+      try {
+        await FareCalculator.storeFareQuote(fareBreakdown, bookingId);
+        console.log('Fare breakdown stored successfully');
+      } catch (fareError) {
+        console.warn('Failed to store fare breakdown, continuing with booking:', fareError.message);
+        // Don't fail the entire booking if fare breakdown storage fails
+        // The booking can proceed without detailed fare breakdown
+      }
     }
 
     // 4. Get ride category id
@@ -399,19 +410,23 @@ router.post('/book-ride', verifyToken, async (req, res) => {
       if (!latitude || !longitude) {
         const address = `${provider.street_address}, ${provider.city}, ${provider.state}, ${provider.zip_code}, India`;
         try {
-          const geocodeUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json`;
+          const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+          const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
           const geocodeResponse = await fetch(geocodeUrl);
           const geocodeData = await geocodeResponse.json();
-          
-          if (geocodeData && geocodeData.length > 0) {
-            latitude = parseFloat(geocodeData[0].lat);
-            longitude = parseFloat(geocodeData[0].lon);
-            
+
+          if (geocodeData && geocodeData.status === 'OK' && geocodeData.results && geocodeData.results.length > 0) {
+            const loc = geocodeData.results[0].geometry.location;
+            latitude = parseFloat(loc.lat);
+            longitude = parseFloat(loc.lng);
+
             // Update provider's location in database
             await connection.query(
               'UPDATE providers SET location_lat = ?, location_lng = ? WHERE id = ?',
               [latitude, longitude, provider.provider_id]
             );
+          } else {
+            console.warn(`Google geocoding failed for provider ${provider.provider_id}:`, geocodeData?.status || 'NO_RESULTS');
           }
         } catch (error) {
           console.error(`Error geocoding address for provider ${provider.provider_id}:`, error);
@@ -451,7 +466,14 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     
     console.log("driver IDs", driverIds);
 
-    // 7. Insert booking requests
+    // Check if any drivers were found
+    if (driverIds.length === 0) {
+      console.log('No drivers found in service area');
+      // Instead of failing, we'll still create the booking but mark it appropriately
+      // This prevents database locks from failed bookings
+    }
+
+    // 7. Insert booking requests only if drivers are available
     for (const providerId of driverIds) {
       await connection.query(
         `INSERT INTO booking_requests (booking_id, provider_id, status, requested_at)
@@ -460,50 +482,88 @@ router.post('/book-ride', verifyToken, async (req, res) => {
       );
     }
 
-    await connection.commit();
+      // Return the booking data from the transaction
+      return {
+        bookingId,
+        driverIds,
+        finalEstimatedCost,
+        fareBreakdown
+      };
+    }, {
+      maxRetries: 2, // Retry up to 2 times for booking operations
+      baseDelay: 2000, // Start with 2 second delay
+      maxDelay: 8000 // Max 8 second delay
+    });
 
     // Emit Socket.IO events to notify providers and customer about new ride booking requests
     try {
       const io = req.app.get('io');
       if (io) {
-        for (const providerId of driverIds) {
+        for (const providerId of result.driverIds) {
           io.to(`provider:${providerId}`).emit('booking_requests:new', {
-            booking_id: bookingId,
+            booking_id: result.bookingId,
             booking_type: 'ride',
             status: 'pending'
           });
         }
         // Notify the customer that their booking was created
         io.to(`user:${user_id}`).emit('bookings:created', {
-          booking_ids: [bookingId]
+          booking_ids: [result.bookingId]
         });
       }
     } catch (emitErr) {
       console.error('Socket emit error (driver book-ride):', emitErr.message);
     }
 
+    // Check if no drivers were found and return appropriate response
+    if (result.driverIds.length === 0) {
+      return res.status(503).json({
+        message: 'No available drivers in your area at the moment. Please try again later.',
+        error_code: 'NO_DRIVERS_AVAILABLE',
+        booking_id: result.bookingId,
+        retry_after: 30
+      });
+    }
+
     res.status(201).json({
       message: 'Driver booking created successfully',
-      booking_id: bookingId,
-      available_providers: driverIds,
+      booking_id: result.bookingId,
+      available_providers: result.driverIds,
       quote_id: quote_id || null,
-      estimated_cost: finalEstimatedCost,
-      fare_breakdown: fareBreakdown ? {
-        distance_km: fareBreakdown.distance_km,
-        duration_min: fareBreakdown.duration_min,
-        vehicle_type: fareBreakdown.vehicle_type_name,
-        total_fare: fareBreakdown.total_fare,
-        surge_multiplier: fareBreakdown.surge_multiplier,
-        night_hours: fareBreakdown.night_hours_applied
+      estimated_cost: result.finalEstimatedCost,
+      fare_breakdown: result.fareBreakdown ? {
+        distance_km: result.fareBreakdown.distance_km,
+        duration_min: result.fareBreakdown.duration_min,
+        vehicle_type: result.fareBreakdown.vehicle_type_name,
+        total_fare: result.fareBreakdown.total_fare,
+        surge_multiplier: result.fareBreakdown.surge_multiplier,
+        night_hours: result.fareBreakdown.night_hours_applied
       } : null
     });
 
   } catch (error) {
-    await connection.rollback();
     console.error('Transaction error in /book-ride:', error);
+    
+    // Use utility functions to determine error type
+    if (isNoDriversError(error)) {
+      console.error('Database lock timeout occurred - no drivers available');
+      return res.status(503).json({ 
+        message: 'No available drivers at the moment. Please try again later.',
+        error_code: 'NO_DRIVERS_AVAILABLE',
+        retry_after: 30 // seconds
+      });
+    }
+    
+    if (isTemporaryServiceError(error)) {
+      console.error('Temporary service error occurred');
+      return res.status(503).json({ 
+        message: 'Service temporarily unavailable. Please try again later.',
+        error_code: 'SERVICE_TIMEOUT',
+        retry_after: 30
+      });
+    }
+    
     res.status(500).json({ message: 'Server error while creating driver booking' });
-  } finally {
-    connection.release();
   }
 });
 

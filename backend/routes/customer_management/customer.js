@@ -185,29 +185,25 @@ router.get('/search-services', async (req, res) => {
 });
 
 /**
- * POST /bookings/:bookingId/generate-otp - Generate OTP for customer
+ * GET /bookings/:bookingId/otp-status - Check OTP status for customer
  */
-router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) => {
+router.get('/bookings/:bookingId/otp-status', verifyToken, async (req, res) => {
   const { bookingId } = req.params;
   const { id: user_id, role } = req.user;
 
   if (role !== 'customer') {
-    return res.status(403).json({ message: 'Only customers can generate OTP' });
+    return res.status(403).json({ message: 'Only customers can check OTP status' });
   }
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
-
-    // Verify the customer owns this booking
-    const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.customer_id, b.service_status, b.provider_id
+    // Verify the customer owns this booking and get OTP status
+    const [bookingCheck] = await pool.query(`
+      SELECT b.id, b.user_id AS customer_id, b.service_status, b.otp_code, b.otp_expires_at
       FROM bookings b
       WHERE b.id = ? AND b.booking_type != 'ride'
     `, [bookingId]);
 
     if (!bookingCheck.length) {
-      await connection.rollback();
       return res.status(404).json({ message: 'Service booking not found' });
     }
 
@@ -215,37 +211,28 @@ router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) =
 
     // Check if customer owns this booking
     if (booking.customer_id !== user_id) {
-      await connection.rollback();
       return res.status(403).json({ message: 'You are not authorized to access this booking' });
     }
 
-    // Check if booking is in arrived status
-    if (booking.service_status !== 'arrived') {
-      await connection.rollback();
-      return res.status(400).json({ message: 'Booking must be in arrived status to generate OTP' });
-    }
-
-    // Generate new OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await connection.query(
-      'UPDATE bookings SET otp_code = ?, updated_at = NOW() WHERE id = ?',
-      [otp, bookingId]
-    );
-
-    await connection.commit();
+    const now = new Date();
+    const hasValidOTP = booking.otp_code && booking.otp_expires_at && new Date(booking.otp_expires_at) > now;
 
     res.json({ 
       success: true, 
-      otp: otp,
-      message: 'OTP generated successfully. Share this code with your service provider.'
+      has_otp: !!booking.otp_code,
+      otp_valid: hasValidOTP,
+      expires_at: booking.otp_expires_at,
+      service_status: booking.service_status,
+      message: hasValidOTP 
+        ? 'OTP is active and valid' 
+        : booking.otp_code 
+          ? 'OTP has expired' 
+          : 'No OTP generated yet'
     });
 
   } catch (error) {
-    await connection.rollback();
-    console.error('Error generating OTP:', error);
-    res.status(500).json({ message: 'Server error while generating OTP' });
-  } finally {
-    connection.release();
+    console.error('Error checking OTP status:', error);
+    res.status(500).json({ message: 'Server error while checking OTP status' });
   }
 });
 
@@ -267,7 +254,7 @@ router.post('/bookings/:bookingId/process-payment', verifyToken, async (req, res
 
     // Verify the customer owns this booking
     const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.customer_id, b.service_status, b.total_amount, b.payment_status, b.payment_method
+      SELECT b.id, b.user_id AS customer_id, b.service_status, b.total_amount, b.payment_status, b.payment_method
       FROM bookings b
       WHERE b.id = ? AND b.booking_type != 'ride'
     `, [bookingId]);
@@ -303,59 +290,17 @@ router.post('/bookings/:bookingId/process-payment', verifyToken, async (req, res
       return res.status(400).json({ message: 'Payment amount does not match booking total' });
     }
 
-    // For wallet payments
+    // For wallet payments (disabled in this deployment)
     if (payment_method === 'wallet') {
-      const CustomerWalletService = require('../../services/customerWalletService');
-      
-      // Check if wallet payment is enabled
-      const isEnabled = await CustomerWalletService.isWalletPaymentEnabled();
-      if (!isEnabled) {
-        await connection.rollback();
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Wallet payments are currently disabled' 
-        });
-      }
-
-      // Process wallet payment
-      const walletResult = await CustomerWalletService.processWalletPayment(
-        user_id,
-        amount,
-        bookingId,
-        `Payment for booking #${bookingId}`
-      );
-
-      // Update booking payment status
-      await connection.query(
-        'UPDATE bookings SET payment_status = ?, payment_method = ?, payment_completed_at = NOW(), service_status = ?, updated_at = NOW() WHERE id = ?',
-        ['paid', 'wallet', 'completed', bookingId]
-      );
-
-      await connection.commit();
-
-      // Emit Socket.IO event to notify worker that service is completed
-      try {
-        const io = req.app.get('io');
-        if (io) {
-          io.to(`booking_${bookingId}`).emit('status_update', {
-            booking_id: bookingId,
-            status: 'completed',
-            message: 'Service completed after payment'
-          });
-        }
-      } catch (socketError) {
-        console.error('Socket error in payment processing:', socketError);
-      }
-
-      res.json({ 
-        success: true, 
-        message: 'Payment processed successfully from wallet.',
-        payment_id: `WALLET_${bookingId}_${Date.now()}`,
-        new_balance: walletResult.newBalance
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Wallet payments are disabled. Please use UPI or cash.' 
       });
+    }
 
     // For UPI payments, use Razorpay integration
-    } else if (payment_method === 'upi' && upi_id) {
+    else if (payment_method === 'upi' && upi_id) {
       // Import Razorpay functions
       const { createUPIOrder, createUPIPaymentRequest } = require('../../config/razorpay');
       
@@ -427,33 +372,7 @@ router.post('/bookings/:bookingId/process-payment', verifyToken, async (req, res
       });
 
     } else {
-      // For cash payments, credit worker wallet and mark as paid
-      const WalletService = require('../../services/walletService');
-      
-      // Get provider details for the booking
-      const [providerData] = await connection.query(
-        'SELECT provider_id FROM bookings WHERE id = ?',
-        [bookingId]
-      );
-
-      if (providerData.length > 0 && providerData[0].provider_id) {
-        // Get worker user_id from provider_id
-        const [workerData] = await connection.query(
-          'SELECT user_id FROM providers WHERE id = ?',
-          [providerData[0].provider_id]
-        );
-
-        if (workerData.length > 0) {
-          // Credit worker wallet
-          await WalletService.creditWallet(
-            workerData[0].user_id,
-            amount,
-            bookingId,
-            `Cash payment for booking #${bookingId}`
-          );
-        }
-      }
-
+      // For cash payments, mark as paid (wallet features disabled - do not credit worker wallet)
       // Update booking status
       await connection.query(
         'UPDATE bookings SET payment_status = ?, payment_method = ?, payment_completed_at = NOW(), service_status = ?, updated_at = NOW() WHERE id = ?',
@@ -478,7 +397,7 @@ router.post('/bookings/:bookingId/process-payment', verifyToken, async (req, res
 
       res.json({ 
         success: true, 
-        message: 'Payment processed successfully. Amount credited to worker wallet.',
+        message: 'Payment processed successfully.',
         payment_id: `PAY_${bookingId}_${Date.now()}`
       });
     }

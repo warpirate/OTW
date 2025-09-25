@@ -14,6 +14,7 @@ const CustomerLogin = lazy(() => import('./app/auth/CustomerLogin'));
 const CustomerSignup = lazy(() => import('./app/auth/CustomerSignup'));
 const ForgotPassword = lazy(() => import('./app/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('./app/auth/ResetPassword'));
+const VerifyEmail = lazy(() => import('./app/auth/VerifyEmail'));
 const CategoryServices = lazy(() => import('./app/customer/CategoryServices'));
 const Cart = lazy(() => import('./app/customer/Cart'));
 const CheckoutSuccess = lazy(() => import('./app/customer/CheckoutSuccess'));
@@ -374,6 +375,7 @@ function App() {
               <Route index element={<LandingPage />} />
               <Route path="login" element={<CustomerLogin />} />
               <Route path="signup" element={<CustomerSignup />} />
+              <Route path="verify-email" element={<VerifyEmail />} />
                 <Route path="forgot-password" element={<ForgotPassword />} />
                 <Route path="reset-password/:token" element={<ResetPassword />} />
               <Route path="category/:categoryId/:categoryName" element={<CategoryServices />} />

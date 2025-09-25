@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
+const { retryDatabaseOperation } = require('./databaseRetry');
 
 /**
  * Dynamic Fare Calculator for OMW Ride Booking System
@@ -378,27 +379,36 @@ class FareCalculator {
           nightHoursApplied
         });
 
-        // Use a separate connection to avoid lock conflicts
-        const connection = await pool.getConnection();
-        try {
-          await connection.query(
-            `INSERT INTO ride_fare_breakdowns (
-              booking_id, quote_id, vehicle_type_id, distance_km_est, time_min_est,
-              base_fare_est, distance_component_est, time_component_est, 
-              surge_component_est, night_component_est, total_fare_est,
-              surge_multiplier_applied, night_hours_applied, quote_created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-            [
-              booking_id, fareBreakdown.quote_id, fareBreakdown.vehicle_type_id,
-              fareBreakdown.distance_km, fareBreakdown.duration_min,
-              fareBreakdown.base_fare, fareBreakdown.distance_component, fareBreakdown.time_component,
-              fareBreakdown.surge_component, fareBreakdown.night_component, fareBreakdown.total_fare,
-              surgeMultiplier, nightHoursApplied
-            ]
-          );
-        } finally {
-          connection.release();
-        }
+        // Use retry mechanism for database operation
+        await retryDatabaseOperation(async () => {
+          const connection = await pool.getConnection();
+          try {
+            // Set connection timeout
+            await connection.query('SET SESSION innodb_lock_wait_timeout = 5');
+            
+            await connection.query(
+              `INSERT INTO ride_fare_breakdowns (
+                booking_id, quote_id, vehicle_type_id, distance_km_est, time_min_est,
+                base_fare_est, distance_component_est, time_component_est, 
+                surge_component_est, night_component_est, total_fare_est,
+                surge_multiplier_applied, night_hours_applied, quote_created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+              [
+                booking_id, fareBreakdown.quote_id, fareBreakdown.vehicle_type_id,
+                fareBreakdown.distance_km, fareBreakdown.duration_min,
+                fareBreakdown.base_fare, fareBreakdown.distance_component, fareBreakdown.time_component,
+                fareBreakdown.surge_component, fareBreakdown.night_component, fareBreakdown.total_fare,
+                surgeMultiplier, nightHoursApplied
+              ]
+            );
+          } finally {
+            connection.release();
+          }
+        }, {
+          maxRetries: 2,
+          baseDelay: 1000,
+          maxDelay: 5000
+        });
       }
 
       return fareBreakdown.quote_id;

@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
 const http = require('http');
 const { Server } = require('socket.io');
+require('dotenv').config();
 const jwt = require('jsonwebtoken');
 
 const app = express();
@@ -11,6 +11,8 @@ app.use(express.json());
 
 // Load route
 const pool = require('./config/db');
+const { verifyTransporter } = require('./services/emailService');
+
 const categoryRoute = require('./routes/category_management/categories');
 const authRoute = require('./routes/authentication/auth');
 const customerRoute = require('./routes/customer_management/customer');
@@ -36,7 +38,8 @@ const baseURL = process.env.BASE_URL1 || '/api';
 app.use(`${baseURL}/categories`, categoryRoute); 
 app.use(`${baseURL}/auth`, authRoute);
 app.use(`${baseURL}/customer`, customerRoute);
-app.use(`${baseURL}/customer`, require('./routes/customer_management/wallet'));
+// Wallet customer routes disabled
+// app.use(`${baseURL}/customer`, require('./routes/customer_management/wallet'));
 app.use(`${baseURL}/customer/driver`, driverRoute);
 app.use(`${baseURL}/customer/ride`, rideQuoteRoute);
 app.use(`${baseURL}/customer/cart`, cartRoute);
@@ -52,70 +55,46 @@ app.use(`${baseURL}/admin/pricing`, pricingAdminRoute);
 app.use(`${baseURL}/admin/payouts`, payoutAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker-management`, require('./routes/worker_management/cash_payments'));
-app.use(`${baseURL}/worker-management`, require('./routes/worker_management/wallet'));
+// Wallet worker routes disabled
+// app.use(`${baseURL}/worker-management`, require('./routes/worker_management/wallet'));
 app.use(`${baseURL}/worker`, workerDocsRoute);
 app.use(`${baseURL}/worker/trip`, tripTrackingRoute);
-app.use(`${baseURL}/admin`, require('./routes/admin_management/wallet'));
+// Wallet admin routes disabled
+// app.use(`${baseURL}/admin`, require('./routes/admin_management/wallet'));
 app.use(`${baseURL}/chat`, chatRoute);
 
-// Create HTTP server and attach Socket.IO
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: process.env.SOCKET_CORS_ORIGIN || '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    credentials: true
-  }
-});
+// Initialize chat socket server with proper ChatService integration
+const SocketServer = require('./socketServer');
+const socketServer = new SocketServer(app);
 
-// Make io accessible in routes via req.app.get('io')
-app.set('io', io);
-
-// Socket.IO authentication and room joins
-io.use(async (socket, next) => {
+// Initialize socket server and get the HTTP server
+let server;
+(async () => {
   try {
-    const authHeader = socket.handshake.headers['authorization'];
-    const tokenFromHeader = authHeader && authHeader.startsWith('Bearer ')
-      ? authHeader.split(' ')[1]
-      : null;
-    const token = socket.handshake.auth?.token || tokenFromHeader;
-    if (!token) {
-      return next(new Error('Authentication token missing'));
-    }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.user = decoded; // { id, email, role, role_id }
+    server = await socketServer.initialize();
+    
+    // Make io accessible in routes via req.app.get('io')
+    app.set('io', socketServer.getIO());
+    app.set('chatService', socketServer.getChatService());
+    
+    console.log('✅ Chat socket server initialized with ChatService');
+    
+    // Start the server
+    const PORT = process.env.PORT || 5001;
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (with Chat Socket.IO)`));
+  } catch (error) {
+    console.error('❌ Failed to initialize chat socket server:', error);
+    // Fallback to basic HTTP server if socket initialization fails
+    server = http.createServer(app);
+    const PORT = process.env.PORT || 5001;
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (basic HTTP only)`));
+  }
+})();
 
-    // Join a per-user room for direct notifications
-    socket.join(`user:${decoded.id}`);
-
-    // If worker, attempt to join provider room as well
-    if (decoded.role === 'worker') {
-      try {
-        const [rows] = await pool.query('SELECT id FROM providers WHERE user_id = ? LIMIT 1', [decoded.id]);
-        if (rows.length) {
-          const providerId = rows[0].id;
-          socket.join(`provider:${providerId}`);
-          socket.providerId = providerId;
-        }
-      } catch (e) {
-        // Do not fail connection on provider room join failure
-      }
-    }
-
-    next();
-  } catch (err) {
-    next(new Error('Invalid or expired token'));
+// Initialize email service
+verifyTransporter().then((isReady) => {
+  if (!isReady) {
+    console.warn('⚠️  Email service not configured properly. OTP emails will not work.');
+    console.warn('Please set USER_GMAIL and USER_PASSWORD environment variables.');
   }
 });
-
-io.on('connection', (socket) => {
-  const { id: userId, role } = socket.user || {};
-  console.log(`🔌 Socket connected: user=${userId} role=${role} socket=${socket.id}`);
-
-  socket.on('disconnect', (reason) => {
-    console.log(`🔌 Socket disconnected: user=${userId} reason=${reason}`);
-  });
-});
-
-const PORT = process.env.PORT || 5001;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT} (with Socket.IO)`));

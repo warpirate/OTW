@@ -55,6 +55,19 @@ const CustomerSignup = () => {
     if (error) setError('');
   };
 
+  const handleResendVerification = async () => {
+    if (!formData.email) return;
+    try {
+      setIsLoading(true);
+      await AuthService.resendVerification(formData.email);
+      toast.success('Verification email resent. Please check your inbox.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to resend verification email');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSendOtp = async () => {
     if (signupMethod === 'phone' && formData.phone) {
       setIsLoading(true);
@@ -136,9 +149,15 @@ const CustomerSignup = () => {
       
       const response = await AuthService.register(userData);
       
-      // Registration successful
-      toast.success("Registration successful! Welcome to OMW.");
-      navigate('/'); // Redirect to home page after successful signup
+      // Registration successful - require email verification
+      if (signupMethod === 'email') {
+        toast.success('Registration successful! Please verify your email.');
+        setCurrentStep(2);
+        setIsOtpSent(true);
+      } else {
+        toast.success('Registration successful!');
+        navigate('/');
+      }
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
       setError(errorMessage);
@@ -440,47 +459,18 @@ const CustomerSignup = () => {
                     </div>
                     <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Verify Your Account</h3>
                     <p className="text-[var(--text-secondary)]">
-                      We've sent a verification code to{' '}
+                      {signupMethod === 'email' ? "We've sent a verification link to " : "We've sent a verification code to "}
                       <span className="font-medium">
                         {signupMethod === 'email' ? formData.email : formData.phone}
                       </span>
                     </p>
                   </div>
 
-                  {!isOtpSent ? (
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      className="w-full btn-brand"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? 'Sending...' : 'Send Verification Code'}
-                    </button>
-                  ) : (
-                    <>
-                      <div>
-                        <label htmlFor="otp" className="block text-sm font-medium mb-2 text-[var(--text-secondary)]">
-                          Verification Code
-                        </label>
-                        <input
-                          id="otp"
-                          name="otp"
-                          type="text"
-                          required
-                          value={formData.otp}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-3 border border-[var(--border-color)] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg tracking-widest bg-[var(--bg-primary)] text-[var(--text-primary)]"
-                          placeholder="000000"
-                          maxLength="6"
-                        />
-                        <p className="text-sm text-[var(--text-secondary)] mt-2 text-center">
-                          Didn't receive the code?{' '}
-                          <button type="button" className="text-blue-600 hover:text-blue-700">
-                            Resend
-                          </button>
-                        </p>
-                      </div>
-
+                  {signupMethod === 'email' ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-[var(--text-secondary)] text-center">
+                        Click the verification link in your email to activate your account.
+                      </p>
                       <div className="flex space-x-4">
                         <button
                           type="button"
@@ -490,14 +480,68 @@ const CustomerSignup = () => {
                           Back
                         </button>
                         <button
-                          type="submit"
+                          type="button"
+                          onClick={handleResendVerification}
                           className="flex-1 btn-brand"
                           disabled={isLoading}
                         >
-                          {isLoading ? 'Creating Account...' : 'Create Account'}
+                          {isLoading ? 'Resending...' : 'Resend Email'}
                         </button>
                       </div>
-                    </>
+                    </div>
+                  ) : (
+                    !isOtpSent ? (
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        className="w-full btn-brand"
+                        disabled={isLoading}
+                      >
+                        {isLoading ? 'Sending...' : 'Send Verification Code'}
+                      </button>
+                    ) : (
+                      <>
+                        <div>
+                          <label htmlFor="otp" className="block text-sm font-medium mb-2 text-[var(--text-secondary)]">
+                            Verification Code
+                          </label>
+                          <input
+                            id="otp"
+                            name="otp"
+                            type="text"
+                            required
+                            value={formData.otp}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-[var(--border-color)] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg tracking-widest bg-[var(--bg-primary)] text-[var(--text-primary)]"
+                            placeholder="000000"
+                            maxLength="6"
+                          />
+                          <p className="text-sm text-[var(--text-secondary)] mt-2 text-center">
+                            Didn't receive the code?{' '}
+                            <button type="button" className="text-blue-600 hover:text-blue-700">
+                              Resend
+                            </button>
+                          </p>
+                        </div>
+
+                        <div className="flex space-x-4">
+                          <button
+                            type="button"
+                            onClick={handlePrevStep}
+                            className="flex-1 py-3 px-4 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] font-medium hover:bg-[var(--bg-secondary)]"
+                          >
+                            Back
+                          </button>
+                          <button
+                            type="submit"
+                            className="flex-1 btn-brand"
+                            disabled={isLoading}
+                          >
+                            {isLoading ? 'Creating Account...' : 'Create Account'}
+                          </button>
+                        </div>
+                      </>
+                    )
                   )}
                 </>
               )}
