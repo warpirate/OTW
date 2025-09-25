@@ -161,19 +161,24 @@ router.post('/register', async (req, res) => {
 
     // Send email verification link (24h expiry)
     try {
+      console.log('📧 Preparing verification email for new user:', { userId, email, name });
       const verifyToken = jwt.sign({ id: userId, purpose: 'email_verify' }, process.env.JWT_SECRET, { expiresIn: '24h' });
       const base = process.env.FRONTEND_URL || 'http://localhost:5173';
       const verifyUrl = `${base}/verify-email?token=${verifyToken}`;
       
+      console.log('🔗 Generated verification URL:', verifyUrl);
+      console.log('📤 Sending verification email to:', email);
+      
       const emailResult = await sendVerificationEmail(email, name, verifyUrl);
       if (emailResult.success) {
-        console.log('Verification email sent successfully to:', email);
+        console.log('✅ Registration verification email sent successfully to:', email);
+        console.log('📝 Message ID:', emailResult.messageId);
       } else {
-        console.error('Failed to send verification email:', emailResult.error);
+        console.error('❌ Failed to send registration verification email:', emailResult.error);
       }
     } catch (mailErr) {
       // Don't fail registration on mail errors
-      console.warn('Email verification send failed:', mailErr.message);
+      console.warn('⚠️ Email verification send failed during registration:', mailErr.message);
     }
 
     res.status(201).json({
@@ -310,36 +315,51 @@ router.post('/verify-email', async (req, res) => {
 // Resend verification email
 router.post('/resend-verification', async (req, res) => {
   const { email } = req.body;
-  console.log(req.body);
+  console.log('📧 Resend verification request received:', req.body);
+  
   if (!email) {
+    console.log('❌ No email provided in request');
     return res.status(400).json({ message: 'Email is required' });
   }
+  
   try {
+    console.log('🔍 Looking up user with email:', email);
     const [rows] = await pool.query('SELECT id, name, email_verified FROM users WHERE email = ? LIMIT 1', [email]);
+    
     if (!rows.length) {
+      console.log('❌ User not found with email:', email);
       // To prevent enumeration
       return res.json({ success: true, message: 'If the email exists, a new verification link will be sent' });
     }
+    
     const user = rows[0];
+    console.log('👤 User found:', { id: user.id, name: user.name, email_verified: user.email_verified });
+    
     if (user.email_verified) {
+      console.log('✅ Email already verified for user:', user.id);
       return res.json({ success: true, message: 'Email already verified' });
     }
+    
+    console.log('🔑 Generating verification token for user:', user.id);
     const verifyToken = jwt.sign({ id: user.id, purpose: 'email_verify' }, process.env.JWT_SECRET, { expiresIn: '24h' });
     const base = process.env.FRONTEND_URL || 'http://localhost:5173';
     const verifyUrl = `${base}/verify-email?token=${verifyToken}`;
+    
+    console.log('📧 Attempting to send verification email to:', email);
+    console.log('🔗 Verification URL:', verifyUrl);
     
     // Send verification email with proper error handling
     const emailResult = await sendVerificationEmail(email, user.name || 'there', verifyUrl);
     
     if (emailResult.success) {
-      console.log('VERIFY EMAIL:', emailResult); 
+      console.log('✅ VERIFICATION EMAIL SENT SUCCESSFULLY:', emailResult); 
       return res.json({ success: true, message: 'Verification link resent successfully' });
     } else {
-      console.error('Failed to send verification email:', emailResult.error);
+      console.error('❌ Failed to send verification email:', emailResult.error);
       return res.status(500).json({ success: false, message: 'Failed to send verification email. Please try again.' });
     }
   } catch (err) {
-    console.error('resend-verification error:', err.message);
+    console.error('❌ resend-verification error:', err.message);
     return res.status(500).json({ message: 'Server error' });
   }
 });

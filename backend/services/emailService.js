@@ -1,41 +1,129 @@
 const nodemailer = require('nodemailer');
+require('dotenv').config();
 
-// Simple Hostinger SMTP transporter (clean version)
+// Enhanced Hostinger SMTP transporter with better configuration
 const transporter = nodemailer.createTransport({
   host: 'smtp.hostinger.com',
   port: 465,
-  secure: true,
+  secure: true, // true for 465, false for other ports
   auth: {
     user: process.env.USER_GMAIL,
     pass: process.env.USER_PASSWORD,
   },
+  // Additional settings for better reliability
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,   // 10 seconds
+  socketTimeout: 30000,     // 30 seconds
+  logger: false,             // Set to true for debugging
+  debug: false,              // Set to true for debugging
+  tls: {
+    rejectUnauthorized: false, // Accept self-signed certificates
+    minVersion: 'TLSv1.2'     // Minimum TLS version
+  },
+  pool: true,                // Use connection pooling
+  maxConnections: 5,         // Maximum simultaneous connections
+  maxMessages: 100,          // Maximum messages per connection
+  rateDelta: 1000,           // Rate limiting: 1 second
+  rateLimit: 5               // Rate limiting: 5 messages per rateDelta
 });
 
 const FROM_ADDRESS = process.env.USER_GMAIL || 'info@omwhub.com';
+const FROM_NAME = 'OTW Service';
 
-// Verify transporter configuration
+// Retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  retryDelay: 2000, // 2 seconds
+  backoffMultiplier: 2
+};
+
+// Enhanced transporter verification with detailed error reporting
 const verifyTransporter = async () => {
     try {
+        // Check if credentials are present
+        if (!process.env.USER_GMAIL || !process.env.USER_PASSWORD) {
+            console.error('❌ Email credentials missing in environment variables');
+            console.error('USER_GMAIL:', process.env.USER_GMAIL ? 'Present' : 'Missing');
+            console.error('USER_PASSWORD:', process.env.USER_PASSWORD ? 'Present' : 'Missing');
+            return false;
+        }
+
+        console.log('🔄 Verifying email transporter configuration...');
         const verified = await transporter.verify();
+        
         console.log('✅ Email service is ready', {
-          host: 'smtp.hostinger.com',
-          port: 465,
-          secure: true,
-          user: process.env.USER_GMAIL,
-          verified
+            host: 'smtp.hostinger.com',
+            port: 465,
+            secure: true,
+            user: process.env.USER_GMAIL,
+            verified,
+            timestamp: new Date().toISOString()
         });
+        
         return true;
     } catch (error) {
         console.error('❌ Email service configuration error:', {
-          message: error.message,
-          code: error.code,
-          command: error.command,
-          host: 'smtp.hostinger.com',
-          port: 465,
-          secure: true,
-          user: process.env.USER_GMAIL,
+            message: error.message,
+            code: error.code,
+            command: error.command,
+            responseCode: error.responseCode,
+            response: error.response,
+            host: 'smtp.hostinger.com',
+            port: 465,
+            secure: true,
+            user: process.env.USER_GMAIL,
+            timestamp: new Date().toISOString()
         });
+        
+        // Provide specific error guidance
+        if (error.code === 'EAUTH') {
+            console.error('🔐 Authentication failed. Please check your email credentials.');
+        } else if (error.code === 'ECONNECTION') {
+            console.error('🌐 Connection failed. Please check your network and SMTP settings.');
+        } else if (error.code === 'ETIMEDOUT') {
+            console.error('⏱️ Connection timeout. The SMTP server may be unreachable.');
+        }
+        
         return false;
+    }
+};
+
+// Retry mechanism for sending emails
+const sendMailWithRetry = async (mailOptions, retryCount = 0) => {
+    try {
+        const result = await transporter.sendMail(mailOptions);
+        console.log('✅ Email sent successfully:', {
+            messageId: result.messageId,
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            timestamp: new Date().toISOString()
+        });
+        return { success: true, messageId: result.messageId, result };
+    } catch (error) {
+        console.error(`❌ Email send attempt ${retryCount + 1} failed:`, {
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            error: error.message,
+            code: error.code,
+            responseCode: error.responseCode,
+            timestamp: new Date().toISOString()
+        });
+
+        if (retryCount < RETRY_CONFIG.maxRetries) {
+            const delay = RETRY_CONFIG.retryDelay * Math.pow(RETRY_CONFIG.backoffMultiplier, retryCount);
+            console.log(`🔄 Retrying in ${delay}ms... (Attempt ${retryCount + 2}/${RETRY_CONFIG.maxRetries + 1})`);
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return sendMailWithRetry(mailOptions, retryCount + 1);
+        }
+
+        console.error('❌ All retry attempts exhausted. Email could not be sent.');
+        return { 
+            success: false, 
+            error: error.message,
+            code: error.code,
+            attempts: retryCount + 1
+        };
     }
 };
 
@@ -154,12 +242,11 @@ Thank you for using OTW Service Platform.
             `
         };
 
-        const result = await transporter.sendMail(mailOptions);
-        console.log('✅ OTP email sent successfully:', result.messageId);
-        return {
-            success: true,
-            messageId: result.messageId
-        };
+        const result = await sendMailWithRetry(mailOptions);
+        if (result.success) {
+            console.log('✅ OTP email sent successfully:', result.messageId);
+        }
+        return result;
     } catch (error) {
         console.error('❌ Failed to send OTP email:', {
           message: error.message,
@@ -220,8 +307,8 @@ const sendServiceCompletionEmail = async (customerEmail, customerName, bookingId
             `
         };
 
-        const result = await transporter.sendMail(mailOptions);
-        return { success: true, messageId: result.messageId };
+        const result = await sendMailWithRetry(mailOptions);
+        return result;
     } catch (error) {
         console.error('Failed to send completion email:', {
           message: error.message,
@@ -232,6 +319,15 @@ const sendServiceCompletionEmail = async (customerEmail, customerName, bookingId
         return { success: false, error: error.message };
     }
 };
+
+// Initialize transporter on module load
+(async () => {
+    console.log('🚀 Initializing email service...');
+    const isReady = await verifyTransporter();
+    if (!isReady) {
+        console.warn('⚠️ Email service may not be fully operational. Emails will still attempt to send with retry mechanism.');
+    }
+})();
 
 module.exports = {
     verifyTransporter,
@@ -247,23 +343,80 @@ module.exports = {
                     address: FROM_ADDRESS
                 },
                 to: toEmail,
-                subject: 'Verify your email address',
+                subject: 'Please verify your email address - OTW Service',
+                replyTo: FROM_ADDRESS,
+                headers: {
+                    'X-Mailer': 'OTW Service Platform',
+                    'X-Priority': '1',
+                    'X-MSMail-Priority': 'High',
+                    'Importance': 'high'
+                },
                 html: `
-                    <div style="font-family: Arial, sans-serif; color: #111;">
-                      <h2>Welcome to OTW, ${toName || 'there'}!</h2>
-                      <p>Thanks for signing up. Please verify your email address by clicking the button below:</p>
-                      <p style="text-align:center; margin: 28px 0;">
-                        <a href="${verifyUrl}" style="background:#6d28d9; color:#fff; padding:12px 22px; text-decoration:none; border-radius:6px;">Verify Email</a>
-                      </p>
-                      <p>If the button doesn't work, copy and paste this link into your browser:</p>
-                      <p style="word-break: break-all; color:#555;">${verifyUrl}</p>
-                      <p style="color:#777; font-size: 12px;">If you did not create an account, you can safely ignore this email.</p>
-                    </div>
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Verify Your Email - OTW Service</title>
+                    </head>
+                    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+                            <tr>
+                                <td align="center">
+                                    <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                                        <tr>
+                                            <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center;">
+                                                <h1 style="margin: 0; font-size: 28px; font-weight: bold;">Welcome to OTW!</h1>
+                                                <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your trusted service platform</p>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 40px 30px;">
+                                                <h2 style="color: #333; margin: 0 0 20px 0; font-size: 24px;">Hello ${toName || 'there'}!</h2>
+                                                
+                                                <p style="color: #666; line-height: 1.6; margin: 0 0 25px 0; font-size: 16px;">
+                                                    Thank you for creating an account with OTW Service Platform. To complete your registration and start using our services, please verify your email address.
+                                                </p>
+                                                
+                                                <div style="text-align: center; margin: 35px 0;">
+                                                    <a href="${verifyUrl}" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold; font-size: 16px;">Verify My Email Address</a>
+                                                </div>
+                                                
+                                                <div style="background: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; margin: 25px 0;">
+                                                    <p style="margin: 0; color: #666; font-size: 14px;">
+                                                        <strong>Can't click the button?</strong><br>
+                                                        Copy and paste this link into your browser:
+                                                    </p>
+                                                    <p style="word-break: break-all; color: #667eea; margin: 10px 0 0 0; font-size: 14px;">${verifyUrl}</p>
+                                                </div>
+                                                
+                                                <div style="border-top: 1px solid #eee; padding-top: 25px; margin-top: 35px;">
+                                                    <p style="color: #999; font-size: 14px; margin: 0; text-align: center;">
+                                                        This verification link will expire in 24 hours for security reasons.<br>
+                                                        If you didn't create an account with OTW, you can safely ignore this email.
+                                                    </p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="background: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #eee;">
+                                                <p style="margin: 0; color: #999; font-size: 12px;">
+                                                    © 2024 OTW Service Platform. All rights reserved.<br>
+                                                    This is an automated message, please do not reply to this email.
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </body>
+                    </html>
                 `,
                 text: `Welcome to OTW!\n\nPlease verify your email by visiting: ${verifyUrl}\n\nIf you did not create an account, you can ignore this email.`
             };
-            const result = await transporter.sendMail(mailOptions);
-            return { success: true, messageId: result.messageId };
+            const result = await sendMailWithRetry(mailOptions);
+            return result;
         } catch (error) {
             console.error('Failed to send verification email:', {
               message: error.message,
@@ -321,8 +474,8 @@ module.exports = {
                 text: `Password Reset Request\n\nHello ${toName || 'there'},\n\nYou requested to reset your password for your OTW Service account.\n\nPlease visit this link to reset your password: ${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this reset, you can safely ignore this email.\n\nBest regards,\nThe OTW Service Team`
             };
             
-            const result = await transporter.sendMail(mailOptions);
-            return { success: true, messageId: result.messageId };
+            const result = await sendMailWithRetry(mailOptions);
+            return result;
         } catch (error) {
             console.error('Failed to send password reset email:', {
               message: error.message,
@@ -334,5 +487,50 @@ module.exports = {
         }
     },
     
-    transporter
+    transporter,
+    
+    // Test email function for debugging
+    sendTestEmail: async (toEmail) => {
+        try {
+            console.log('📧 Sending test email to:', toEmail);
+            
+            const mailOptions = {
+                from: {
+                    name: FROM_NAME,
+                    address: FROM_ADDRESS
+                },
+                to: toEmail,
+                subject: 'OTW Email Service Test',
+                html: `
+                    <div style="font-family: Arial, sans-serif; padding: 20px;">
+                        <h2>🎉 Email Service Test Successful!</h2>
+                        <p>This is a test email from your OTW application.</p>
+                        <p>If you're receiving this, your email configuration is working correctly.</p>
+                        <hr>
+                        <p style="color: #666; font-size: 12px;">
+                            Sent from: ${FROM_ADDRESS}<br>
+                            Timestamp: ${new Date().toISOString()}<br>
+                            SMTP Host: smtp.hostinger.com<br>
+                            Port: 465 (SSL/TLS)
+                        </p>
+                    </div>
+                `,
+                text: `Email Service Test\n\nThis is a test email from your OTW application.\nIf you're receiving this, your email configuration is working correctly.\n\nSent from: ${FROM_ADDRESS}\nTimestamp: ${new Date().toISOString()}`
+            };
+            
+            const result = await sendMailWithRetry(mailOptions);
+            
+            if (result.success) {
+                console.log('✅ Test email sent successfully!');
+                console.log('Message ID:', result.messageId);
+            } else {
+                console.error('❌ Test email failed:', result.error);
+            }
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Test email error:', error);
+            return { success: false, error: error.message };
+        }
+    }
 };
