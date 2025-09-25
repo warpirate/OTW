@@ -21,7 +21,7 @@ import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import AuthService from '../services/auth.service';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
-import { ChatWindow } from '../../components/Chat';
+import { CustomerChatWindow } from '../../components/Chat';
 import { toast } from 'react-toastify';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
@@ -956,7 +956,7 @@ const ServiceTracking = () => {
       {showChat && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="w-full max-w-4xl h-[80vh] mx-4">
-            <ChatWindow
+            <CustomerChatWindow
               bookingId={bookingId}
               onClose={() => setShowChat(false)}
               isOpen={showChat}

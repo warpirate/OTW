@@ -88,12 +88,12 @@ const ChatInput = ({
     }, []);
 
     return (
-        <div className="flex items-end gap-2 p-4 bg-white border-t border-gray-200">
+        <div className="flex items-end gap-2 p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
             {/* File Upload Button */}
             <button
                 onClick={handleFileClick}
                 disabled={disabled}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 text-purple-600 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Attach file"
             >
                 <Paperclip className="h-5 w-5" />
@@ -103,7 +103,7 @@ const ChatInput = ({
             <button
                 onClick={handleImageClick}
                 disabled={disabled}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 text-purple-600 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Send image"
             >
                 <Image className="h-5 w-5" />
@@ -118,7 +118,7 @@ const ChatInput = ({
                     placeholder={placeholder}
                     disabled={disabled}
                     rows={1}
-                    className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
                     style={{
                         minHeight: '48px',
                         maxHeight: '120px',
@@ -131,7 +131,7 @@ const ChatInput = ({
                 />
                 
                 {/* Character Count */}
-                <div className="absolute bottom-1 right-2 text-xs text-gray-400">
+                <div className="absolute bottom-1 right-2 text-xs text-gray-400 dark:text-gray-500">
                     {message.length}/{maxLength}
                 </div>
             </div>
@@ -140,7 +140,7 @@ const ChatInput = ({
             <button
                 onClick={handleSend}
                 disabled={disabled || !message.trim()}
-                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 text-purple-600 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Send message"
             >
                 <Send className="h-5 w-5" />
@@ -151,7 +151,7 @@ const ChatInput = ({
                 ref={fileInputRef}
                 type="file"
                 onChange={handleFileSelect}
-                className="hidden"
+                className="hidden dark:bg-gray-800"
                 accept="*/*"
             />
             <input

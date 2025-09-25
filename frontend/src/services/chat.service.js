@@ -71,11 +71,12 @@ class ChatService {
         if (!this.socket) return;
 
         this.socket.on('connect', () => {
-            console.log('Chat socket connected');
+            console.log('Chat socket connected successfully');
             this.isConnected = true;
             this.emitConnectionEvent('connected');
             // Flush any pending messages
             if (this.pendingMessages.length > 0) {
+                console.log(`Flushing ${this.pendingMessages.length} pending messages`);
                 this.pendingMessages.forEach((msg) => {
                     this.socket.emit('send_message', msg);
                 });
@@ -187,12 +188,12 @@ class ChatService {
         if (this.isConnected) {
             this.socket.emit('join_chat', { sessionId });
             // also request history when joining
-            this.getChatHistory(sessionId);
+            this.getChatHistoryViaSocket(sessionId);
         } else {
             // join once connected
             this.socket.once('connect', () => {
                 this.socket.emit('join_chat', { sessionId });
-                this.getChatHistory(sessionId);
+                this.getChatHistoryViaSocket(sessionId);
             });
             try { this.socket.connect(); } catch (_) {}
         }
@@ -205,7 +206,11 @@ class ChatService {
     }
 
     sendMessage(sessionId, content, messageType = 'text', fileData = null) {
-        if (!this.socket) return;
+        if (!this.socket) {
+            console.error('Socket not initialized, cannot send message');
+            throw new Error('Socket not initialized');
+        }
+        
         const messageData = {
             sessionId,
             content,
@@ -218,12 +223,22 @@ class ChatService {
             messageData.fileSize = fileData.size;
         }
 
+        console.log('Sending message:', messageData);
+
         if (this.isConnected) {
+            console.log('Socket connected, emitting message');
             this.socket.emit('send_message', messageData);
         } else {
+            console.log('Socket not connected, queuing message');
             // Queue until connected
             this.pendingMessages.push(messageData);
-            try { this.socket.connect(); } catch (_) {}
+            try { 
+                console.log('Attempting to reconnect socket');
+                this.socket.connect(); 
+            } catch (connectError) {
+                console.error('Failed to reconnect socket:', connectError);
+                throw connectError;
+            }
         }
     }
 
@@ -239,13 +254,13 @@ class ChatService {
         }
     }
 
-    markMessagesAsRead(sessionId, messageIds = []) {
+    markMessagesAsReadViaSocket(sessionId, messageIds = []) {
         if (this.socket && this.isConnected) {
             this.socket.emit('mark_read', { sessionId, messageIds });
         }
     }
 
-    getChatHistory(sessionId, limit = 50, offset = 0) {
+    getChatHistoryViaSocket(sessionId, limit = 50, offset = 0) {
         if (this.socket && this.isConnected) {
             this.socket.emit('get_chat_history', { sessionId, limit, offset });
         }
@@ -291,7 +306,7 @@ class ChatService {
     async markMessagesAsRead(sessionId, messageIds = []) {
         try {
             const response = await this.apiClient.put(
-                `${this.baseURL}/sessions/${sessionId}/messages/read`,
+                `/sessions/${sessionId}/messages/read`,
                 { messageIds }
             );
             return response.data;
@@ -307,7 +322,7 @@ class ChatService {
             formData.append('file', file);
 
             const response = await this.apiClient.post(
-                `${this.baseURL}/upload`,
+                `/upload`,
                 formData,
                 {
                     headers: {
@@ -372,6 +387,27 @@ class ChatService {
             return response.data;
         } catch (error) {
             console.error('Error deleting chat data:', error);
+            throw error;
+        }
+    }
+
+    async sendMessageViaRest(sessionId, content, messageType = 'text', fileData = null) {
+        try {
+            const messageData = {
+                content,
+                messageType
+            };
+
+            if (fileData) {
+                messageData.fileUrl = fileData.url;
+                messageData.fileName = fileData.name;
+                messageData.fileSize = fileData.size;
+            }
+
+            const response = await this.apiClient.post(`/sessions/${sessionId}/messages`, messageData);
+            return response.data;
+        } catch (error) {
+            console.error('Error sending message via REST:', error);
             throw error;
         }
     }

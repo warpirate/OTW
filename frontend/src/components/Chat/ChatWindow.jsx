@@ -5,6 +5,7 @@ import ChatInput from './ChatInput';
 import chatService from '../../services/chat.service';
 import AuthService from '../../app/services/auth.service';
 import './ChatWindow.css';
+import { isDarkMode as getIsDarkMode, addThemeListener } from '../../app/utils/themeUtils';
 
 // CSS classes will be used instead of styled components
 
@@ -15,7 +16,10 @@ const ChatWindow = ({
     onError,
     provider = null,
     customer = null,
-    booking = null
+    booking = null,
+    // New props to explicitly control role/participant from wrappers
+    forceRole = null,
+    otherParticipantOverride = null
 }) => {
     const [messages, setMessages] = useState([]);
     const [sessionId, setSessionId] = useState(null);
@@ -28,10 +32,28 @@ const ChatWindow = ({
     const [error, setError] = useState(null);
     const [isOnline, setIsOnline] = useState(false);
     const [lastSeen, setLastSeen] = useState(null);
+    const [isDark, setIsDark] = useState(() => {
+        try {
+            const attrDark = getIsDarkMode();
+            const classDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
+            const savedPref = localStorage.getItem('prefersDarkMode') === 'true';
+            return attrDark || classDark || savedPref;
+        } catch {
+            return getIsDarkMode();
+        }
+    });
     
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const socketRef = useRef(null);
+    const historyPollRef = useRef(null);
+
+    // Local theme listener so dark mode works in both customer and worker apps
+    useEffect(() => {
+        setIsDark(getIsDarkMode());
+        const cleanup = addThemeListener((dark) => setIsDark(dark));
+        return cleanup;
+    }, []);
 
     // Scroll to bottom when new messages arrive
     const scrollToBottom = useCallback(() => {
@@ -59,7 +81,8 @@ const ChatWindow = ({
             });
 
             // Ensure chat requests use the correct role token
-            chatService.activeRole = user.role;
+            const effectiveRole = forceRole || user.role;
+            chatService.activeRole = effectiveRole;
 
             // Create or get existing chat session (do NOT error if not yet available)
             let sessionIdResp;
@@ -73,12 +96,23 @@ const ChatWindow = ({
                     const existing = sessions.find(s => s.bookingId === Number(bookingId) || s.bookingId === bookingId);
                     if (!existing) {
                         // No session yet (booking likely not accepted). Render header + placeholder, keep input disabled.
+                        // Still set booking info from provided props so UI can reflect completed state
+                        setBookingInfo({ 
+                            id: bookingId,
+                            service: booking?.service_name || 'Service',
+                            status: booking?.service_status || booking?.status || 'pending'
+                        });
                         setIsLoading(false);
                         return;
                     }
                     sessionIdResp = { sessionId: existing.sessionId };
                 } catch (sessionsError) {
                     // Gracefully render placeholder if sessions endpoint not yet available
+                    setBookingInfo({ 
+                        id: bookingId,
+                        service: booking?.service_name || 'Service',
+                        status: booking?.service_status || booking?.status || 'pending'
+                    });
                     setIsLoading(false);
                     return;
                 }
@@ -92,27 +126,37 @@ const ChatWindow = ({
                 const sessionDetails = await chatService.getChatSessionDetails(actualSessionId);
                 const session = sessionDetails.session;
                 
+                console.log('Session details received:', session);
+                console.log('Customer prop passed:', customer);
+                console.log('Provider prop passed:', provider);
+                console.log('User role:', user.role);
+                
                 setBookingInfo({ 
                     id: bookingId,
-                    service: session.serviceName || 'Service',
-                    status: session.serviceStatus || 'pending'
+                    service: session.serviceName || session.service_name || 'Service',
+                    status: session.serviceStatus || session.service_status || 'pending'
                 });
 
                 // Determine the other participant based on the authenticated user's role
-                if (user.role === 'customer') {
+                if (otherParticipantOverride) {
+                    setOtherParticipant(otherParticipantOverride);
+                } else if (effectiveRole === 'customer') {
                     setOtherParticipant({
-                        id: session.provider?.id,
-                        name: session.provider?.name || 'Service Provider',
+                        id: session.provider?.id || provider?.id,
+                        name: session.provider?.name || provider?.name || 'Service Provider',
                         avatar: null,
-                        phone: session.provider?.phone
+                        phone: session.provider?.phone || provider?.phone
                     });
-                } else {
-                    setOtherParticipant({
-                        id: session.customer?.id,
-                        name: session.customer?.name || 'Customer',
-                        avatar: null,
-                        phone: session.customer?.phone
-                    });
+                } else if (effectiveRole === 'worker' || effectiveRole === 'provider') {
+                    // Prioritize customer prop data over session data for worker view
+                    const customerData = {
+                        id: customer?.id || session.customer?.id,
+                        name: customer?.name || session.customer?.name || 'Customer',
+                        avatar: customer?.avatar || null,
+                        phone: customer?.phone || session.customer?.phone
+                    };
+                    console.log('Setting other participant (customer) for worker:', customerData);
+                    setOtherParticipant(customerData);
                 }
 
                 // Load chat history
@@ -134,27 +178,32 @@ const ChatWindow = ({
                     status: booking?.service_status || 'pending'
                 });
 
-                if (user.role === 'customer') {
+                if (otherParticipantOverride) {
+                    setOtherParticipant(otherParticipantOverride);
+                } else if (effectiveRole === 'customer') {
                     setOtherParticipant({
                         id: provider?.id || 'provider',
                         name: provider?.name || 'Service Provider',
                         avatar: provider?.avatar || null,
                         phone: provider?.phone || null
                     });
-                } else {
-                    setOtherParticipant({
+                } else if (effectiveRole === 'worker' || effectiveRole === 'provider') {
+                    // Always prioritize customer prop data for worker view
+                    const customerData = {
                         id: customer?.id || 'customer',
                         name: customer?.name || 'Customer',
                         avatar: customer?.avatar || null,
                         phone: customer?.phone || null
-                    });
+                    };
+                    console.log('Using fallback customer data for worker:', customerData);
+                    setOtherParticipant(customerData);
                 }
                 setMessages([]);
             }
 
             // Initialize socket connection
             try {
-                const token = AuthService.getToken(user.role);
+                const token = AuthService.getToken(forceRole || user.role);
                 if (token) {
                     chatService.initializeSocket(token);
                 }
@@ -199,14 +248,23 @@ const ChatWindow = ({
 
             // Handle incoming messages
             chatService.onMessage('new_message', (newMessage) => {
+                console.log('Received new message:', newMessage);
                 const formattedMessage = chatService.formatMessage(newMessage);
                 setMessages(prev => {
                     // Remove any optimistic temp messages that match this real message
-                    const withoutTemps = prev.filter(msg => !(msg.isTemp && msg.content === formattedMessage.content && msg.senderId === formattedMessage.senderId));
+                    const withoutTemps = prev.filter(msg => {
+                        if (msg.isTemp && msg.content === formattedMessage.content && String(msg.senderId) === String(formattedMessage.senderId)) {
+                            console.log('Removing temp message:', msg.id);
+                            return false;
+                        }
+                        return true;
+                    });
                     // Skip if this message already exists (deduplication)
-                    if (withoutTemps.some(msg => msg.id === formattedMessage.id)) {
+                    if (withoutTemps.some(msg => String(msg.id) === String(formattedMessage.id))) {
+                        console.log('Message already exists, skipping:', formattedMessage.id);
                         return withoutTemps;
                     }
+                    console.log('Adding new message:', formattedMessage.id);
                     return [...withoutTemps, formattedMessage];
                 });
                 scrollToBottom();
@@ -291,19 +349,23 @@ const ChatWindow = ({
             try {
                 chatService.sendMessage(sessionId, messageText.trim());
                 
-                // If socket send succeeds, remove temp message and let real message come through
-                setTimeout(() => {
-                    setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id));
-                }, 100);
+                // Don't remove temp message immediately - let the real message replace it
+                // The new_message handler will handle deduplication
                 
             } catch (socketError) {
                 console.warn('Socket send failed, trying REST API:', socketError);
                 
                 // Fallback to REST API
                 try {
-                    // For now, we'll keep the temp message since we don't have a REST endpoint for sending
-                    // In a real implementation, you'd call a REST API to save the message
-                    console.log('Message sent via fallback method');
+                    const response = await chatService.sendMessageViaRest(sessionId, messageText.trim());
+                    if (response.success && response.message) {
+                        // Replace temp message with real message
+                        const realMessage = chatService.formatMessage(response.message);
+                        setMessages(prev => prev.map(msg => 
+                            msg.id === tempMessage.id ? realMessage : msg
+                        ));
+                        console.log('Message sent via REST fallback');
+                    }
                 } catch (restError) {
                     console.error('Both socket and REST send failed:', restError);
                     // Remove temp message on failure
@@ -370,6 +432,59 @@ const ChatWindow = ({
         }
     }, [sessionId, connectToChat]);
 
+    // REST polling fallback: periodically refresh history when socket is not connected
+    useEffect(() => {
+        const startPolling = () => {
+            if (historyPollRef.current) return;
+            historyPollRef.current = setInterval(async () => {
+                try {
+                    if (!sessionId) return;
+                    // Only poll when socket is not connected
+                    if (chatService && !chatService.isSocketConnected()) {
+                        const history = await chatService.getChatHistory(sessionId, 50, 0);
+                        const formatted = history.messages.map(m => chatService.formatMessage(m));
+                        // Merge without duplicating
+                        setMessages(prev => {
+                            const byId = new Map(prev.map(m => [String(m.id), m]));
+                            formatted.forEach(m => {
+                                byId.set(String(m.id), m);
+                            });
+                            const merged = Array.from(byId.values()).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                            return merged;
+                        });
+                    }
+                } catch (e) {
+                    // silent fail for polling
+                }
+            }, 3000);
+        };
+
+        const stopPolling = () => {
+            if (historyPollRef.current) {
+                clearInterval(historyPollRef.current);
+                historyPollRef.current = null;
+            }
+        };
+
+        if (sessionId) {
+            if (!chatService.isSocketConnected()) {
+                startPolling();
+            } else {
+                stopPolling();
+            }
+        }
+
+        // Also listen to socket connection changes via connection handlers
+        const onConnected = () => stopPolling();
+        const onDisconnected = () => startPolling();
+        chatService.onConnection('connected', onConnected);
+        chatService.onConnection('disconnected', onDisconnected);
+
+        return () => {
+            stopPolling();
+        };
+    }, [sessionId]);
+
     // Scroll to bottom when messages change
     useEffect(() => {
         scrollToBottom();
@@ -401,12 +516,15 @@ const ChatWindow = ({
         return null;
     }
 
+    const containerBase = "flex flex-col h-full max-h-screen relative shadow-lg rounded-lg border";
+    const themeClasses = isDark ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200";
+
     if (isLoading) {
         return (
-            <div className="flex flex-col h-full max-h-screen bg-white relative shadow-lg rounded-lg border border-gray-200">
+            <div className={`${isDark ? 'dark ' : ''}${containerBase} ${themeClasses}`}>
                 <div className="flex justify-center items-center h-48 flex-col gap-4">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                    <p className="text-sm text-gray-600">Loading chat...</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Loading chat...</p>
                 </div>
             </div>
         );
@@ -414,13 +532,13 @@ const ChatWindow = ({
 
     if (error && !sessionId) {
         return (
-            <div className="flex flex-col h-full max-h-screen bg-white relative shadow-lg rounded-lg border border-gray-200">
+            <div className={`${isDark ? 'dark ' : ''}${containerBase} ${themeClasses}`}>
                 <div className="p-6">
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded flex items-center justify-between">
+                    <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded flex items-center justify-between">
                         <span>{error}</span>
                         <button 
                             onClick={loadChatSession}
-                            className="text-red-700 underline cursor-pointer"
+                            className="text-red-700 dark:text-red-300 underline cursor-pointer"
                         >
                             Retry
                         </button>
@@ -430,10 +548,16 @@ const ChatWindow = ({
         );
     }
 
+    // Prefer override participant when provided for header and bubbles
+    const participantForUI = otherParticipantOverride || otherParticipant;
+
+    const isCustomer = (forceRole || currentUser?.role || '').toString().toLowerCase() === 'customer';
+    const isCompleted = (bookingInfo?.status || '').toString().toLowerCase() === 'completed';
+
     return (
-        <div className="flex flex-col h-full max-h-screen bg-white relative shadow-lg rounded-lg border border-gray-200">
+        <div className={`${isDark ? 'dark ' : ''}${containerBase} ${themeClasses}`}>
             <ChatHeader
-                otherParticipant={otherParticipant}
+                otherParticipant={participantForUI}
                 bookingInfo={bookingInfo}
                 isOnline={isConnected}
                 lastSeen={lastSeen}
@@ -447,54 +571,58 @@ const ChatWindow = ({
 
             <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1 scrollbar-thin chat-message-container">
                 {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-48 text-gray-500 gap-2">
-                        <h6 className="text-lg font-medium">{sessionId ? 'No messages yet' : 'Chat not active yet'}</h6>
+                    <div className="flex flex-col items-center justify-center h-48 text-gray-500 dark:text-gray-400 gap-2">
+                        <h6 className="text-lg font-medium">{isCompleted ? 'Chat closed' : (sessionId ? 'No messages yet' : 'Chat not active yet')}</h6>
                         <p className="text-sm">
-                            {sessionId ? 'Start the conversation by sending a message' : 'Chat will be available once the job is accepted/assigned.'}
+                            {isCompleted 
+                                ? 'This conversation has been closed because the job was completed.' 
+                                : (sessionId ? 'Start the conversation by sending a message' : 'Chat will be available once the job is accepted/assigned.')}
                         </p>
                     </div>
                 ) : (
                     messages.map((message, index) => {
                         const isOwn = String(message.senderId) === String(currentUser?.id);
-                        const showAvatar = index === 0 || 
-                            messages[index - 1]?.senderId !== message.senderId;
-                        
+                        const showAvatar = index === 0 || messages[index - 1]?.senderId !== message.senderId;
                         return (
                             <MessageBubble
                                 key={message.id}
                                 message={message}
                                 isOwn={isOwn}
                                 showAvatar={showAvatar}
-                                otherParticipant={otherParticipant}
+                                otherParticipant={participantForUI}
                             />
                         );
                     })
                 )}
-
-                {isTyping && (
-                    <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500">
-                        <span>{otherParticipant?.name} is typing...</span>
-                    </div>
-                )}
-
-                <div ref={messagesEndRef} />
             </div>
+
+            {isCompleted && (
+                <div className="px-4 py-2 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-center">
+                    Chat is closed after job completion. You can no longer send messages.
+                </div>
+            )}
+
+            {isTyping && (
+                <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                    <span>{participantForUI?.name} is typing...</span>
+                </div>
+            )}
 
             <ChatInput
                 onSendMessage={handleSendMessage}
                 onSendFile={handleSendFile}
                 onTyping={handleTyping}
-                disabled={!sessionId}
+                disabled={!sessionId || (isCustomer && isCompleted)}
                 placeholder="Type a message..."
             />
 
             {error && (
-                <div className="fixed bottom-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50">
+                <div className="fixed bottom-4 right-4 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded z-50">
                     <div className="flex items-center justify-between">
                         <span>{error}</span>
                         <button 
                             onClick={() => setError(null)}
-                            className="ml-2 text-red-700 font-bold"
+                            className="ml-2 text-red-700 dark:text-red-300 font-bold"
                         >
                             ×
                         </button>

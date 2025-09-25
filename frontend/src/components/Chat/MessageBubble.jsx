@@ -67,7 +67,7 @@ const MessageBubble = ({
                         />
                         {message.content && (
                             <div className={`mt-2 text-sm leading-relaxed ${
-                                isOwn ? 'text-white' : 'text-gray-900'
+                                isOwn ? 'text-white' : 'text-gray-900 dark:text-gray-100'
                             }`}>
                                 {message.content}
                             </div>
@@ -80,21 +80,21 @@ const MessageBubble = ({
                     <div>
                         <div 
                             onClick={handleFileClick}
-                            className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100"
+                            className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                         >
-                            <Paperclip className="h-5 w-5 text-purple-600" />
+                            <Paperclip className="h-5 w-5 text-purple-600 dark:text-purple-300" />
                             <div>
-                                <div className="text-sm font-medium text-gray-900">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {message.fileName}
                                 </div>
-                                <div className="text-xs text-gray-500">
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
                                     {formatFileSize(message.fileSize)}
                                 </div>
                             </div>
                         </div>
                         {message.content && (
                             <div className={`mt-2 text-sm leading-relaxed ${
-                                isOwn ? 'text-white' : 'text-gray-900'
+                                isOwn ? 'text-white' : 'text-gray-900 dark:text-gray-100'
                             }`}>
                                 {message.content}
                             </div>
@@ -114,7 +114,7 @@ const MessageBubble = ({
             default:
                 return (
                     <div className={`text-sm leading-relaxed ${
-                        isOwn ? 'text-white' : 'text-gray-900'
+                        isOwn ? 'text-white' : 'text-gray-900 dark:text-gray-100'
                     }`}>
                         {message.content}
                     </div>
@@ -125,7 +125,7 @@ const MessageBubble = ({
     return (
         <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} items-end mb-2 gap-2`}>
             {!isOwn && showAvatar && (
-                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center flex-shrink-0">
                     {otherParticipant?.avatar ? (
                         <img 
                             src={otherParticipant.avatar} 
@@ -133,7 +133,7 @@ const MessageBubble = ({
                             className="w-8 h-8 rounded-full object-cover"
                         />
                     ) : (
-                        <span className="text-purple-600 font-semibold text-sm">
+                        <span className="text-purple-600 dark:text-purple-300 font-semibold text-sm">
                             {otherParticipant?.name?.charAt(0)?.toUpperCase()}
                         </span>
                     )}
@@ -141,20 +141,21 @@ const MessageBubble = ({
             )}
             
             {!isOwn && !showAvatar && (
-                <div className="w-8" /> // Spacer for alignment
+                <div className="w-8" />
+                /* Spacer for alignment */
             )}
 
             <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} max-w-[70%]`}>
                 <div className={`px-4 py-2 rounded-2xl message-bubble ${
                     isOwn 
                         ? 'bg-purple-600 text-white rounded-br-md' 
-                        : 'bg-gray-100 text-gray-900 rounded-bl-md'
-                } ${message.messageType === 'image' ? 'p-2 bg-transparent shadow-none' : 'shadow-sm'}`}>
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md'
+                } ${message.messageType === 'image' ? 'p-2 bg-transparent shadow-none' : 'shadow-sm dark:shadow-black/20'}`}>
                     {renderMessageContent()}
                 </div>
 
                 <div className={`flex items-center gap-1 mt-1 text-xs ${
-                    isOwn ? 'text-purple-200' : 'text-gray-500'
+                    isOwn ? 'text-purple-200 dark:text-purple-300' : 'text-gray-500 dark:text-gray-400'
                 }`}>
                     <span>{formatTime(message.createdAt || message.timestamp || new Date())}</span>
                     {isOwn && (

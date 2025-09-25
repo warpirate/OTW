@@ -373,6 +373,37 @@ router.post('/end', verifyToken, async (req, res) => {
       [final_status, finalFareData.final_fare, booking_id]
     );
 
+    // If the job is completed, clean up chat data for this booking
+    if (final_status === 'completed') {
+      try {
+        const [chatSessions] = await connection.query(
+          'SELECT id FROM chat_sessions WHERE booking_id = ? LIMIT 1',
+          [booking_id]
+        );
+        if (chatSessions.length) {
+          // Try stored procedures
+          try { await connection.query('CALL sp_end_chat_session(?)', [booking_id]); } catch (_) {}
+          try { await connection.query('CALL sp_delete_chat_data(?)', [booking_id]); } catch (spErr) {
+            // Fallback manual cleanup
+            await connection.query(
+              'DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE booking_id = ?)',
+              [booking_id]
+            );
+            await connection.query(
+              'DELETE FROM chat_participants WHERE session_id IN (SELECT id FROM chat_sessions WHERE booking_id = ?)',
+              [booking_id]
+            );
+            await connection.query(
+              "UPDATE chat_sessions SET session_status = 'ended', last_message_at = NOW() WHERE booking_id = ?",
+              [booking_id]
+            );
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('Chat cleanup warning (trip end):', cleanupErr?.message || cleanupErr);
+      }
+    }
+
     await connection.commit();
 
     // Emit Socket.IO event to notify customer

@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
-const jwt = require('jsonwebtoken');
+const verifyToken = require('../middlewares/verify_token');
+const { generateOTP, sendOTPEmail } = require('../../services/emailService');
 const bcrypt = require('bcrypt');
 
 /**
@@ -413,9 +414,6 @@ class WorkerService {
   }
 }
 
-const verifyToken = require('../middlewares/verify_token');
-const authorizeRole = require('../middlewares/authorizeRole');
-
 /**
  * Worker Registration Route
  */
@@ -773,21 +771,22 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.duration,
           b.cost_type,
           b.subcategory_id,
-          b.rating,
-          b.review,
-          b.rating_submitted_at,
+          r.rating as ride_rating,
+          r.review as ride_review,
+          r.created_at as ride_rating_submitted_at,
           u.name as customer_name,
           u.phone_number as customer_phone,
           s.name as service_name,
           s.description as service_description,
           sc.name as category_name
         FROM booking_requests br
-        LEFT JOIN bookings b ON br.booking_id = b.id
+        INNER JOIN bookings b ON br.booking_id = b.id
         INNER JOIN users u ON b.user_id = u.id
         LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
         LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
         LEFT JOIN subcategories s ON b.subcategory_id = s.id
         LEFT JOIN service_categories sc ON s.category_id = sc.id
+        LEFT JOIN ratings r ON b.id = r.booking_id
         WHERE br.provider_id = ?
       `;
 
@@ -855,9 +854,9 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.duration,
           b.cost_type,
           b.subcategory_id,
-          b.rating,
-          b.review,
-          b.rating_submitted_at,
+          r.rating as ride_rating,
+          r.review as ride_review,
+          r.created_at as ride_rating_submitted_at,
           u.name as customer_name,
           u.phone_number as customer_phone,
           s.name as service_name,
@@ -870,6 +869,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
         LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
         LEFT JOIN subcategories s ON b.subcategory_id = s.id
         LEFT JOIN service_categories sc ON s.category_id = sc.id
+        LEFT JOIN ratings r ON b.id = r.booking_id
         WHERE br.provider_id = ?
       `;
 
@@ -1450,12 +1450,13 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
     // Get rating and reviews count (from actual bookings)
     const [ratingResult] = await pool.query(
       `SELECT 
-        COALESCE(AVG(b.rating), 0) AS average_rating,
-        COUNT(b.rating) AS rating_count
-       FROM bookings b
-       WHERE b.provider_id = ? 
-       AND b.rating IS NOT NULL
-       AND b.service_status = 'completed'`,
+        COALESCE(AVG(r.rating), 0) AS average_rating,
+        COUNT(r.id) AS rating_count
+       FROM ratings r
+       INNER JOIN bookings b ON b.id = r.booking_id
+       WHERE r.ratee_type = 'provider'
+         AND r.ratee_id = ?
+         AND b.service_status = 'completed'`,
       [providerId]
     );
 
@@ -1492,533 +1493,7 @@ router.get('/worker/dashboard-stats', verifyToken, async (req, res) => {
   }
 });
 
-/**
- * PUT /bookings/:bookingId/status - Update booking status (Worker)
- */
-router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
-  const { bookingId } = req.params;
-  const { status, location } = req.body; // Added location parameter
-  const { id: user_id, role } = req.user;
-
-  if (role !== 'worker') {
-    return res.status(403).json({ message: 'Only workers can update booking status' });
-  }
-
-  const validStatuses = ['started', 'en_route', 'arrived', 'in_progress', 'completed', 'cancelled'];
-  if (!validStatuses.includes(status)) {
-    return res.status(400).json({ 
-      message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
-    });
-  }
-
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Verify the worker is assigned to this booking
-    const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.provider_id, b.service_status, b.customer_id
-      FROM bookings b
-      WHERE b.id = ? AND b.booking_type != 'ride'
-    `, [bookingId]);
-
-    if (!bookingCheck.length) {
-      await connection.rollback();
-      return res.status(404).json({ message: 'Service booking not found' });
-    }
-
-    const booking = bookingCheck[0];
-
-    // Get provider_id for this worker
-    const [providerData] = await connection.query(
-      'SELECT id FROM providers WHERE user_id = ?',
-      [user_id]
-    );
-
-    if (!providerData.length) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'Worker profile not found' });
-    }
-
-    const provider_id = providerData[0].id;
-
-    if (booking.provider_id !== provider_id) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'You are not assigned to this booking' });
-    }
-
-    // Validate status transition
-    const currentStatus = booking.service_status;
-    const validTransitions = {
-      'assigned': ['started', 'cancelled'],
-      'accepted': ['started', 'cancelled'],
-      'started': ['en_route', 'arrived', 'cancelled'],
-      'en_route': ['arrived', 'cancelled'],
-      'arrived': ['in_progress', 'cancelled'],
-      'in_progress': ['completed', 'cancelled'],
-      'completed': [],
-      'cancelled': []
-    };
-
-    if (!validTransitions[currentStatus]?.includes(status)) {
-      await connection.rollback();
-      return res.status(400).json({ 
-        message: `Cannot transition from ${currentStatus} to ${status}` 
-      });
-    }
-
-    // Special validation for completion status
-    if (status === 'completed') {
-      // Check if payment is required and has been completed
-      const [paymentCheck] = await connection.query(`
-        SELECT 
-          cash_payment_id,
-          upi_payment_method_id,
-          payment_status,
-          CASE 
-            WHEN cash_payment_id IS NOT NULL THEN 'pay_after_service'
-            WHEN upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
-            ELSE 'pay_after_service'
-          END as payment_method
-        FROM bookings 
-        WHERE id = ?
-      `, [bookingId]);
-
-      if (paymentCheck.length > 0) {
-        const { payment_method, payment_status, upi_payment_method_id } = paymentCheck[0];
-        
-        // If payment method is UPI and not paid, prevent completion
-        if (payment_method === 'UPI Payment' && payment_status !== 'paid') {
-          await connection.rollback();
-          return res.status(400).json({ 
-            message: 'Cannot complete service. Payment is required before completion.',
-            requires_payment: true,
-            payment_method: payment_method
-          });
-        }
-      }
-    }
-
-    // Update booking status
-    await connection.query(
-      'UPDATE bookings SET service_status = ?, updated_at = NOW() WHERE id = ?',
-      [status, bookingId]
-    );
-
-    // Update worker location if provided
-    if (location && location.latitude && location.longitude) {
-      // Update provider's current location
-      await connection.query(
-        'UPDATE providers SET location_lat = ?, location_lng = ?, last_active_at = NOW() WHERE id = ?',
-        [location.latitude, location.longitude, provider_id]
-      );
-
-      // Store location history for tracking
-      await connection.query(
-        `INSERT INTO worker_location_history (provider_id, booking_id, latitude, longitude, accuracy, heading, speed, status, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-        [
-          provider_id,
-          bookingId,
-          location.latitude,
-          location.longitude,
-          location.accuracy || null,
-          location.heading || null,
-          location.speed || null,
-          status
-        ]
-      );
-    }
-
-    // Generate OTP when arrived
-    if (status === 'arrived') {
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      await connection.query(
-        'UPDATE bookings SET otp_code = ? WHERE id = ?',
-        [otp, bookingId]
-      );
-    }
-
-    await connection.commit();
-
-    // Emit Socket.IO event to notify customer
-    try {
-      const io = req.app.get('io');
-      if (io) {
-        const statusUpdateData = {
-          booking_id: bookingId,
-          status: status,
-          message: `Status updated to ${status}`,
-          timestamp: new Date().toISOString()
-        };
-
-        // Include location data if available
-        if (location && location.latitude && location.longitude) {
-          statusUpdateData.worker_location = {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            accuracy: location.accuracy,
-            heading: location.heading,
-            speed: location.speed,
-            timestamp: new Date().toISOString()
-          };
-        }
-
-        io.to(`booking_${bookingId}`).emit('status_update', statusUpdateData);
-        
-        // Also emit location update separately for real-time tracking
-        if (location && location.latitude && location.longitude) {
-          io.to(`booking_${bookingId}`).emit('worker_location_update', {
-            booking_id: bookingId,
-            latitude: location.latitude,
-            longitude: location.longitude,
-            accuracy: location.accuracy,
-            heading: location.heading,
-            speed: location.speed,
-            timestamp: new Date().toISOString()
-          });
-        }
-
-        // Send OTP to customer when arrived
-        if (status === 'arrived') {
-          const [otpResult] = await connection.query(
-            'SELECT otp_code FROM bookings WHERE id = ?',
-            [bookingId]
-          );
-          if (otpResult.length > 0) {
-            io.to(`booking_${bookingId}`).emit('otp_code', {
-              booking_id: bookingId,
-              otp: otpResult[0].otp_code
-            });
-          }
-        }
-      }
-    } catch (socketError) {
-      console.error('Socket error in status update:', socketError);
-      // Don't fail the request if socket fails
-    }
-
-    res.json({ 
-      success: true, 
-      message: `Status updated to ${status}`,
-      status: status
-    });
-
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error updating booking status:', error);
-    res.status(500).json({ message: 'Server error while updating booking status' });
-  } finally {
-    connection.release();
-  }
-});
-
-/**
- * POST /bookings/:bookingId/location - Update worker location (Real-time tracking)
- */
-router.post('/bookings/:bookingId/location', verifyToken, async (req, res) => {
-  const { bookingId } = req.params;
-  const { latitude, longitude, accuracy, heading, speed } = req.body;
-  const { id: user_id, role } = req.user;
-
-  if (role !== 'worker') {
-    return res.status(403).json({ message: 'Only workers can update location' });
-  }
-
-  if (!latitude || !longitude) {
-    return res.status(400).json({ message: 'Latitude and longitude are required' });
-  }
-
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Verify the worker is assigned to this booking
-    const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.provider_id, b.service_status, b.customer_id
-      FROM bookings b
-      WHERE b.id = ? AND b.booking_type != 'ride'
-    `, [bookingId]);
-
-    if (!bookingCheck.length) {
-      await connection.rollback();
-      return res.status(404).json({ message: 'Service booking not found' });
-    }
-
-    const booking = bookingCheck[0];
-
-    // Get provider_id for this worker
-    const [providerData] = await connection.query(
-      'SELECT id FROM providers WHERE user_id = ?',
-      [user_id]
-    );
-
-    if (!providerData.length) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'Worker profile not found' });
-    }
-
-    const provider_id = providerData[0].id;
-
-    if (booking.provider_id !== provider_id) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'You are not assigned to this booking' });
-    }
-
-    // Update provider's current location
-    await connection.query(
-      'UPDATE providers SET location_lat = ?, location_lng = ?, last_active_at = NOW() WHERE id = ?',
-      [latitude, longitude, provider_id]
-    );
-
-    // Store location history for tracking
-    await connection.query(
-      `INSERT INTO worker_location_history (provider_id, booking_id, latitude, longitude, accuracy, heading, speed, status, created_at) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [
-        provider_id,
-        bookingId,
-        latitude,
-        longitude,
-        accuracy || null,
-        heading || null,
-        speed || null,
-        booking.service_status
-      ]
-    );
-
-    await connection.commit();
-
-    // Emit real-time location update to customer
-    try {
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`booking_${bookingId}`).emit('worker_location_update', {
-          booking_id: bookingId,
-          latitude: latitude,
-          longitude: longitude,
-          accuracy: accuracy,
-          heading: heading,
-          speed: speed,
-          timestamp: new Date().toISOString()
-        });
-      }
-    } catch (socketError) {
-      console.error('Socket error in location update:', socketError);
-      // Don't fail the request if socket fails
-    }
-
-    res.json({ 
-      success: true, 
-      message: 'Location updated successfully',
-      location: {
-        latitude,
-        longitude,
-        accuracy,
-        heading,
-        speed,
-        timestamp: new Date().toISOString()
-      }
-    });
-
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error updating worker location:', error);
-    res.status(500).json({ message: 'Server error while updating location' });
-  } finally {
-    connection.release();
-  }
-});
-
-/**
- * POST /bookings/:bookingId/generate-otp - Generate OTP for customer
- */
-router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) => {
-  const { bookingId } = req.params;
-  const { id: user_id, role } = req.user;
-
-  if (role !== 'worker') {
-    return res.status(403).json({ message: 'Only workers can generate OTP' });
-  }
-
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Verify the worker is assigned to this booking
-    const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.provider_id, b.service_status, b.customer_id
-      FROM bookings b
-      WHERE b.id = ? AND b.booking_type != 'ride'
-    `, [bookingId]);
-
-    if (!bookingCheck.length) {
-      await connection.rollback();
-      return res.status(404).json({ message: 'Service booking not found' });
-    }
-
-    const booking = bookingCheck[0];
-
-    // Get provider_id for this worker
-    const [providerData] = await connection.query(
-      'SELECT id FROM providers WHERE user_id = ?',
-      [user_id]
-    );
-
-    if (!providerData.length) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'Worker profile not found' });
-    }
-
-    const provider_id = providerData[0].id;
-
-    if (booking.provider_id !== provider_id) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'You are not assigned to this booking' });
-    }
-
-    // Check if booking is in arrived status
-    if (booking.service_status !== 'arrived') {
-      await connection.rollback();
-      return res.status(400).json({ message: 'Booking must be in arrived status to generate OTP' });
-    }
-
-    // Generate new OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await connection.query(
-      'UPDATE bookings SET otp_code = ?, updated_at = NOW() WHERE id = ?',
-      [otp, bookingId]
-    );
-
-    await connection.commit();
-
-    // Emit Socket.IO event to send OTP to customer
-    try {
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`booking_${bookingId}`).emit('otp_code', {
-          booking_id: bookingId,
-          otp: otp,
-          message: 'Your service provider has arrived. Please share this OTP with them.'
-        });
-      }
-    } catch (socketError) {
-      console.error('Socket error in OTP generation:', socketError);
-    }
-
-    res.json({ 
-      success: true, 
-      message: 'OTP generated and sent to customer successfully.'
-    });
-
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error generating OTP:', error);
-    res.status(500).json({ message: 'Server error while generating OTP' });
-  } finally {
-    connection.release();
-  }
-});
-
-/**
- * POST /bookings/:bookingId/verify-otp - Verify OTP from customer
- */
-router.post('/bookings/:bookingId/verify-otp', verifyToken, async (req, res) => {
-  const { bookingId } = req.params;
-  const { otp } = req.body;
-  const { id: user_id, role } = req.user;
-
-  if (role !== 'worker') {
-    return res.status(403).json({ message: 'Only workers can verify OTP' });
-  }
-
-  if (!otp || otp.length !== 6) {
-    return res.status(400).json({ message: 'Invalid OTP format' });
-  }
-
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-
-    // Verify the worker is assigned to this booking
-    const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.provider_id, b.service_status, b.otp_code
-      FROM bookings b
-      WHERE b.id = ? AND b.booking_type != 'ride'
-    `, [bookingId]);
-
-    if (!bookingCheck.length) {
-      await connection.rollback();
-      return res.status(404).json({ message: 'Service booking not found' });
-    }
-
-    const booking = bookingCheck[0];
-
-    // Get provider_id for this worker
-    const [providerData] = await connection.query(
-      'SELECT id FROM providers WHERE user_id = ?',
-      [user_id]
-    );
-
-    if (!providerData.length) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'Worker profile not found' });
-    }
-
-    const provider_id = providerData[0].id;
-
-    if (booking.provider_id !== provider_id) {
-      await connection.rollback();
-      return res.status(403).json({ message: 'You are not assigned to this booking' });
-    }
-
-    // Check if booking is in arrived status
-    if (booking.service_status !== 'arrived') {
-      await connection.rollback();
-      return res.status(400).json({ message: 'Booking is not in arrived status' });
-    }
-
-    // Verify OTP
-    if (booking.otp_code !== otp) {
-      await connection.rollback();
-      return res.status(400).json({ message: 'Invalid OTP' });
-    }
-
-    // Update status to in_progress
-    await connection.query(
-      'UPDATE bookings SET service_status = ?, updated_at = NOW() WHERE id = ?',
-      ['in_progress', bookingId]
-    );
-
-    await connection.commit();
-
-    // Emit Socket.IO event to notify customer
-    try {
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`booking_${bookingId}`).emit('status_update', {
-          booking_id: bookingId,
-          status: 'in_progress',
-          message: 'Service has started'
-        });
-      }
-    } catch (socketError) {
-      console.error('Socket error in OTP verification:', socketError);
-    }
-
-    res.json({ 
-      success: true, 
-      message: 'OTP verified successfully. Service started.'
-    });
-
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error verifying OTP:', error);
-    res.status(500).json({ message: 'Server error while verifying OTP' });
-  } finally {
-    connection.release();
-  }
-});
+// ...
 
 /**
  * GET /bookings/:bookingId - Get booking details for worker
@@ -2052,10 +1527,12 @@ router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
         u.name as customer_name,
         u.phone_number as customer_phone,
         u.email as customer_email,
-        sb.address,
-        b.rating,
-        b.review,
-        b.rating_submitted_at,
+        COALESCE(sb.address, CONCAT(rb.pickup_address, ' → ', rb.drop_address)) as address,
+        COALESCE(s.name, 'Driver Booking') as service_name,
+        COALESCE(s.description, 'Driver transportation service') as service_description,
+        r.rating,
+        r.review,
+        r.created_at as rating_submitted_at,
         CASE 
           WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
           WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
@@ -2063,8 +1540,11 @@ router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
         END as payment_method
       FROM bookings b
       LEFT JOIN users u ON b.user_id = u.id
-      LEFT JOIN service_bookings sb ON b.id = sb.booking_id
-      WHERE b.id = ? AND b.provider_id = ? AND b.booking_type != 'ride'
+      LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
+      LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
+      LEFT JOIN subcategories s ON b.subcategory_id = s.id
+      LEFT JOIN ratings r ON r.booking_id = b.id AND r.ratee_type = 'provider' AND r.ratee_id = b.provider_id
+      WHERE b.id = ? AND b.provider_id = ?
     `, [bookingId, provider_id]);
 
     if (!bookingResult.length) {
@@ -2114,6 +1594,581 @@ router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching booking details:', error);
     res.status(500).json({ message: 'Server error while fetching booking details' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * PUT /bookings/:bookingId/status - Update booking status (Worker)
+ */
+router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { status } = req.body;
+  const { id: user_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can update booking status' });
+  }
+
+  const validStatuses = ['started', 'arrived', 'in_progress', 'completed', 'cancelled'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Verify the worker is assigned to this booking
+    const [bookingRows] = await connection.query(
+      `SELECT b.id, b.provider_id, b.user_id as customer_id, b.booking_type, b.service_status
+       FROM bookings b
+       WHERE b.id = ?`,
+      [bookingId]
+    );
+
+    if (!bookingRows.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Get provider_id for this worker
+    const [providerData] = await connection.query(
+      'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+      [user_id]
+    );
+
+    if (!providerData.length) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'Worker profile not found' });
+    }
+
+    const provider_id = providerData[0].id;
+    const booking = bookingRows[0];
+
+    if (booking.provider_id !== provider_id) {
+      await connection.rollback();
+      return res.status(403).json({ message: 'You are not assigned to this booking' });
+    }
+
+    // Update booking status
+    await connection.query(
+      'UPDATE bookings SET service_status = ? WHERE id = ?',
+      [status, bookingId]
+    );
+
+    // If job is completed, clean up chat data for this booking
+    if (status === 'completed') {
+      try {
+        // Check if a chat session exists for this booking
+        const [chatSessions] = await connection.query(
+          'SELECT id FROM chat_sessions WHERE booking_id = ? LIMIT 1',
+          [bookingId]
+        );
+
+        if (chatSessions.length) {
+          // Try stored procedures first
+          try {
+            await connection.query('CALL sp_end_chat_session(?)', [bookingId]);
+          } catch (_) {
+            // ignore if SP missing
+          }
+          try {
+            await connection.query('CALL sp_delete_chat_data(?)', [bookingId]);
+          } catch (spErr) {
+            // Fallback manual cleanup
+            await connection.query(
+              'DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE booking_id = ?)',
+              [bookingId]
+            );
+            await connection.query(
+              'DELETE FROM chat_participants WHERE session_id IN (SELECT id FROM chat_sessions WHERE booking_id = ?)',
+              [bookingId]
+            );
+            await connection.query(
+              "UPDATE chat_sessions SET session_status = 'ended', last_message_at = NOW() WHERE booking_id = ?",
+              [bookingId]
+            );
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('Chat cleanup warning (worker status):', cleanupErr?.message || cleanupErr);
+      }
+    }
+
+    await connection.commit();
+
+    // Emit socket events to customer and provider rooms
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        // Generic status broadcast to booking room
+        io.to(`booking_${bookingId}`).emit('status_update', { booking_id: Number(bookingId), status });
+
+        // Customer specific events for DriverBooking.jsx
+        if (status === 'started') {
+          io.to(`booking_${bookingId}`).emit('trip_started', { booking_id: Number(bookingId) });
+        } else if (status === 'arrived') {
+          io.to(`booking_${bookingId}`).emit('driver_arrived', { booking_id: Number(bookingId) });
+        } else if (status === 'in_progress') {
+          // Send a neutral progress update; front-end may render a spinner/progress
+          io.to(`booking_${bookingId}`).emit('trip_progress', { booking_id: Number(bookingId), progress: 10, eta: null });
+        } else if (status === 'completed') {
+          io.to(`booking_${bookingId}`).emit('trip_completed', { booking_id: Number(bookingId), final_fare: null });
+        }
+
+        // Notify the assigned provider room too (optional)
+        io.to(`provider:${provider_id}`).emit('booking_status_updated', { booking_id: Number(bookingId), status });
+
+        // Notify the customer user channel (optional)
+        if (booking.customer_id) {
+          io.to(`user:${booking.customer_id}`).emit('booking_status_updated', { booking_id: Number(bookingId), status });
+        }
+      }
+    } catch (socketErr) {
+      // Log socket errors but do not fail the API
+      console.error('Socket emit error (status update):', socketErr.message);
+    }
+
+    return res.json({ success: true, message: 'Status updated', status });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error updating booking status:', error);
+    return res.status(500).json({ message: 'Server error while updating booking status' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /send-otp-email - Send OTP via email to customer for service verification
+ */
+router.post('/send-otp-email', verifyToken, async (req, res) => {
+  const { booking_id } = req.body;
+  const { id: worker_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can send OTP emails' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get booking details with customer information
+    const [bookingDetails] = await connection.query(`
+      SELECT 
+        b.id, b.user_id AS customer_id, b.service_status, b.otp_code, b.otp_expires_at,
+        u.name as customer_name, u.email as customer_email,
+        wu.name as worker_name,
+        sc.name as service_name,
+        p.id as provider_id
+      FROM bookings b
+      JOIN providers p ON b.provider_id = p.id
+      JOIN users u ON b.user_id = u.id
+      JOIN users wu ON p.user_id = wu.id
+      LEFT JOIN subcategories sc ON b.subcategory_id = sc.id
+      WHERE b.id = ? AND p.user_id = ? AND b.booking_type != 'ride'
+    `, [booking_id, worker_id]);
+
+    if (!bookingDetails.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Booking not found or not assigned to you' });
+    }
+
+    const booking = bookingDetails[0];
+
+    // Check if booking is in arrived status
+    if (booking.service_status !== 'arrived') {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Booking must be in arrived status to send OTP' });
+    }
+
+    // Check if customer has email
+    if (!booking.customer_email) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Customer email not found. Cannot send OTP.' });
+    }
+
+    // Check if OTP was sent recently (prevent spam)
+    const now = new Date();
+    if (booking.otp_expires_at && new Date(booking.otp_expires_at) > now) {
+      const timeLeft = Math.ceil((new Date(booking.otp_expires_at) - now) / 60000);
+      await connection.rollback();
+      return res.status(429).json({ 
+        message: `Please wait ${timeLeft} minutes before requesting a new OTP` 
+      });
+    }
+
+    // Generate new OTP and set expiration (15 minutes)
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    
+    await connection.query(
+      'UPDATE bookings SET otp_code = ?, otp_expires_at = ?, updated_at = NOW() WHERE id = ?',
+      [otp, expiresAt, booking_id]
+    );
+
+    await connection.commit();
+
+    // Send OTP email to customer
+    const emailResult = await sendOTPEmail(
+      booking.customer_email,
+      booking.customer_name,
+      otp,
+      booking.worker_name,
+      booking_id,
+      booking.service_name || 'Service'
+    );
+
+    if (emailResult.success) {
+      res.json({ 
+        success: true, 
+        message: `OTP sent successfully to ${booking.customer_email}`,
+        customer_email: booking.customer_email,
+        expires_at: expiresAt.toISOString()
+      });
+    } else {
+      // If email fails, we should remove the OTP from database
+      await pool.query(
+        'UPDATE bookings SET otp_code = NULL, otp_expires_at = NULL WHERE id = ?',
+        [booking_id]
+      );
+      
+      res.status(500).json({ 
+        success: false,
+        message: 'Failed to send OTP email. Please try again.',
+        error: emailResult.error
+      });
+    }
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error sending OTP email:', error);
+    res.status(500).json({ message: 'Server error while sending OTP email' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /verify-otp - Verify OTP provided by customer and complete service
+ */
+router.post('/verify-otp', verifyToken, async (req, res) => {
+  const { booking_id, otp_code } = req.body;
+  const { id: worker_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can verify OTP' });
+  }
+
+  if (!otp_code || otp_code.length !== 6) {
+    return res.status(400).json({ message: 'Please provide a valid 6-digit OTP' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get booking details with OTP information
+    const [bookingDetails] = await connection.query(`
+      SELECT 
+        b.id, b.user_id AS customer_id, b.service_status, b.otp_code, b.otp_expires_at,
+        u.name as customer_name, u.email as customer_email,
+        wu.name as worker_name,
+        sc.name as service_name,
+        p.id as provider_id
+      FROM bookings b
+      JOIN providers p ON b.provider_id = p.id
+      JOIN users u ON b.user_id = u.id
+      JOIN users wu ON p.user_id = wu.id
+      LEFT JOIN subcategories sc ON b.subcategory_id = sc.id
+      WHERE b.id = ? AND p.user_id = ? AND b.booking_type != 'ride'
+    `, [booking_id, worker_id]);
+
+    if (!bookingDetails.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Booking not found or not assigned to you' });
+    }
+
+    const booking = bookingDetails[0];
+
+    // Check if booking is in arrived status
+    if (booking.service_status !== 'arrived') {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Booking must be in arrived status to verify OTP' });
+    }
+
+    // Check if OTP exists
+    if (!booking.otp_code) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'No OTP found. Please generate OTP first.' });
+    }
+
+    // Check if OTP has expired
+    const now = new Date();
+    if (!booking.otp_expires_at || new Date(booking.otp_expires_at) < now) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+    }
+
+    // Verify OTP
+    if (booking.otp_code !== otp_code) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Invalid OTP. Please check and try again.' });
+    }
+
+    // OTP is valid - update booking status to in_progress and clear OTP
+    await connection.query(
+      'UPDATE bookings SET service_status = ?, otp_code = NULL, otp_expires_at = NULL, service_started_at = NOW(), updated_at = NOW() WHERE id = ?',
+      ['in_progress', booking_id]
+    );
+
+    await connection.commit();
+
+    // Emit socket events
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`booking_${booking_id}`).emit('status_update', { 
+          booking_id: Number(booking_id), 
+          status: 'in_progress',
+          message: 'Service verification completed. Service has started.'
+        });
+        io.to(`booking_${booking_id}`).emit('trip_started', { booking_id: Number(booking_id) });
+      }
+    } catch (socketErr) {
+      console.error('Socket emit error (OTP verification):', socketErr.message);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'OTP verified successfully. Service has started.',
+      status: 'in_progress'
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({ message: 'Server error while verifying OTP' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /bookings/:bookingId/generate-otp - Generate and send OTP to customer (booking-specific route)
+ */
+router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { id: worker_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can generate OTP' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get booking details with customer information
+    const [bookingDetails] = await connection.query(`
+      SELECT 
+        b.id, b.user_id AS customer_id, b.service_status, b.otp_code, b.otp_expires_at,
+        u.name as customer_name, u.email as customer_email,
+        wu.name as worker_name,
+        sc.name as service_name,
+        p.id as provider_id
+      FROM bookings b
+      JOIN providers p ON b.provider_id = p.id
+      JOIN users u ON b.user_id = u.id
+      JOIN users wu ON p.user_id = wu.id
+      LEFT JOIN subcategories sc ON b.subcategory_id = sc.id
+      WHERE b.id = ? AND p.user_id = ? 
+    `, [bookingId, worker_id]);
+
+    if (!bookingDetails.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Booking not found or not assigned to you' });
+    }
+
+    const booking = bookingDetails[0];
+
+    // Check if booking is in arrived status
+    if (booking.service_status !== 'arrived') {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Booking must be in arrived status to generate OTP' });
+    }
+
+    // Check if customer has email
+    if (!booking.customer_email) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Customer email not found. Cannot send OTP.' });
+    }
+
+    // Check if OTP was sent recently (prevent spam)
+    const now = new Date();
+    if (booking.otp_expires_at && new Date(booking.otp_expires_at) > now) {
+      const timeLeft = Math.ceil((new Date(booking.otp_expires_at) - now) / 60000);
+      await connection.rollback();
+      return res.status(429).json({ 
+        message: `Please wait ${timeLeft} minutes before requesting a new OTP` 
+      });
+    }
+
+    // Generate new OTP and set expiration (15 minutes)
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+    
+    await connection.query(
+      'UPDATE bookings SET otp_code = ?, otp_expires_at = ?, updated_at = NOW() WHERE id = ?',
+      [otp, expiresAt, bookingId]
+    );
+
+    await connection.commit();
+
+    // Send OTP email to customer
+    const emailResult = await sendOTPEmail(
+      booking.customer_email,
+      booking.customer_name,
+      otp,
+      booking.worker_name,
+      bookingId,
+      booking.service_name || 'Service'
+    );
+
+    if (emailResult.success) {
+      res.json({ 
+        success: true, 
+        message: `OTP sent successfully to ${booking.customer_email}`,
+        customer_email: booking.customer_email,
+        expires_at: expiresAt.toISOString()
+      });
+    } else {
+      // If email fails, we should remove the OTP from database
+      await pool.query(
+        'UPDATE bookings SET otp_code = NULL, otp_expires_at = NULL WHERE id = ?',
+        [bookingId]
+      );
+      
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send OTP email. Please try again.' 
+      });
+    }
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error generating OTP:', error);
+    res.status(500).json({ message: 'Server error while generating OTP' });
+  } finally {
+    connection.release();
+  }
+});
+
+/**
+ * POST /bookings/:bookingId/verify-otp - Verify OTP provided by customer (booking-specific route)
+ */
+router.post('/bookings/:bookingId/verify-otp', verifyToken, async (req, res) => {
+  const { bookingId } = req.params;
+  const { otp } = req.body;
+  const { id: worker_id, role } = req.user;
+
+  if (role !== 'worker') {
+    return res.status(403).json({ message: 'Only workers can verify OTP' });
+  }
+
+  if (!otp || otp.length !== 6) {
+    return res.status(400).json({ message: 'Please provide a valid 6-digit OTP' });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get booking details with OTP information
+    const [bookingDetails] = await connection.query(`
+      SELECT 
+        b.id, b.user_id AS customer_id, b.service_status, b.otp_code, b.otp_expires_at,
+        u.name as customer_name, u.email as customer_email,
+        wu.name as worker_name,
+        sc.name as service_name,
+        p.id as provider_id
+      FROM bookings b
+      JOIN providers p ON b.provider_id = p.id
+      JOIN users u ON b.user_id = u.id
+      JOIN users wu ON p.user_id = wu.id
+      LEFT JOIN subcategories sc ON b.subcategory_id = sc.id
+      WHERE b.id = ? AND p.user_id = ? AND b.booking_type != 'ride'
+    `, [bookingId, worker_id]);
+
+    if (!bookingDetails.length) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Booking not found or not assigned to you' });
+    }
+
+    const booking = bookingDetails[0];
+
+    // Check if booking is in arrived status
+    if (booking.service_status !== 'arrived') {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Booking must be in arrived status to verify OTP' });
+    }
+
+    // Check if OTP exists
+    if (!booking.otp_code) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'No OTP found. Please generate OTP first.' });
+    }
+
+    // Check if OTP has expired
+    const now = new Date();
+    if (!booking.otp_expires_at || new Date(booking.otp_expires_at) < now) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'OTP has expired. Please request a new one.' });
+    }
+
+    // Verify OTP
+    if (booking.otp_code !== otp) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Invalid OTP. Please check and try again.' });
+    }
+
+    // OTP is valid - update booking status to in_progress and clear OTP
+    await connection.query(
+      'UPDATE bookings SET service_status = ?, otp_code = NULL, otp_expires_at = NULL, service_started_at = NOW(), updated_at = NOW() WHERE id = ?',
+      ['in_progress', bookingId]
+    );
+
+    await connection.commit();
+
+    // Emit socket events
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`booking_${bookingId}`).emit('status_update', { 
+          booking_id: Number(bookingId), 
+          status: 'in_progress',
+          message: 'Service verification completed. Service has started.'
+        });
+        io.to(`booking_${bookingId}`).emit('trip_started', { booking_id: Number(bookingId) });
+      }
+    } catch (socketErr) {
+      console.error('Socket emit error (OTP verification):', socketErr.message);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'OTP verified successfully. Service has started.',
+      booking_id: Number(bookingId),
+      status: 'in_progress'
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({ message: 'Server error while verifying OTP' });
   } finally {
     connection.release();
   }

@@ -75,23 +75,7 @@ const AuthService = {
       };
       
       const response = await authClient.post('/register', registerData);
-      if (response.data.token) {
-        // Make sure the user object has a role property
-        const user = response.data.user;
-        if (!user.role && userData.role_id) {
-          // Map role_id to role string if needed
-          const roleMap = {
-            1: 'customer',
-            2: 'worker',
-            3: 'admin',
-            4: 'super admin'
-          };
-          user.role = roleMap[userData.role_id] || 'customer';
-        }
-        
-        // Use the store tokens helper
-        AuthService._storeTokens(response.data.token, user);
-      }
+      // Do NOT auto-login after registration; require email verification
       return response.data;
     } catch (error) {
       throw error;
@@ -153,6 +137,16 @@ const AuthService = {
   verifyEmail: async (token) => {
     try {
       const response = await authClient.post('/verify-email', { token });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Resend verification email
+  resendVerification: async (email) => {
+    try {
+      const response = await authClient.post('/resend-verification', { email });
       return response.data;
     } catch (error) {
       throw error;

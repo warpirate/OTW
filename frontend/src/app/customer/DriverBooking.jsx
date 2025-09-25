@@ -356,18 +356,19 @@ const DriverBooking = () => {
   // Search for nearby drivers
   const searchNearbyDrivers = useCallback(async () => {
     if (!pickupLocation.selected) return;
-    
+
     try {
       setSearchingDrivers(true);
-      const response = await DriverService.searchNearbyDrivers({
+      const response = await DriverService.search.available({
         pickup: {
-          lat: pickupLocation.selected.lat,
-          lng: pickupLocation.selected.lon
+          lat: parseFloat(pickupLocation.selected.lat),
+          lng: parseFloat(pickupLocation.selected.lon)
         }
       });
-      
+      console.log('Nearby drivers response:', response);
+
       setNearbyDrivers(response.drivers || []);
-      
+
       if (response.drivers?.length > 0) {
         toast.success(`Found ${response.drivers.length} nearby drivers`);
         // Simulate driver assignment after 3-8 seconds
@@ -617,11 +618,46 @@ const DriverBooking = () => {
       toast.info('Searching for nearby drivers...');
     } catch (error) {
       console.error('Error creating booking:', error);
-      if (error.response?.status === 400 && error.response?.data?.message?.includes('quote')) {
+      
+      // Handle specific error codes from backend
+      const errorCode = error.response?.data?.error_code;
+      const errorMessage = error.response?.data?.message;
+      const retryAfter = error.response?.data?.retry_after;
+      
+      if (errorCode === 'NO_DRIVERS_AVAILABLE') {
+        toast.error(errorMessage || 'No available drivers in your area at the moment.');
+        setTripStatus('no_drivers');
+        setNearbyDrivers([]);
+        setSearchingDrivers(false);
+        
+        // Show retry option after specified time
+        if (retryAfter) {
+          setTimeout(() => {
+            toast.info('You can try booking again now.');
+          }, retryAfter * 1000);
+        }
+      } else if (errorCode === 'SERVICE_TIMEOUT') {
+        toast.error(errorMessage || 'Service temporarily unavailable. Please try again later.');
+        setTripStatus('service_timeout');
+        
+        // Auto-retry after specified time
+        if (retryAfter) {
+          setTimeout(() => {
+            toast.info('Service is available again. You can retry your booking.');
+          }, retryAfter * 1000);
+        }
+      } else if (error.response?.status === 400 && errorMessage?.includes('quote')) {
         toast.error('Quote has expired. Generating new quote...');
         generateQuote();
+      } else if (error.response?.status === 503) {
+        // Service unavailable - likely due to database timeouts
+        toast.error('No available drivers at the moment. Please try again later.');
+        setTripStatus('no_drivers');
+        setNearbyDrivers([]);
+        setSearchingDrivers(false);
       } else {
-        toast.error(error.response?.data?.message || 'Failed to create booking.');
+        toast.error(errorMessage || 'Failed to create booking.');
+        setTripStatus('booking_failed');
       }
     } finally {
       setLoading(false);
@@ -1074,18 +1110,103 @@ const DriverBooking = () => {
               {/* Trip Status Display for non-searching states */}
               {tripStatus !== 'searching' && (
                 <div className="text-center py-8">
-                  <div className={`text-lg font-semibold mb-2 ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}>
-                    Trip Status: {tripStatus}
-            </div>
-                  <p className={`${
-                darkMode ? 'text-gray-400' : 'text-gray-600'
-              }`}>
-                    Your ride details will appear here
-                  </p>
-              </div>
-            )}
+                  {tripStatus === 'no_drivers' && (
+                    <div className="space-y-4">
+                      <div className="flex justify-center">
+                        <XCircle className="h-16 w-16 text-red-500" />
+                      </div>
+                      <div className={`text-lg font-semibold ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        No Drivers Available
+                      </div>
+                      <p className={`${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        There are no available drivers in your area at the moment. Please try again later or choose a different location.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setTripStatus('searching');
+                          setCurrentQuote(null);
+                          setFareBreakdown(null);
+                        }}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+                  {tripStatus === 'service_timeout' && (
+                    <div className="space-y-4">
+                      <div className="flex justify-center">
+                        <AlertTriangle className="h-16 w-16 text-yellow-500" />
+                      </div>
+                      <div className={`text-lg font-semibold ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        Service Temporarily Unavailable
+                      </div>
+                      <p className={`${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        Our service is experiencing high demand. Please try again in a few moments.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setTripStatus('searching');
+                          setCurrentQuote(null);
+                          setFareBreakdown(null);
+                        }}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+                  {tripStatus === 'booking_failed' && (
+                    <div className="space-y-4">
+                      <div className="flex justify-center">
+                        <XCircle className="h-16 w-16 text-red-500" />
+                      </div>
+                      <div className={`text-lg font-semibold ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        Booking Failed
+                      </div>
+                      <p className={`${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        We couldn't process your booking. Please try again.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setTripStatus('searching');
+                          setCurrentQuote(null);
+                          setFareBreakdown(null);
+                        }}
+                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+                  {!['no_drivers', 'service_timeout', 'booking_failed'].includes(tripStatus) && (
+                    <div>
+                      <div className={`text-lg font-semibold mb-2 ${
+                        darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        Trip Status: {tripStatus}
+                      </div>
+                      <p className={`${
+                        darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        Your ride details will appear here
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
                 </div>
               </div>
             </div>

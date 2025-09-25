@@ -96,3 +96,22 @@
     background: #718096;
   }
 }
+
+/* Dark mode support (class-based: Tailwind 'dark' class on html/body) */
+.dark .chat-message-container {
+  scrollbar-color: #4b5563 #1f2937; /* thumb track */
+}
+
+.dark .chat-message-container::-webkit-scrollbar-track {
+  background: #1f2937; /* gray-800 */
+  border-radius: 3px;
+}
+
+.dark .chat-message-container::-webkit-scrollbar-thumb {
+  background: #4b5563; /* gray-600 */
+  border-radius: 3px;
+}
+
+.dark .chat-message-container::-webkit-scrollbar-thumb:hover {
+  background: #6b7280; /* gray-500 */
+}

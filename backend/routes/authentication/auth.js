@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../../config/db');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../../services/emailService');
 require('dotenv').config();
 
 // ------------------------
@@ -25,6 +26,14 @@ router.post('/login', async (req, res) => {
     }
 
     const user = users[0];
+
+    // Enforce email verification for email/password login (customers only)
+    if (role && role.toLowerCase() === 'customer' && !user.email_verified) {
+      return res.status(403).json({
+        message: 'Please verify your email address before logging in. Check your inbox or request a new link.',
+        code: 'EMAIL_NOT_VERIFIED'
+      });
+    }
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -120,7 +129,7 @@ router.post('/register', async (req, res) => {
 
     // Insert into users
     const [userResult] = await pool.query(
-      'INSERT INTO users (name, email, password, phone_number, is_active, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      'INSERT INTO users (name, email, password, phone_number, is_active, email_verified, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())',
       [name, email, hashedPassword, phone_number, 1]
     );
 
@@ -138,7 +147,7 @@ router.post('/register', async (req, res) => {
       [userId]
     );
 
-    // Create JWT
+    // Create auth JWT
     const token = jwt.sign(
       {
         id: userId,
@@ -150,6 +159,23 @@ router.post('/register', async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRATION }
     );
 
+    // Send email verification link (24h expiry)
+    try {
+      const verifyToken = jwt.sign({ id: userId, purpose: 'email_verify' }, process.env.JWT_SECRET, { expiresIn: '24h' });
+      const base = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const verifyUrl = `${base}/verify-email?token=${verifyToken}`;
+      
+      const emailResult = await sendVerificationEmail(email, name, verifyUrl);
+      if (emailResult.success) {
+        console.log('Verification email sent successfully to:', email);
+      } else {
+        console.error('Failed to send verification email:', emailResult.error);
+      }
+    } catch (mailErr) {
+      // Don't fail registration on mail errors
+      console.warn('Email verification send failed:', mailErr.message);
+    }
+
     res.status(201).json({
       token,
       user: {
@@ -159,7 +185,8 @@ router.post('/register', async (req, res) => {
         phone_number,
         role: 'customer',
         role_id
-      }
+      },
+      email_verification_sent: true
     });
 
   } catch (err) {
@@ -261,10 +288,59 @@ router.post('/verify-email', async (req, res) => {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // TODO: Mark email as verified in database
-    res.json({ success: true, message: 'Email verified successfully' });
+    const userId = decoded.id;
+    // Optional guard: check token purpose when present
+    if (decoded.purpose && decoded.purpose !== 'email_verify') {
+      return res.status(400).json({ message: 'Invalid token purpose' });
+    }
+
+    // Update user as verified
+    await pool.query(
+      'UPDATE users SET email_verified = 1, email_verified_at = NOW() WHERE id = ? LIMIT 1',
+      [userId]
+    );
+
+    return res.json({ success: true, message: 'Email verified successfully' });
   } catch (err) {
-    res.status(400).json({ message: 'Invalid or expired token' });
+    console.error('verify-email error:', err.message);
+    return res.status(400).json({ message: 'Invalid or expired token' });
+  }
+});
+
+// Resend verification email
+router.post('/resend-verification', async (req, res) => {
+  const { email } = req.body;
+  console.log(req.body);
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+  try {
+    const [rows] = await pool.query('SELECT id, name, email_verified FROM users WHERE email = ? LIMIT 1', [email]);
+    if (!rows.length) {
+      // To prevent enumeration
+      return res.json({ success: true, message: 'If the email exists, a new verification link will be sent' });
+    }
+    const user = rows[0];
+    if (user.email_verified) {
+      return res.json({ success: true, message: 'Email already verified' });
+    }
+    const verifyToken = jwt.sign({ id: user.id, purpose: 'email_verify' }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    const base = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verifyUrl = `${base}/verify-email?token=${verifyToken}`;
+    
+    // Send verification email with proper error handling
+    const emailResult = await sendVerificationEmail(email, user.name || 'there', verifyUrl);
+    
+    if (emailResult.success) {
+      console.log('VERIFY EMAIL:', emailResult); 
+      return res.json({ success: true, message: 'Verification link resent successfully' });
+    } else {
+      console.error('Failed to send verification email:', emailResult.error);
+      return res.status(500).json({ success: false, message: 'Failed to send verification email. Please try again.' });
+    }
+  } catch (err) {
+    console.error('resend-verification error:', err.message);
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -291,7 +367,7 @@ router.post('/forgot-password', async (req, res) => {
   }
   try {
     const [users] = await pool.query(
-      'SELECT id FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, name FROM users WHERE email = ? LIMIT 1',
       [email]
     );
     if (users.length === 0) {
@@ -300,12 +376,21 @@ router.post('/forgot-password', async (req, res) => {
     }
     const user = users[0];
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
-    console.log(`Password reset link for ${email}: ${resetUrl}`);
-    // TODO: Integrate email service to send resetUrl to user.email
-    return res.json({ success: true, message: 'If that email is in our database, a password reset link will be sent' });
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${token}`;
+    
+    // Send password reset email
+    const emailResult = await sendPasswordResetEmail(email, user.name || 'there', resetUrl);
+    
+    if (emailResult.success) {
+      console.log(`Password reset email sent successfully to: ${email}`);
+      return res.json({ success: true, message: 'If that email is in our database, a password reset link will be sent' });
+    } else {
+      console.error('Failed to send password reset email:', emailResult.error);
+      // Still return success to prevent email enumeration
+      return res.json({ success: true, message: 'If that email is in our database, a password reset link will be sent' });
+    }
   } catch (err) {
-    console.error(err);
+    console.error('Forgot password error:', err);
     return res.status(500).json({ message: 'Server error' });
   }
 });

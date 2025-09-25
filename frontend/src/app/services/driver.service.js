@@ -86,6 +86,18 @@ export const DriverService = {
     }
   },
 
+  // Backwards-compatible alias used by DriverBooking.jsx
+  // Calls the same backend endpoint as search.available
+  searchNearbyDrivers: async (searchCriteria) => {
+    try {
+      const response = await apiClient.post('/search', searchCriteria);
+      return response.data;
+    } catch (error) {
+      console.error('Error searching nearby drivers:', error);
+      throw error;
+    }
+  },
+
   // Driver Booking
   booking: {
     // Create a new driver booking

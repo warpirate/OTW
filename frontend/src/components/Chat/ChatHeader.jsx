@@ -51,11 +51,11 @@ const ChatHeader = ({
     };
 
     return (
-        <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200 min-h-16">
+        <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 min-h-16">
             <div className="flex items-center gap-3 flex-1">
                 <div className="relative">
                     <div 
-                        className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center"
+                        className="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center"
                     >
                         {otherParticipant?.avatar ? (
                             <img 
@@ -64,19 +64,19 @@ const ChatHeader = ({
                                 className="w-12 h-12 rounded-full object-cover"
                             />
                         ) : (
-                            <span className="text-purple-600 font-semibold text-lg">
+                            <span className="text-purple-600 dark:text-purple-300 font-semibold text-lg">
                                 {otherParticipant?.name?.charAt(0)?.toUpperCase()}
                             </span>
                         )}
                     </div>
-                    <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                    <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900 ${
                         getStatusColor() === 'online' ? 'bg-green-500 status-online' : 
                         getStatusColor() === 'away' ? 'bg-yellow-500' : 'bg-gray-400'
                     }`}></div>
                 </div>
 
                 <div className="flex flex-col min-w-0">
-                    <h3 className="font-semibold text-lg text-gray-900 truncate">
+                    <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100 truncate">
                         {otherParticipant?.name || 'Unknown User'}
                     </h3>
                     <div className="flex items-center gap-1">
@@ -84,13 +84,13 @@ const ChatHeader = ({
                             getStatusColor() === 'online' ? 'bg-green-500' : 
                             getStatusColor() === 'away' ? 'bg-yellow-500' : 'bg-gray-400'
                         }`}></div>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
                             {getStatusText()}
                         </span>
                     </div>
                     {bookingInfo && (
                         <div className="mt-1">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200">
                                 Booking #{bookingInfo.id}
                             </span>
                         </div>
@@ -103,7 +103,7 @@ const ChatHeader = ({
                     <button
                         onClick={onCall}
                         disabled={isBlocked}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-2 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Voice call"
                     >
                         <Phone className="h-5 w-5" />
@@ -112,7 +112,7 @@ const ChatHeader = ({
 
                 <button 
                     onClick={onClose} 
-                    className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors" 
+                    className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors" 
                     title="Close chat"
                 >
                     <X className="h-5 w-5" />

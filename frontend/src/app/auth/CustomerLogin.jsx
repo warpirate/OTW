@@ -56,6 +56,8 @@ const CustomerLogin = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -85,8 +87,25 @@ const CustomerLogin = () => {
       const errorMessage = error?.response?.data?.message || error.message || 'Login failed. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
+      if (error?.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        setNeedsVerification(true);
+      } else {
+        setNeedsVerification(false);
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      setResendLoading(true);
+      await AuthService.resendVerification(formData.email);
+      toast.success('Verification email resent. Please check your inbox.');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Failed to resend verification email');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -274,6 +293,20 @@ const CustomerLogin = () => {
               </form>
 
               {/* Divider */}
+              {needsVerification && (
+                <div className="mt-4 p-3 border rounded-md bg-yellow-50 border-yellow-200 text-yellow-800">
+                  <div className="mb-2">Your email is not verified. Please verify to continue.</div>
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    className="btn-brand"
+                    disabled={resendLoading || !formData.email}
+                  >
+                    {resendLoading ? 'Resending...' : 'Resend Verification Email'}
+                  </button>
+                </div>
+              )}
+
               <div className="mt-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
