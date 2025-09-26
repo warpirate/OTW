@@ -337,6 +337,48 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
   }
 });
 
+// GET /upi/verify/:paymentId - Verify UPI payment status by our transaction id
+router.get('/upi/verify/:paymentId', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const paymentId = req.params.paymentId; // our TXN_... id
+
+    // Find transaction by our transaction id
+    const [rows] = await pool.query(
+      `SELECT ut.*, COALESCE(JSON_UNQUOTE(JSON_EXTRACT(ut.payment_gateway_response, '$.razorpay_order_id')), NULL) AS razorpay_order_id
+       FROM upi_transactions ut
+       WHERE ut.transaction_id = ? AND ut.user_id = ?
+       LIMIT 1`,
+      [paymentId, userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    const txn = rows[0];
+
+    // If already completed or failed, return immediately
+    if (txn.status === 'completed' || txn.status === 'failed' || txn.status === 'refunded') {
+      return res.json({
+        success: true,
+        status: txn.status,
+        razorpay_order_id: txn.razorpay_order_id || null
+      });
+    }
+
+    // If we have a Razorpay order id, we can optionally leave it to webhooks or polling on client.
+    return res.json({
+      success: true,
+      status: txn.status || 'processing',
+      razorpay_order_id: txn.razorpay_order_id || null
+    });
+  } catch (error) {
+    console.error('Error verifying UPI payment status:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify payment' });
+  }
+});
+
 // GET /history - Get payment history
 router.get('/history', verifyToken, async (req, res) => {
   try {
