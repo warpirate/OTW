@@ -28,7 +28,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const FROM_ADDRESS = process.env.USER_GMAIL || 'info@omwhub.com';
-const FROM_NAME = 'OTW Service';
+const FROM_NAME = 'OMW Service';
 
 // Retry configuration
 const RETRY_CONFIG = {
@@ -137,7 +137,7 @@ const sendOTPEmail = async (customerEmail, customerName, otp, workerName, bookin
     try {
         const mailOptions = {
             from: {
-                name: 'OTW Service',
+                name: 'OMW Service',
                 address: FROM_ADDRESS
             },
             to: customerEmail,
@@ -208,7 +208,7 @@ const sendOTPEmail = async (customerEmail, customerName, otp, workerName, bookin
                             <div class="footer">
                                 <p>Need help? Contact our support team</p>
                                 <p style="color: #999; font-size: 12px;">
-                                    This is an automated message from OTW Service Platform.<br>
+                                    This is an automated message from OMW Service Platform.<br>
                                     Please do not reply to this email.
                                 </p>
                             </div>
@@ -238,7 +238,7 @@ Booking Details:
 - Service: ${serviceName}
 - Provider: ${workerName}
 
-Thank you for using OTW Service Platform.
+Thank you for using OMW Service Platform.
             `
         };
 
@@ -266,7 +266,7 @@ const sendServiceCompletionEmail = async (customerEmail, customerName, bookingId
     try {
         const mailOptions = {
             from: {
-                name: 'OTW Service',
+                name: 'OMW Service',
                 address: FROM_ADDRESS
             },
             to: customerEmail,
@@ -298,7 +298,7 @@ const sendServiceCompletionEmail = async (customerEmail, customerName, bookingId
                                 • Provider: ${workerName}<br>
                                 • Amount: ₹${amount}
                             </div>
-                            <p>Your service has been completed successfully. Thank you for using OTW Service Platform!</p>
+                            <p>Your service has been completed successfully. Thank you for using OMW Service Platform!</p>
                             <p>You can now proceed with the payment process.</p>
                         </div>
                     </div>
@@ -339,14 +339,14 @@ module.exports = {
         try {
             const mailOptions = {
                 from: {
-                    name: 'OTW Service',
+                    name: 'OMW Service',
                     address: FROM_ADDRESS
                 },
                 to: toEmail,
-                subject: 'Please verify your email address - OTW Service',
+                subject: 'Please verify your email address - OMW Service',
                 replyTo: FROM_ADDRESS,
                 headers: {
-                    'X-Mailer': 'OTW Service Platform',
+                    'X-Mailer': 'OMW Service Platform',
                     'X-Priority': '1',
                     'X-MSMail-Priority': 'High',
                     'Importance': 'high'
@@ -357,7 +357,7 @@ module.exports = {
                     <head>
                         <meta charset="utf-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Verify Your Email - OTW Service</title>
+                        <title>Verify Your Email - OMW Service</title>
                     </head>
                     <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
                         <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
@@ -366,7 +366,7 @@ module.exports = {
                                     <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                                         <tr>
                                             <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center;">
-                                                <h1 style="margin: 0; font-size: 28px; font-weight: bold;">Welcome to OTW!</h1>
+                                                <h1 style="margin: 0; font-size: 28px; font-weight: bold;">Welcome to OMW!</h1>
                                                 <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your trusted service platform</p>
                                             </td>
                                         </tr>
@@ -375,7 +375,7 @@ module.exports = {
                                                 <h2 style="color: #333; margin: 0 0 20px 0; font-size: 24px;">Hello ${toName || 'there'}!</h2>
                                                 
                                                 <p style="color: #666; line-height: 1.6; margin: 0 0 25px 0; font-size: 16px;">
-                                                    Thank you for creating an account with OTW Service Platform. To complete your registration and start using our services, please verify your email address.
+                                                    Thank you for creating an account with OMW Service Platform. To complete your registration and start using our services, please verify your email address.
                                                 </p>
                                                 
                                                 <div style="text-align: center; margin: 35px 0;">
@@ -393,7 +393,7 @@ module.exports = {
                                                 <div style="border-top: 1px solid #eee; padding-top: 25px; margin-top: 35px;">
                                                     <p style="color: #999; font-size: 14px; margin: 0; text-align: center;">
                                                         This verification link will expire in 24 hours for security reasons.<br>
-                                                        If you didn't create an account with OTW, you can safely ignore this email.
+                                                        If you didn't create an account with OMW, you can safely ignore this email.
                                                     </p>
                                                 </div>
                                             </td>
@@ -401,7 +401,7 @@ module.exports = {
                                         <tr>
                                             <td style="background: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #eee;">
                                                 <p style="margin: 0; color: #999; font-size: 12px;">
-                                                    © 2024 OTW Service Platform. All rights reserved.<br>
+                                                    © 2024 OMW Service Platform. All rights reserved.<br>
                                                     This is an automated message, please do not reply to this email.
                                                 </p>
                                             </td>
@@ -413,7 +413,7 @@ module.exports = {
                     </body>
                     </html>
                 `,
-                text: `Welcome to OTW!\n\nPlease verify your email by visiting: ${verifyUrl}\n\nIf you did not create an account, you can ignore this email.`
+                text: `Welcome to OMW!\n\nPlease verify your email by visiting: ${verifyUrl}\n\nIf you did not create an account, you can ignore this email.`
             };
             const result = await sendMailWithRetry(mailOptions);
             return result;
@@ -433,11 +433,11 @@ module.exports = {
         try {
             const mailOptions = {
                 from: {
-                    name: 'OTW Service',
+                    name: 'OMW Service',
                     address: FROM_ADDRESS
                 },
                 to: toEmail,
-                subject: 'Reset your password - OTW Service',
+                subject: 'Reset your password - OMW Service',
                 html: `
                     <div style="font-family: Arial, sans-serif; color: #111; max-width: 600px; margin: 0 auto;">
                         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
@@ -448,7 +448,7 @@ module.exports = {
                         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
                             <h2>Hello ${toName || 'there'},</h2>
                             
-                            <p>You requested to reset your password for your OTW Service account. Click the button below to create a new password:</p>
+                            <p>You requested to reset your password for your OMW Service account. Click the button below to create a new password:</p>
                             
                             <div style="text-align: center; margin: 30px 0;">
                                 <a href="${resetUrl}" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold;">Reset Password</a>
@@ -466,12 +466,12 @@ module.exports = {
                             
                             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #777; font-size: 14px;">
                                 <p>If you have any questions, please contact our support team.</p>
-                                <p>Best regards,<br>The OTW Service Team</p>
+                                <p>Best regards,<br>The OMW Service Team</p>
                             </div>
                         </div>
                     </div>
                 `,
-                text: `Password Reset Request\n\nHello ${toName || 'there'},\n\nYou requested to reset your password for your OTW Service account.\n\nPlease visit this link to reset your password: ${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this reset, you can safely ignore this email.\n\nBest regards,\nThe OTW Service Team`
+                text: `Password Reset Request\n\nHello ${toName || 'there'},\n\nYou requested to reset your password for your OMW Service account.\n\nPlease visit this link to reset your password: ${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request this reset, you can safely ignore this email.\n\nBest regards,\nThe OMW Service Team`
             };
             
             const result = await sendMailWithRetry(mailOptions);
@@ -500,11 +500,11 @@ module.exports = {
                     address: FROM_ADDRESS
                 },
                 to: toEmail,
-                subject: 'OTW Email Service Test',
+                subject: 'OMW Email Service Test',
                 html: `
                     <div style="font-family: Arial, sans-serif; padding: 20px;">
                         <h2>🎉 Email Service Test Successful!</h2>
-                        <p>This is a test email from your OTW application.</p>
+                        <p>This is a test email from your OMW application.</p>
                         <p>If you're receiving this, your email configuration is working correctly.</p>
                         <hr>
                         <p style="color: #666; font-size: 12px;">
@@ -515,7 +515,7 @@ module.exports = {
                         </p>
                     </div>
                 `,
-                text: `Email Service Test\n\nThis is a test email from your OTW application.\nIf you're receiving this, your email configuration is working correctly.\n\nSent from: ${FROM_ADDRESS}\nTimestamp: ${new Date().toISOString()}`
+                text: `Email Service Test\n\nThis is a test email from your OMW application.\nIf you're receiving this, your email configuration is working correctly.\n\nSent from: ${FROM_ADDRESS}\nTimestamp: ${new Date().toISOString()}`
             };
             
             const result = await sendMailWithRetry(mailOptions);

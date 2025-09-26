@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import {LandingPageService} from '../services/landing_page.service';
 import AuthService from '../services/auth.service';
@@ -45,6 +45,7 @@ import InfographicIcon from '../../components/InfographicIcon';
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('maintenance');
   const [searchQuery, setSearchQuery] = useState('');
   const [darkMode, setDarkMode] = useState(isDarkMode());
@@ -257,6 +258,24 @@ const LandingPage = () => {
       removeListener();
     };
   }, []);
+
+  // Handle scroll to services section when coming from cart
+  useEffect(() => {
+    if (location.state?.scrollToServices) {
+      // Small delay to ensure the page is fully rendered
+      const timer = setTimeout(() => {
+        const servicesSection = document.querySelector('#our-services-section');
+        if (servicesSection) {
+          servicesSection.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
   
   // Force authentication state update (for debugging)
   const forceAuthUpdate = () => {

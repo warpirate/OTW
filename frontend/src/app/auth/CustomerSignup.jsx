@@ -55,6 +55,19 @@ const CustomerSignup = () => {
     if (error) setError('');
   };
 
+  const handleSendInitialVerification = async () => {
+    if (!formData.email) return;
+    try {
+      setIsLoading(true);
+      await AuthService.sendVerification(formData.email);
+      toast.success('Verification email sent. Please check your inbox.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send verification email');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResendVerification = async () => {
     if (!formData.email) return;
     try {
@@ -89,7 +102,7 @@ const CustomerSignup = () => {
     }
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     // Validate fields before proceeding
     if (signupMethod === 'email') {
       if (!formData.email || !formData.password || !formData.confirmPassword) {
@@ -119,8 +132,44 @@ const CustomerSignup = () => {
       return;
     }
     
-    setError('');
-    setCurrentStep(currentStep + 1);
+    // For email signup, register user first, then proceed to verification step
+    if (signupMethod === 'email') {
+      setIsLoading(true);
+      try {
+        const userData = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+          role_id: 1
+        };
+        
+        const response = await AuthService.register(userData);
+        
+        // Registration successful - now send verification email
+        try {
+          await AuthService.sendVerification(formData.email);
+          toast.success('Registration successful! Verification email sent.');
+        } catch (emailErr) {
+          // Registration succeeded but email failed - still proceed to verification step
+          toast.warning('Registration successful! Please try sending verification email manually.');
+        }
+        
+        setError('');
+        setCurrentStep(currentStep + 1);
+        setIsOtpSent(true);
+      } catch (err) {
+        const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+        setError(errorMessage);
+        toast.error(errorMessage);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // For phone signup, just proceed to next step
+      setError('');
+      setCurrentStep(currentStep + 1);
+    }
   };
 
   const handlePrevStep = () => {
@@ -133,30 +182,25 @@ const CustomerSignup = () => {
     setIsLoading(true);
     
     try {
-      const userData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        password: formData.password,
-        role_id: 1
-      };
-      
-      if (signupMethod === 'email') {
-        userData.email = formData.email;
-      } else {
-        userData.phone = formData.phone;
-        userData.otp = formData.otp;
-      }
-      
-      const response = await AuthService.register(userData);
-      
-      // Registration successful - require email verification
-      if (signupMethod === 'email') {
-        toast.success('Registration successful! Please verify your email.');
-        setCurrentStep(2);
-        setIsOtpSent(true);
-      } else {
+      // For email signup, registration already happened in handleNextStep
+      // This function now only handles phone signup (OTP verification)
+      if (signupMethod === 'phone') {
+        const userData = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          password: formData.password,
+          otp: formData.otp,
+          role_id: 1
+        };
+        
+        const response = await AuthService.register(userData);
         toast.success('Registration successful!');
         navigate('/');
+      } else {
+        // For email signup, this shouldn't be called since registration already happened
+        // But if it is, just show a message
+        toast.info('Please verify your email to complete registration.');
       }
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
@@ -481,13 +525,24 @@ const CustomerSignup = () => {
                         </button>
                         <button
                           type="button"
+                          onClick={handleSendInitialVerification}
+                          className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+                          disabled={isLoading}
+                        >
+                          {isLoading ? 'Sending...' : 'Send Email'}
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleResendVerification}
-                          className="flex-1 btn-brand"
+                          className="flex-1 py-3 px-4 border border-blue-600 text-blue-600 rounded-lg font-medium hover:bg-blue-50"
                           disabled={isLoading}
                         >
                           {isLoading ? 'Resending...' : 'Resend Email'}
                         </button>
                       </div>
+                      <p className="text-xs text-[var(--text-secondary)] text-center">
+                        Use "Send Email" for first-time sending or "Resend Email" if you already received one before.
+                      </p>
                     </div>
                   ) : (
                     !isOtpSent ? (

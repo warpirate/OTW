@@ -109,6 +109,11 @@ const Cart = () => {
     }
   };
 
+  // Handle browse services - navigate to home and scroll to services section
+  const handleBrowseServices = () => {
+    navigate('/', { state: { scrollToServices: true } });
+  };
+
   // Handle checkout process - redirect to booking flow
   const handleCheckout = async (e) => {
     e.preventDefault();
@@ -156,7 +161,7 @@ const Cart = () => {
               Looks like you haven't added any services yet.
             </p>
             <button 
-              onClick={() => navigate('/')}
+              onClick={handleBrowseServices}
               className="btn-brand px-8 py-3"
             >
               Browse Services
