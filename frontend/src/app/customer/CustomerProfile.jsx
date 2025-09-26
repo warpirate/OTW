@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Edit2, Save, X, Mail, Phone, MapPin, Calendar, Shield, CreditCard, Wallet } from 'lucide-react';
+import { User, Edit2, Save, X, Mail, Phone, MapPin, Shield, CreditCard } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import AuthService from '../services/auth.service';
 import ProfileService from '../services/profile.service';
 import CustomerVerificationsService from '../services/customerVerifications.service';
-import WalletSummary from '../../components/WalletSummary';
 
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
@@ -139,7 +138,6 @@ const CustomerProfile = () => {
       await loadDocuments();
     } catch (e) {
       console.error('Upload failed', e);
-      toast.error(e?.response?.data?.message || 'Failed to upload document');
     } finally {
       setUploading(false);
     }
@@ -151,6 +149,35 @@ const CustomerProfile = () => {
       ...prev,
       [name]: value
     }));
+  };
+
+  const handleGenderChange = async (e) => {
+    const { value } = e.target;
+    
+    // Update the profile state immediately
+    setProfile(prev => ({
+      ...prev,
+      gender: value
+    }));
+
+    // Save the gender change to backend immediately
+    try {
+      await ProfileService.updateProfile({ gender: value });
+      toast.success('Gender updated successfully');
+      // Update original profile to reflect the change
+      setOriginalProfile(prev => ({
+        ...prev,
+        gender: value
+      }));
+    } catch (error) {
+      console.error('Error updating gender:', error);
+      toast.error('Failed to update gender');
+      // Revert the change if it failed
+      setProfile(prev => ({
+        ...prev,
+        gender: originalProfile.gender || ''
+      }));
+    }
   };
 
   const handleSave = async () => {
@@ -255,37 +282,13 @@ const CustomerProfile = () => {
             </div>
           </div>
 
-          {/* Wallet Section */}
-          <div className="mb-8">
-            <WalletSummary showFullView={true} />
-          </div>
 
           {/* Quick Access Menu */}
           <div className={`card p-6 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               Quick Access
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button
-                onClick={() => navigate('/wallet')}
-                className={`p-4 rounded-lg border text-left transition-colors ${
-                  darkMode 
-                    ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <Wallet className="h-6 w-6 text-green-600" />
-                  <div>
-                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      My Wallet
-                    </h3>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Manage wallet & payments
-                    </p>
-                  </div>
-                </div>
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
               <button
                 onClick={() => navigate('/payment-methods')}
@@ -303,27 +306,6 @@ const CustomerProfile = () => {
                     </h3>
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       Manage UPI payments
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => navigate('/bookings')}
-                className={`p-4 rounded-lg border text-left transition-colors ${
-                  darkMode 
-                    ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <Calendar className="h-6 w-6 text-purple-600" />
-                  <div>
-                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      My Bookings
-                    </h3>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      View booking history
                     </p>
                   </div>
                 </div>
@@ -476,31 +458,21 @@ const CustomerProfile = () => {
                   <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     Gender
                   </label>
-                  {isEditing ? (
-                    <select
-                      name="gender"
-                      value={profile.gender || ''}
-                      onChange={handleInputChange}
-                      disabled
-                      className={`w-full px-3 py-2 border rounded-lg ${
-                        darkMode
-                          ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
-                          : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
-                      }`}
-                    >
-                      <option value="">Select gender</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                      <option value="prefer_not_to_say">Prefer not to say</option>
-                    </select>
-                  ) : (
-                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                      {profile.gender
-                        ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1).replace(/_/g, ' ')
-                        : 'Not provided'}
-                    </p>
-                  )}
+                  <select
+                    name="gender"
+                    value={profile.gender || ''}
+                    onChange={handleGenderChange}
+                    className={`w-full px-3 py-2 border rounded-lg ${
+                      darkMode
+                        ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                        : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                    }`}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="prefer_not_to_say">Prefer not to say</option>
+                  </select>
                 </div>
               </div>
 

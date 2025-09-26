@@ -143,6 +143,16 @@ const AuthService = {
     }
   },
 
+  // Send initial verification email (after signup)
+  sendVerification: async (email) => {
+    try {
+      const response = await authClient.post('/send-verification', { email });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Resend verification email
   resendVerification: async (email) => {
     try {
@@ -330,15 +340,6 @@ const AuthService = {
     }
   },
 
-  // Forgot password
-  forgotPassword: async (email) => {
-    try {
-      const response = await authClient.post('/forgot-password', { email });
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
-  },
 
   // Reset password with token
   resetPassword: async (token, newPassword) => {

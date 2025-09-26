@@ -105,7 +105,7 @@ router.put('/:id', verifyToken, async (req, res) => {
       );
     }
 
-    if (customerFields.length === 0 && !phone_number) {
+    if (customerFields.length === 0 && !phone_number && !gender) {
       return res.status(400).json({ message: 'No fields provided to update' });
     }
 

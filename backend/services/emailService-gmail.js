@@ -1,8 +1,8 @@
-// Alternative Gmail SMTP configuration
+// Alternative Gmail SMTP configuration for OMW
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Gmail SMTP transporter (for better deliverability)
+// Gmail SMTP transporter for OMW (for better deliverability)
 const gmailTransporter = nodemailer.createTransporter({
     service: 'gmail',
     host: 'smtp.gmail.com',
@@ -37,5 +37,5 @@ INSTRUCTIONS TO SETUP GMAIL SMTP:
    USER_GMAIL=tulasi12115045@gmail.com
    USER_PASSWORD=your-16-character-app-password
 
-This will have much better deliverability than Hostinger SMTP.
+This will have much better deliverability than Hostinger SMTP for OMW platform.
 */
