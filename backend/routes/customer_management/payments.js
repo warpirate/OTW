@@ -4,7 +4,6 @@ const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 const { 
   createUPIOrder, 
-  createUPIPaymentRequest, 
   verifyPayment, 
   capturePayment,
   refundPayment,
@@ -307,45 +306,13 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
       });
     }
 
-    // Create UPI payment request
-    const paymentResult = await createUPIPaymentRequest(
-      orderResult.order.id,
-      upi_id,
-      amount,
-      description
-    );
-
-    if (!paymentResult.success) {
-      // Update transaction as failed
-      await pool.query(
-        `UPDATE upi_transactions 
-         SET status = 'failed', failure_reason = ? 
-         WHERE id = ?`,
-        [paymentResult.error, transactionResult.insertId]
-      );
-
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to create payment request'
-      });
-    }
-
-    // Update transaction with Razorpay details
+    // Update transaction with Razorpay order details
     await pool.query(
       `UPDATE upi_transactions 
        SET status = 'processing', 
-           upi_transaction_id = ?,
-           payment_gateway_response = ?
+           payment_gateway_response = JSON_SET(COALESCE(payment_gateway_response, '{}'), '$.razorpay_order_id', ?)
        WHERE id = ?`,
-      [
-        paymentResult.payment.id,
-        JSON.stringify({
-          razorpay_order_id: orderResult.order.id,
-          razorpay_payment_id: paymentResult.payment.id,
-          status: paymentResult.payment.status
-        }),
-        transactionResult.insertId
-      ]
+      [orderResult.order.id, transactionResult.insertId]
     );
 
     // Return payment details for client
@@ -353,12 +320,12 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
       success: true,
       payment_id: transactionId,
       razorpay_order_id: orderResult.order.id,
-      razorpay_payment_id: paymentResult.payment.id,
+      razorpay_payment_id: null,
       upi_id: upi_id,
       amount: amount,
       currency: 'INR',
-      status: 'processing',
-      message: 'Payment request created successfully. Please complete payment in your UPI app.'
+      status: 'order_created',
+      message: 'Order created. Complete the payment via UPI using Razorpay Checkout.'
     });
 
   } catch (error) {
