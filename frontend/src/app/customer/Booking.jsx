@@ -335,7 +335,7 @@ const Booking = () => {
     }));
   };
   
-  // Geocode address to get latitude and longitude
+  // Geocode address using Google Maps API to get latitude and longitude
   const geocodeAddress = async (addressData) => {
     try {
       const { address, city, state, country } = addressData;
@@ -351,7 +351,15 @@ const Booking = () => {
       let longitude = null;
       
       for (const addr of addressCombinations) {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addr)}&format=json&limit=1`;
+        // Get Google Maps API key from environment
+        const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE';
+        
+        if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
+          console.warn('Google Maps API key not configured');
+          continue;
+        }
+        
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addr)}&key=${GOOGLE_MAPS_API_KEY}`;
         const response = await fetch(url);
         
         if (!response.ok) {
@@ -361,19 +369,27 @@ const Booking = () => {
         
         const data = await response.json();
         
-        if (data && data.length > 0) {
-          latitude = parseFloat(data[0].lat);
-          longitude = parseFloat(data[0].lon);
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          const location = data.results[0].geometry.location;
+          latitude = location.lat;
+          longitude = location.lng;
+          console.log('Google Maps geocoding successful:', {
+            address: addr,
+            coordinates: { lat: latitude, lng: longitude },
+            formatted_address: data.results[0].formatted_address
+          });
           break;
+        } else if (data.status !== 'OK') {
+          console.warn('Google Maps geocoding failed for address:', addr, 'Status:', data.status, data.error_message);
         }
       }
       
       if (!latitude || !longitude) {
-        console.warn('Could not determine precise location from address, using default coordinates');
+        console.warn('Could not determine precise location from address, using default coordinates for India');
         // Return default coordinates (center of India) if geocoding fails
         return { 
-          location_lat: 0.0000, 
-          location_lng: 0.0000 
+          location_lat: 20.5937, 
+          location_lng: 78.9629 
         };
       }
       
@@ -382,11 +398,11 @@ const Booking = () => {
         location_lng: longitude 
       };
     } catch (error) {
-      console.error('Error in geocoding:', error);
+      console.error('Error in Google Maps geocoding:', error);
       // Return default coordinates (center of India) in case of error
       return { 
-        location_lat: 0.0000, 
-        location_lng: 0.0000 
+        location_lat: 20.5937, 
+        location_lng: 78.9629 
       };
     }
   };
