@@ -24,6 +24,15 @@ const WorkerSignup = () => {
     return cleanup;
   }, []);
 
+  // Initialize bio word count
+  useEffect(() => {
+    if (formData.bio) {
+      const validation = validateBio(formData.bio);
+      setBioWordCount(validation.wordCount);
+      setBioError(validation.error);
+    }
+  }, []);
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -70,11 +79,70 @@ const WorkerSignup = () => {
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isLoadingSubcategories, setIsLoadingSubcategories] = useState(false);
   const [categoryError, setCategoryError] = useState('');
-  
+  const [bioError, setBioError] = useState('');
+  const [bioWordCount, setBioWordCount] = useState(0);
+
+  // Bio validation function
+  const validateBio = (bioText) => {
+    const words = bioText.trim().split(/\s+/).filter(word => word.length > 0);
+    const wordCount = words.length;
+    
+    // Check word limit
+    if (wordCount > 30) {
+      return {
+        isValid: false,
+        error: `Bio must be 30 words or less. Current: ${wordCount} words.`,
+        wordCount
+      };
+    }
+    
+    // Check for spam patterns
+    const spamPatterns = [
+      /(.)\1{4,}/i, // Repeated characters (5+ times)
+      /\b(call|contact|whatsapp|phone)\s*me\b/i, // Contact solicitation
+      /\b\d{10,}\b/, // Phone numbers
+      /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/, // Email addresses
+      /\b(best|top|#1|number\s*1|cheapest|lowest\s*price)\b/i, // Superlative claims
+      /\b(guarantee|100%|money\s*back)\b/i, // Unrealistic promises
+      /(.{1,10})\1{3,}/i, // Repeated phrases
+    ];
+    
+    for (const pattern of spamPatterns) {
+      if (pattern.test(bioText)) {
+        return {
+          isValid: false,
+          error: 'Bio contains inappropriate content. Please write a professional description.',
+          wordCount
+        };
+      }
+    }
+    
+    // Check minimum length
+    if (wordCount > 0 && wordCount < 5) {
+      return {
+        isValid: false,
+        error: 'Bio must be at least 5 words long.',
+        wordCount
+      };
+    }
+    
+    return {
+      isValid: true,
+      error: '',
+      wordCount
+    };
+  };
 
 
   const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
+    
+    // Handle bio validation in real-time
+    if (name === 'bio') {
+      const validation = validateBio(value);
+      setBioError(validation.error);
+      setBioWordCount(validation.wordCount);
+    }
     
     // Handle nested fields (like permanentAddress)
     if (name.includes('.')) {
@@ -155,6 +223,12 @@ const WorkerSignup = () => {
       }
       if (!formData.bio) {
         setError('Please write a brief bio');
+        return false;
+      }
+      // Validate bio content and length
+      const bioValidation = validateBio(formData.bio);
+      if (!bioValidation.isValid) {
+        setError(bioValidation.error);
         return false;
       }
     } else if (currentStep === 3) {
@@ -863,7 +937,7 @@ const WorkerSignup = () => {
 
             <div>
               <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
-                Bio
+                Bio (Professional Description)
               </label>
               <textarea
                 name="bio"
@@ -872,10 +946,32 @@ const WorkerSignup = () => {
                 onChange={handleInputChange}
                 required
                 className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                  darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                  bioError 
+                    ? 'border-red-500 focus:ring-red-500' 
+                    : darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                 }`}
-                placeholder="Tell customers about yourself, your experience, and what makes you special..."
+                placeholder="Write a professional description about your skills and experience (5-30 words). Avoid contact details, superlative claims, or promotional language."
               />
+              <div className="flex justify-between items-center mt-1">
+                <div className="text-xs">
+                  {bioError ? (
+                    <span className="text-red-500">{bioError}</span>
+                  ) : (
+                    <span className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
+                      Write a professional description (5-30 words)
+                    </span>
+                  )}
+                </div>
+                <div className={`text-xs ${
+                  bioWordCount > 30 
+                    ? 'text-red-500' 
+                    : bioWordCount > 25 
+                      ? 'text-yellow-500' 
+                      : darkMode ? 'text-gray-400' : 'text-gray-500'
+                }`}>
+                  {bioWordCount}/30 words
+                </div>
+              </div>
             </div>
 
             <div>
