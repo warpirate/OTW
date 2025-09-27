@@ -653,7 +653,9 @@ const LandingPage = () => {
                                   <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
                                   <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>
                                   <div className="flex justify-between items-center">
-                                    <span className="text-sm text-brand">View Services</span>
+                                    <button className="text-sm text-brand hover:text-brand-dark transition-colors font-medium">
+                                      View Services
+                                    </button>
                                     <ChevronRight className="h-5 w-5 text-brand" />
                                   </div>
                                 </div>
