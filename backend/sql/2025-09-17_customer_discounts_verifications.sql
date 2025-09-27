@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS customer_verifications (
   id INT AUTO_INCREMENT PRIMARY KEY,
   customer_id INT NOT NULL,
   document_url VARCHAR(255) NOT NULL,
-  document_type ENUM('student_id', 'aadhaar', 'pan', 'other') NOT NULL,
+  document_type ENUM('student', 'senior_citizen') NOT NULL,
   verification_status ENUM('pending', 'verified', 'rejected') DEFAULT 'pending',
   uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_customer_verifications_customer

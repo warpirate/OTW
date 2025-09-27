@@ -7,6 +7,7 @@ import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
+import CustomerVerificationsService from '../services/customerVerifications.service';
 
 const Cart = () => {
 
@@ -33,6 +34,13 @@ const Cart = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  // Discount state
+  const [discountInfo, setDiscountInfo] = useState({
+    has_discount: false,
+    discount_percentage: 0,
+    customer_type: 'Normal'
+  });
+  const [loadingDiscount, setLoadingDiscount] = useState(false);
 
   // Listen for theme changes
   useEffect(() => {
@@ -81,6 +89,23 @@ const Cart = () => {
       clearInterval(authCheckInterval);
     };
   }, [isAuthenticated]); // Only depend on isAuthenticated to prevent unnecessary re-renders
+
+  // Load discount info for authenticated customers
+  useEffect(() => {
+    const loadDiscount = async () => {
+      if (!isAuthenticated) return;
+      try {
+        setLoadingDiscount(true);
+        const info = await CustomerVerificationsService.getDiscountInfo();
+        setDiscountInfo(info || { has_discount: false, discount_percentage: 0, customer_type: 'Normal' });
+      } catch (e) {
+        console.warn('Failed to load discount info', e);
+      } finally {
+        setLoadingDiscount(false);
+      }
+    };
+    loadDiscount();
+  }, [isAuthenticated]);
   
   // Handle checkout data change
   const handleInputChange = (e) => {
@@ -107,6 +132,15 @@ const Cart = () => {
     if (window.confirm('Are you sure you want to clear your requests?')) {
       await clearCart();
     }
+  };
+
+  // Calculate totals with discount (cart view doesn't include service fee/tax)
+  const calculateTotals = () => {
+    if (!cart || !cart.items) return { subtotal: 0, discount: 0, total: 0 };
+    const subtotal = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const discount = discountInfo.has_discount ? subtotal * (discountInfo.discount_percentage / 100) : 0;
+    const total = subtotal - discount;
+    return { subtotal, discount, total };
   };
 
   // Handle browse services - navigate to home and scroll to services section
@@ -298,10 +332,18 @@ const Cart = () => {
                   </button>
                   <div className="text-right">
                     <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Total ({cart.items.length} {cart.items.length === 1 ? 'item' : 'items'})
+                      Subtotal ({cart.items.length} {cart.items.length === 1 ? 'item' : 'items'})
                     </p>
-                    <p className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      ₹{cart.total}
+                    <p className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      ₹{calculateTotals().subtotal.toFixed(2)}
+                    </p>
+                    {discountInfo.has_discount && (
+                      <p className={`text-sm text-green-600 ${darkMode ? 'dark:text-green-400' : ''}`}>
+                        Discount ({discountInfo.discount_percentage}%): -₹{calculateTotals().discount.toFixed(2)}
+                      </p>
+                    )}
+                    <p className={`text-lg font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                      Total: ₹{calculateTotals().total.toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -334,13 +376,21 @@ const Cart = () => {
                   ))}
                   
                   <div className={`border-t pt-4 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                    <div className="flex justify-between items-center">
-                      <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        Total
-                      </span>
-                      <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        ₹{cart.total}
-                      </span>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Subtotal</span>
+                        <span className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>₹{calculateTotals().subtotal.toFixed(2)}</span>
+                      </div>
+                      {discountInfo.has_discount && (
+                        <div className="flex justify-between text-green-600">
+                          <span>{discountInfo.customer_type} Discount ({discountInfo.discount_percentage}%)</span>
+                          <span>-₹{calculateTotals().discount.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between border-t pt-2">
+                        <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Total</span>
+                        <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>₹{calculateTotals().total.toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>

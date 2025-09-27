@@ -34,9 +34,11 @@ const CustomerProfile = () => {
   // Verification docs state
   const [docsLoading, setDocsLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
-  const [docType, setDocType] = useState('student_id');
+  const [customerType, setCustomerType] = useState('student');
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [hasExistingVerification, setHasExistingVerification] = useState(false);
+  const [existingVerificationType, setExistingVerificationType] = useState(null);
 
   // Listen for theme changes
   useEffect(() => {
@@ -84,7 +86,19 @@ const CustomerProfile = () => {
     try {
       setDocsLoading(true);
       const resp = await CustomerVerificationsService.list();
-      setDocuments(resp.documents || []);
+      const docs = resp.documents || [];
+      setDocuments(docs);
+      
+      // Check for existing verification documents
+      const existingDoc = docs.find(doc => 
+        doc.verification_status === 'pending' || doc.verification_status === 'verified'
+      );
+      
+      if (existingDoc) {
+        setHasExistingVerification(true);
+        setExistingVerificationType(existingDoc.document_type);
+        setCustomerType(existingDoc.document_type); // Set dropdown to existing type
+      }
     } catch (e) {
       console.error('Failed to load verification documents', e);
     } finally {
@@ -120,7 +134,7 @@ const CustomerProfile = () => {
       const presign = await CustomerVerificationsService.presignUpload({
         file_name: selectedFile.name,
         content_type: selectedFile.type,
-        document_type: docType
+        customer_type: customerType
       });
       // 2) PUT to S3
       await fetch(presign.uploadUrl, {
@@ -130,7 +144,7 @@ const CustomerProfile = () => {
       });
       // 3) Confirm
       await CustomerVerificationsService.confirmUpload({
-        document_type: docType,
+        customer_type: customerType,
         object_key: presign.objectKey
       });
       toast.success('Document uploaded successfully');
@@ -138,6 +152,9 @@ const CustomerProfile = () => {
       await loadDocuments();
     } catch (e) {
       console.error('Upload failed', e);
+      // Handle specific error messages from backend
+      const errorMessage = e.response?.data?.message || 'Upload failed. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setUploading(false);
     }
@@ -608,31 +625,40 @@ const CustomerProfile = () => {
               </div>
               <div className="flex items-center space-x-3">
                 <select
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                  className={`px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                  value={customerType}
+                  onChange={(e) => setCustomerType(e.target.value)}
+                  disabled={hasExistingVerification}
+                  className={`px-3 py-2 rounded-lg border ${
+                    hasExistingVerification 
+                      ? darkMode ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                      : darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`}
                 >
-                  <option value="student_id">Student ID</option>
-                  <option value="aadhaar">Aadhaar</option>
-                  <option value="pan">PAN</option>
-                  <option value="other">Other</option>
+                  <option value="student">Student</option>
+                  <option value="senior_citizen">Senior Citizen</option>
                 </select>
+                {hasExistingVerification && (
+                  <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    You already have a {existingVerificationType === 'student' ? 'Student' : 'Senior Citizen'} verification
+                  </span>
+                )}
                 <input
                   type="file"
                   accept="image/jpeg,image/png,application/pdf"
                   onChange={handleFileSelect}
                   className="hidden"
                   id="docUploadInput"
+                  disabled={hasExistingVerification}
                 />
                 <label
                   htmlFor="docUploadInput"
-                  className="btn-outline cursor-pointer"
+                  className={`btn-outline cursor-pointer ${hasExistingVerification ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Choose File
                 </label>
                 <button
                   onClick={uploadVerification}
-                  disabled={!selectedFile || uploading}
+                  disabled={!selectedFile || uploading || hasExistingVerification}
                   className="btn-brand disabled:opacity-50"
                 >
                   {uploading ? 'Uploading...' : 'Upload'}
@@ -664,7 +690,11 @@ const CustomerProfile = () => {
                     <tbody className={`${darkMode ? 'bg-gray-800' : 'bg-white'} divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
                       {documents.map((doc) => (
                         <tr key={doc.id}>
-                          <td className="px-4 py-3 capitalize">{(doc.document_type || '').replace('_',' ')}</td>
+                          <td className="px-4 py-3 capitalize">
+                            {doc.document_type === 'student' ? 'Student' : 
+                             doc.document_type === 'senior_citizen' ? 'Senior Citizen' : 
+                             (doc.document_type || '').replace('_',' ')}
+                          </td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                               doc.verification_status === 'verified' ? 'bg-green-100 text-green-800' :

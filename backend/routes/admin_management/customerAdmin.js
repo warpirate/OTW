@@ -147,12 +147,24 @@ router.get('/customers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
     if (!rows.length) return res.status(404).json({ success: false, message: 'Customer not found' });
 
     const [docs] = await pool.query(
-      `SELECT id, document_type, document_url, verification_status, uploaded_at
-       FROM customer_verifications WHERE customer_id = ? ORDER BY uploaded_at DESC`,
+      `SELECT cv.id, cv.document_url, cv.verification_status, cv.uploaded_at, ct.name as customer_type_name
+       FROM customer_verifications cv
+       JOIN customers c ON c.id = cv.customer_id
+       JOIN customer_types ct ON ct.id = c.customer_type_id
+       WHERE cv.customer_id = ? ORDER BY cv.uploaded_at DESC`,
       [id]
     );
 
-    res.json({ success: true, data: { customer: rows[0], documents: docs } });
+    // Map the results to include document_type for frontend compatibility
+    const documentsWithType = docs.map(row => ({
+      id: row.id,
+      document_url: row.document_url,
+      verification_status: row.verification_status,
+      uploaded_at: row.uploaded_at,
+      document_type: row.customer_type_name.toLowerCase().replace(' ', '_') // Convert "Senior Citizen" to "senior_citizen"
+    }));
+
+    res.json({ success: true, data: { customer: rows[0], documents: documentsWithType } });
   } catch (error) {
     console.error('Error fetching customer:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch customer' });
