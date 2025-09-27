@@ -16,7 +16,7 @@ const S3_BUCKET =
   process.env.AWS_S3_BUCKET;
 const s3 = new AWS.S3({ region: S3_REGION });
 
-const ALLOWED_DOC_TYPES = new Set(['student_id', 'aadhaar', 'pan', 'other']);
+const ALLOWED_CUSTOMER_TYPES = new Set(['student', 'senior_citizen']);
 
 // Helper to create a safe S3 key filename
 const sanitizeFileName = (name) => {
@@ -34,14 +34,14 @@ router.post('/presign', verifyToken, async (req, res) => {
     }
 
     const customerId = req.user.id;
-    const { file_name, content_type, document_type } = req.body || {};
+    const { file_name, content_type, customer_type } = req.body || {};
 
-    if (!file_name || !content_type || !document_type) {
-      return res.status(400).json({ message: 'file_name, content_type and document_type are required' });
+    if (!file_name || !content_type || !customer_type) {
+      return res.status(400).json({ message: 'file_name, content_type and customer_type are required' });
     }
 
-    if (!ALLOWED_DOC_TYPES.has(document_type)) {
-      return res.status(400).json({ message: 'Invalid document_type' });
+    if (!ALLOWED_CUSTOMER_TYPES.has(customer_type)) {
+      return res.status(400).json({ message: 'Invalid customer_type. Must be "student" or "senior_citizen"' });
     }
 
     const safeName = sanitizeFileName(file_name);
@@ -73,25 +73,70 @@ router.post('/presign', verifyToken, async (req, res) => {
 router.post('/confirm', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
-    const { document_type, object_key } = req.body || {};
+    const { customer_type, object_key } = req.body || {};
 
-    if (!object_key || !document_type) {
-      return res.status(400).json({ message: 'document_type and object_key are required' });
+    if (!object_key || !customer_type) {
+      return res.status(400).json({ message: 'customer_type and object_key are required' });
     }
-    if (!ALLOWED_DOC_TYPES.has(document_type)) {
-      return res.status(400).json({ message: 'Invalid document_type' });
+    if (!ALLOWED_CUSTOMER_TYPES.has(customer_type)) {
+      return res.status(400).json({ message: 'Invalid customer_type. Must be "student" or "senior_citizen"' });
     }
 
+    // Check for existing verification documents (mutual exclusivity)
+    const [existingDocs] = await pool.query(
+      `SELECT cv.id, ct.name as customer_type_name 
+       FROM customer_verifications cv
+       JOIN customers c ON c.id = cv.customer_id
+       JOIN customer_types ct ON ct.id = c.customer_type_id
+       WHERE cv.customer_id = ? AND cv.verification_status IN ('pending', 'verified')`,
+      [customerId]
+    );
+
+    // If user already has a verification document, prevent uploading different type
+    if (existingDocs.length > 0) {
+      const existingTypeName = existingDocs[0].customer_type_name;
+      const newTypeName = customer_type === 'student' ? 'Student' : 'Senior Citizen';
+      
+      if (existingTypeName.toLowerCase() !== customer_type) {
+        return res.status(400).json({ 
+          message: `You already have a ${existingTypeName} verification document. Cannot upload ${newTypeName} document.`,
+          existing_type: existingTypeName.toLowerCase()
+        });
+      }
+      
+      // If same type, check if there's already a pending/verified document
+      return res.status(400).json({ 
+        message: `You already have a ${existingTypeName} verification document pending or verified.`
+      });
+    }
+
+    // Update customer type first based on intended verification type
+    let customerTypeId = 1; // Default to Normal (1)
+    if (customer_type === 'student') {
+      customerTypeId = 3; // Student type
+    } else if (customer_type === 'senior_citizen') {
+      customerTypeId = 2; // Senior Citizen type
+    }
+
+    // Update the customer's type
+    await pool.query(
+      `UPDATE customers SET customer_type_id = ? WHERE id = ?`,
+      [customerTypeId, customerId]
+    );
+
+    // Insert verification record (without document_type column)
     const [result] = await pool.query(
-      `INSERT INTO customer_verifications (customer_id, document_url, document_type, verification_status)
-       VALUES (?, ?, ?, 'pending')`,
-      [customerId, object_key, document_type]
+      `INSERT INTO customer_verifications (customer_id, document_url, verification_status)
+       VALUES (?, ?, 'pending')`,
+      [customerId, object_key]
     );
 
     return res.status(201).json({
       message: 'Document saved successfully',
       id: result.insertId,
-      document_url: object_key
+      document_url: object_key,
+      customer_type_updated: true,
+      customer_type_id: customerTypeId
     });
   } catch (err) {
     console.error('Error confirming customer document:', err);
@@ -105,14 +150,25 @@ router.get('/', verifyToken, async (req, res) => {
     const customerId = req.user.id;
 
     const [rows] = await pool.query(
-      `SELECT id, document_type, document_url, verification_status, uploaded_at
-       FROM customer_verifications
-       WHERE customer_id = ?
-       ORDER BY uploaded_at DESC`,
+      `SELECT cv.id, cv.document_url, cv.verification_status, cv.uploaded_at, ct.name as customer_type_name
+       FROM customer_verifications cv
+       JOIN customers c ON c.id = cv.customer_id
+       JOIN customer_types ct ON ct.id = c.customer_type_id
+       WHERE cv.customer_id = ?
+       ORDER BY cv.uploaded_at DESC`,
       [customerId]
     );
 
-    return res.json({ documents: rows });
+    // Map the results to include document_type for frontend compatibility
+    const documents = rows.map(row => ({
+      id: row.id,
+      document_url: row.document_url,
+      verification_status: row.verification_status,
+      uploaded_at: row.uploaded_at,
+      document_type: row.customer_type_name.toLowerCase().replace(' ', '_') // Convert "Senior Citizen" to "senior_citizen"
+    }));
+
+    return res.json({ documents });
   } catch (err) {
     console.error('Error listing customer documents:', err);
     return res.status(500).json({ message: 'Server error', error: err.message });
@@ -174,6 +230,108 @@ router.get('/:id/presign', verifyToken, async (req, res) => {
     return res.json({ success: true, url, storage: 's3', expiresIn: 300 });
   } catch (err) {
     console.error('Error generating customer doc view URL:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// PUT /:id/status -> update verification status (admin only)
+router.put('/:id/status', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // 'verified', 'rejected'
+
+    if (!['verified', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be "verified" or "rejected"' });
+    }
+
+    // Get the verification document details with current customer type
+    const [docs] = await pool.query(
+      `SELECT cv.customer_id, ct.name as customer_type_name, ct.id as customer_type_id
+       FROM customer_verifications cv
+       JOIN customers c ON c.id = cv.customer_id
+       JOIN customer_types ct ON ct.id = c.customer_type_id
+       WHERE cv.id = ?`,
+      [id]
+    );
+
+    if (docs.length === 0) {
+      return res.status(404).json({ message: 'Verification document not found' });
+    }
+
+    const { customer_id, customer_type_name, customer_type_id } = docs[0];
+
+    // Update verification status
+    await pool.query(
+      `UPDATE customer_verifications SET verification_status = ? WHERE id = ?`,
+      [status, id]
+    );
+
+    // If document is rejected, reset customer type to Normal
+    // If verified, keep the current customer type (already set during upload)
+    let newCustomerTypeId = customer_type_id; // Keep current type
+    
+    if (status === 'rejected') {
+      newCustomerTypeId = 1; // Reset to Normal (1)
+      
+      // Update the customer's type back to Normal
+      await pool.query(
+        `UPDATE customers SET customer_type_id = ? WHERE id = ?`,
+        [newCustomerTypeId, customer_id]
+      );
+    }
+
+    return res.json({
+      message: `Verification ${status} successfully`,
+      verification_id: id,
+      customer_type_updated: status === 'rejected',
+      customer_type_id: newCustomerTypeId,
+      customer_type_name: status === 'rejected' ? 'Normal' : customer_type_name
+    });
+  } catch (err) {
+    console.error('Error updating verification status:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /discount-info -> get customer discount information
+router.get('/discount-info', verifyToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+
+    // Get customer type info and check if they have verified documents
+    const [rows] = await pool.query(
+      `SELECT c.customer_type_id, ct.name as customer_type_name, ct.discount_percentage,
+              COUNT(cv.id) as verified_docs_count
+       FROM customers c
+       LEFT JOIN customer_types ct ON ct.id = c.customer_type_id
+       LEFT JOIN customer_verifications cv ON cv.customer_id = c.id AND cv.verification_status = 'verified'
+       WHERE c.id = ?
+       GROUP BY c.id, c.customer_type_id, ct.name, ct.discount_percentage`,
+      [customerId]
+    );
+
+    if (rows.length === 0) {
+      return res.json({
+        has_discount: false,
+        discount_percentage: 0,
+        verification_type: null,
+        customer_type: 'Normal'
+      });
+    }
+
+    const customerData = rows[0];
+    const hasVerifiedDocs = customerData.verified_docs_count > 0;
+    const discountPercentage = hasVerifiedDocs ? (customerData.discount_percentage || 0) : 0;
+    const customerTypeName = customerData.customer_type_name || 'Normal';
+
+    return res.json({
+      has_discount: discountPercentage > 0 && hasVerifiedDocs,
+      discount_percentage: discountPercentage,
+      verification_type: customerTypeName.toLowerCase().replace(' ', '_'), // Convert "Senior Citizen" to "senior_citizen"
+      customer_type: customerTypeName
+    });
+  } catch (err) {
+    console.error('Error getting discount info:', err);
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

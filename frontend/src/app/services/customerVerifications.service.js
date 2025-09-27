@@ -14,12 +14,12 @@ apiClient.interceptors.request.use((config) => {
 });
 
 const CustomerVerificationsService = {
-  presignUpload: async ({ file_name, content_type, document_type }) => {
-    const { data } = await apiClient.post('/presign', { file_name, content_type, document_type });
+  presignUpload: async ({ file_name, content_type, customer_type }) => {
+    const { data } = await apiClient.post('/presign', { file_name, content_type, customer_type });
     return data;
   },
-  confirmUpload: async ({ document_type, object_key }) => {
-    const { data } = await apiClient.post('/confirm', { document_type, object_key });
+  confirmUpload: async ({ customer_type, object_key }) => {
+    const { data } = await apiClient.post('/confirm', { customer_type, object_key });
     return data;
   },
   list: async () => {
@@ -28,6 +28,14 @@ const CustomerVerificationsService = {
   },
   presignView: async (id) => {
     const { data } = await apiClient.get(`/${id}/presign`);
+    return data;
+  },
+  getDiscountInfo: async () => {
+    const { data } = await apiClient.get('/discount-info');
+    return data;
+  },
+  updateStatus: async (id, status) => {
+    const { data } = await apiClient.put(`/${id}/status`, { status });
     return data;
   }
 };
