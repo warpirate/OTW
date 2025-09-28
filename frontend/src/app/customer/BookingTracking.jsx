@@ -14,13 +14,32 @@ import {
   MessageSquare,
   Star,
   X,
-  Wrench
+  Wrench,
+  DollarSign
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
+import AuthService from '../services/auth.service';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
 import io from 'socket.io-client';
+import { API_BASE_URL } from '../config';
+import PaymentService from '../services/payment.service';
+
+// Load Razorpay script
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 const BookingTracking = () => {
   const { bookingId } = useParams();
@@ -346,18 +365,13 @@ const BookingTracking = () => {
         toast.error(data.message || 'Payment failed. Please try again.');
       }
     } catch (error) {
-      console.error('Payment error:', error);
-      toast.error('Payment failed. Please try again.');
     } finally {
       setPaymentProcessing(false);
     }
   };
 
-  const handleRatingSubmit = async () => {
-    if (rating === 0) {
-      toast.error('Please select a rating');
-      return;
-    }
+  const handleRazorpayPayment = async () => {
+    if (!booking) return;
 
     setSubmittingRating(true);
     try {

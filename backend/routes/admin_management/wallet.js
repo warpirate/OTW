@@ -86,7 +86,7 @@ router.get('/admin/wallets/:workerId', verifyToken, verifyAdmin, async (req, res
 
     // Get more detailed transaction history
     const [transactions] = await pool.query(
-      `SELECT wt.*, b.id as booking_id, b.service_name, b.total_amount
+      `SELECT wt.*, b.id as booking_id, b.service_name, b.price as total_amount
        FROM wallet_transactions wt
        LEFT JOIN bookings b ON wt.booking_id = b.id
        WHERE wt.wallet_id = ?

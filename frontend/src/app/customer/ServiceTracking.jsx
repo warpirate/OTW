@@ -25,6 +25,22 @@ import { CustomerChatWindow } from '../../components/Chat';
 import { toast } from 'react-toastify';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
+import PaymentService from '../services/payment.service';
+
+// Load Razorpay script
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]')) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 const ServiceTracking = () => {
   const { bookingId } = useParams();
@@ -46,7 +62,6 @@ const ServiceTracking = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [hasRated, setHasRated] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(null);
   const [showChat, setShowChat] = useState(false);
 
   // Status flow configuration for service providers
@@ -147,6 +162,14 @@ const ServiceTracking = () => {
       newSocket.emit('join_booking_room', bookingId);
     });
 
+    newSocket.on('connect_error', (error) => {
+      console.log('WebSocket connection failed, continuing without real-time updates:', error.message);
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
+    });
+
     newSocket.on('provider_assigned', (data) => {
       setProvider(data.provider);
       setCurrentStatus('accepted');
@@ -242,7 +265,6 @@ const ServiceTracking = () => {
 
     if (bookingId) {
       loadBookingDetails();
-      fetchWalletBalance();
     }
   }, [bookingId, navigate]);
 
@@ -304,28 +326,6 @@ const ServiceTracking = () => {
     }
   };
 
-  const fetchWalletBalance = async () => {
-    try {
-      const token = AuthService.getToken('customer');
-      const response = await fetch(`${API_BASE_URL}/api/customer/wallet/balance`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setWalletBalance(parseFloat(data.data.current_balance));
-      } else {
-        setWalletBalance(0);
-      }
-    } catch (error) {
-      console.error('Error fetching wallet balance:', error);
-      setWalletBalance(0);
-    }
-  };
 
   const handlePayment = async () => {
     if (!booking) return;
@@ -333,21 +333,17 @@ const ServiceTracking = () => {
     setPaymentProcessing(true);
     
     try {
-      const token = AuthService.getToken('customer');
-      
       // Get selected payment method
-      const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'wallet';
+      const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked')?.value || 'upi';
       
-      let requestBody = {
-        amount: booking.total_amount,
-        payment_method: selectedMethod
-      };
-
-      // Add UPI ID for UPI payments
       if (selectedMethod === 'upi') {
-        const upiId = 'customer@paytm'; // This should come from user profile or be selected
-        requestBody.upi_id = upiId;
+        // Open Razorpay checkout for UPI payment
+        await handleRazorpayPayment();
+        return;
       }
+
+      // Handle cash payments through existing API
+      const token = AuthService.getToken('customer');
       
       const response = await fetch(`${API_BASE_URL}/api/customer/bookings/${bookingId}/process-payment`, {
         method: 'POST',
@@ -355,42 +351,23 @@ const ServiceTracking = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          amount: booking.display_price || booking.total_amount || booking.price,
+          payment_method: selectedMethod
+        })
       });
 
       const data = await response.json();
       
       if (data.success) {
-        if (selectedMethod === 'wallet') {
-          // Wallet payment completed immediately
-          toast.success(`Payment processed successfully from wallet! New balance: ₹${data.new_balance}`);
-          setWalletBalance(data.new_balance);
-          setShowPaymentModal(false);
-          
-          // Show rating modal after successful payment
-          setTimeout(() => {
-            setShowRatingModal(true);
-          }, 1000);
-        } else if (selectedMethod === 'upi' && data.status === 'processing') {
-          // Payment is being processed via Razorpay
-          toast.info('Payment request created. Please complete payment in your UPI app.');
-          setShowPaymentModal(false);
-          
-          // The webhook will handle the completion and status update
-          // We'll listen for the status_update event to show rating modal
-        } else {
-          // Payment completed immediately (cash or successful UPI)
-          const message = selectedMethod === 'cash' 
-            ? 'Payment processed successfully! Amount will be credited to worker wallet.'
-            : 'Payment processed successfully!';
-          toast.success(message);
-          setShowPaymentModal(false);
-          
-          // Show rating modal after successful payment
-          setTimeout(() => {
-            setShowRatingModal(true);
-          }, 1000);
-        }
+        // Cash payment
+        toast.success('Payment processed successfully!');
+        setShowPaymentModal(false);
+        
+        // Show rating modal after successful payment
+        setTimeout(() => {
+          setShowRatingModal(true);
+        }, 1000);
       } else {
         toast.error(data.message || 'Payment failed. Please try again.');
       }
@@ -399,6 +376,158 @@ const ServiceTracking = () => {
       toast.error('Payment failed. Please try again.');
     } finally {
       setPaymentProcessing(false);
+    }
+  };
+
+  const handleRazorpayPayment = async () => {
+    if (!booking) return;
+
+    try {
+      // Load Razorpay script if not already loaded
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        toast.error('Payment gateway could not be loaded. Please try again.');
+        return;
+      }
+
+      // Create Razorpay order
+      const orderResponse = await PaymentService.razorpay.createOrder({
+        amount: booking.display_price || booking.total_amount || booking.price,
+        description: `${booking.service_name || booking.subcategory_name} - Service Payment`,
+        booking_id: booking.id,
+        user_details: {
+          name: 'Customer', // You can get this from auth context
+          email: 'customer@example.com', // You can get this from auth context
+          contact: '9999999999' // You can get this from auth context
+        }
+      });
+
+      if (!orderResponse.success) {
+        throw new Error(orderResponse.message || 'Failed to create payment order');
+      }
+
+      const { order } = orderResponse;
+
+      // Razorpay checkout options
+      const options = {
+        key: order.key,
+        amount: order.amount,
+        currency: order.currency,
+        name: order.name,
+        description: order.description,
+        order_id: order.id,
+        prefill: order.prefill,
+        theme: order.theme,
+        method: order.method,
+        config: order.config,
+        handler: async (response) => {
+          try {
+            console.log('Razorpay payment success:', response);
+            
+            // Handle payment success
+            const successResponse = await PaymentService.razorpay.handleSuccess({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature
+            });
+
+            if (successResponse.success) {
+              toast.success(`Payment of ₹${booking.display_price || booking.total_amount || booking.price} completed successfully!`);
+              setShowPaymentModal(false);
+              
+              // Show rating modal after successful payment
+              setTimeout(() => {
+                setShowRatingModal(true);
+              }, 1000);
+            } else {
+              toast.error('Payment verification failed. Your payment may have been processed but could not be confirmed. Please contact support with your transaction ID.', {
+                duration: 8000,
+                position: 'top-center'
+              });
+            }
+          } catch (error) {
+            console.error('Payment verification error:', error);
+            toast.error('Payment verification failed due to network error. Your payment may have been processed. Please check your payment history or contact support.', {
+              duration: 8000,
+              position: 'top-center'
+            });
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            console.log('Razorpay checkout modal closed');
+            // Modal dismissed, don't show error
+          }
+        }
+      };
+
+      // Open Razorpay checkout
+      const rzp = new window.Razorpay(options);
+      
+      rzp.on('payment.failed', (response) => {
+        console.error('Razorpay payment failed:', response.error);
+        
+        // Enhanced error handling with specific messages
+        const error = response.error;
+        let errorMessage = 'Payment failed. Please try again.';
+        
+        if (error.code === 'PAYMENT_FAILED') {
+          if (error.reason === 'international_transaction_not_allowed') {
+            errorMessage = 'International cards are not supported. Please use a domestic Indian card or try UPI payment.';
+          } else if (error.reason === 'payment_failed') {
+            errorMessage = `Payment failed: ${error.description || 'Transaction declined by bank'}`;
+          } else if (error.reason === 'authentication_failed') {
+            errorMessage = 'Payment authentication failed. Please check your card details and try again.';
+          } else if (error.reason === 'gateway_error') {
+            errorMessage = 'Payment gateway error. Please try again in a few minutes.';
+          } else {
+            errorMessage = `Payment failed: ${error.description || error.reason || 'Unknown error'}`;
+          }
+        } else if (error.code === 'BAD_REQUEST_ERROR') {
+          errorMessage = 'Invalid payment request. Please contact support.';
+        } else if (error.code === 'GATEWAY_ERROR') {
+          errorMessage = 'Payment gateway temporarily unavailable. Please try again.';
+        } else if (error.code === 'NETWORK_ERROR') {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+        } else {
+          // Fallback to description or reason
+          errorMessage = `Payment failed: ${error.description || error.reason || error.code || 'Unknown error'}`;
+        }
+        
+        toast.error(errorMessage, {
+          duration: 6000, // Show longer for detailed messages
+          position: 'top-center'
+        });
+      });
+
+      rzp.open();
+
+    } catch (error) {
+      console.error('Razorpay payment error:', error);
+      
+      // Enhanced error handling for API/network errors
+      let errorMessage = 'Payment could not be processed. Please try again.';
+      
+      if (error?.response?.status === 400) {
+        errorMessage = 'Invalid payment request. Please check the amount and try again.';
+      } else if (error?.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please login again.';
+      } else if (error?.response?.status === 500) {
+        errorMessage = 'Payment service temporarily unavailable. Please try again in a few minutes.';
+      } else if (error?.response?.status === 503) {
+        errorMessage = 'Payment gateway is under maintenance. Please try again later.';
+      } else if (error?.code === 'NETWORK_ERROR' || error?.message?.includes('Network Error')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = `Payment error: ${error.message}`;
+      }
+      
+      toast.error(errorMessage, {
+        duration: 6000,
+        position: 'top-center'
+      });
     }
   };
 
@@ -697,7 +826,7 @@ const ServiceTracking = () => {
               <div>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Amount</p>
                 <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  ₹{booking.total_amount || booking.estimated_cost}
+                  ₹{booking.display_price || booking.total_amount || booking.estimated_cost || booking.price}
                 </p>
               </div>
               
@@ -810,7 +939,7 @@ const ServiceTracking = () => {
                 <div className="flex justify-between items-center">
                   <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Total Amount</span>
                   <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                    ₹{booking?.total_amount}
+                    ₹{booking?.display_price || booking?.total_amount || booking?.price}
                   </span>
                 </div>
               </div>
@@ -824,27 +953,8 @@ const ServiceTracking = () => {
                   <input
                     type="radio"
                     name="paymentMethod"
-                    value="wallet"
-                    defaultChecked
-                    className="text-blue-600"
-                  />
-                  <div className="flex-1">
-                    <div className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Wallet Payment</div>
-                    <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      Pay from your wallet balance
-                      {walletBalance !== null && (
-                        <span className={`ml-2 font-medium ${walletBalance >= booking?.total_amount ? 'text-green-600' : 'text-red-600'}`}>
-                          (₹{walletBalance})
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </label>
-                <label className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
                     value="upi"
+                    defaultChecked
                     className="text-blue-600"
                   />
                   <div>

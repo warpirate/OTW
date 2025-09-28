@@ -754,4 +754,196 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router; 
+// GET /:id/otp-status - Check OTP status for a booking (customer side)
+router.get('/:id/otp-status', verifyToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const bookingId = req.params.id;
+
+    // Check if booking exists and belongs to customer
+    const [bookings] = await pool.query(
+      'SELECT id, service_status, otp_code, otp_expires_at FROM bookings WHERE id = ? AND user_id = ?',
+      [bookingId, customerId]
+    );
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    const booking = bookings[0];
+    const now = new Date();
+    const hasOtp = !!booking.otp_code;
+    const isValidOtp = hasOtp && booking.otp_expires_at && new Date(booking.otp_expires_at) > now;
+
+    res.json({
+      has_otp: hasOtp,
+      otp_valid: isValidOtp,
+      expires_at: booking.otp_expires_at,
+      service_status: booking.service_status,
+      message: hasOtp ? 
+        (isValidOtp ? 'OTP is valid and active' : 'OTP has expired') : 
+        'No OTP generated yet'
+    });
+
+  } catch (err) {
+    console.error('Error checking OTP status:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /:id/generate-otp - Generate OTP for service booking (customer side)
+router.post('/:id/generate-otp', verifyToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const bookingId = req.params.id;
+
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Get booking details with customer and worker information
+      const [bookingDetails] = await connection.query(`
+        SELECT 
+          b.id, b.user_id AS customer_id, b.service_status, b.otp_code, b.otp_expires_at,
+          u.name as customer_name, u.email as customer_email,
+          wu.name as worker_name,
+          sc.name as service_name
+        FROM bookings b
+        LEFT JOIN users u ON b.user_id = u.id
+        LEFT JOIN providers p ON b.provider_id = p.id
+        LEFT JOIN users wu ON p.user_id = wu.id
+        LEFT JOIN booking_items bi ON b.id = bi.booking_id
+        LEFT JOIN subcategories sc ON bi.subcategory_id = sc.id
+        WHERE b.id = ? AND b.user_id = ?
+        LIMIT 1
+      `, [bookingId, customerId]);
+
+      if (bookingDetails.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Booking not found' });
+      }
+
+      const booking = bookingDetails[0];
+
+      // Check if booking is in appropriate status (arrived or in_progress)
+      if (!['arrived', 'in_progress'].includes(booking.service_status)) {
+        await connection.rollback();
+        return res.status(400).json({ 
+          message: 'OTP can only be generated when service provider has arrived or service is in progress' 
+        });
+      }
+
+      // Check if OTP was generated recently (prevent spam)
+      const now = new Date();
+      if (booking.otp_expires_at && new Date(booking.otp_expires_at) > now) {
+        const timeLeft = Math.ceil((new Date(booking.otp_expires_at) - now) / 60000);
+        await connection.rollback();
+        return res.status(429).json({ 
+          message: `OTP is still valid. Please wait ${timeLeft} minutes before requesting a new OTP` 
+        });
+      }
+
+      // Generate new OTP (6-digit number)
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
+      
+      await connection.query(
+        'UPDATE bookings SET otp_code = ?, otp_expires_at = ?, updated_at = NOW() WHERE id = ?',
+        [otp, expiresAt, bookingId]
+      );
+
+      await connection.commit();
+
+      res.json({ 
+        success: true, 
+        message: 'OTP generated successfully',
+        otp: otp, // Return OTP to customer so they can share with worker
+        expires_at: expiresAt.toISOString(),
+        customer_email: booking.customer_email
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+  } catch (err) {
+    console.error('Error generating OTP:', err);
+    res.status(500).json({ message: 'Server error while generating OTP' });
+  }
+});
+
+// POST /:id/verify-otp - Verify OTP (customer side - for customer verification if needed)
+router.post('/:id/verify-otp', verifyToken, async (req, res) => {
+  try {
+    const customerId = req.user.id;
+    const bookingId = req.params.id;
+    const { otp } = req.body;
+
+    if (!otp || otp.length !== 6) {
+      return res.status(400).json({ message: 'Please provide a valid 6-digit OTP' });
+    }
+
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Get booking details with OTP information
+      const [bookingDetails] = await connection.query(`
+        SELECT id, service_status, otp_code, otp_expires_at
+        FROM bookings 
+        WHERE id = ? AND user_id = ?
+      `, [bookingId, customerId]);
+
+      if (bookingDetails.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Booking not found' });
+      }
+
+      const booking = bookingDetails[0];
+
+      if (!booking.otp_code) {
+        await connection.rollback();
+        return res.status(400).json({ message: 'No OTP has been generated for this booking' });
+      }
+
+      // Check if OTP has expired
+      const now = new Date();
+      if (new Date(booking.otp_expires_at) <= now) {
+        await connection.rollback();
+        return res.status(400).json({ message: 'OTP has expired. Please generate a new one.' });
+      }
+
+      // Verify OTP
+      if (booking.otp_code !== otp) {
+        await connection.rollback();
+        return res.status(400).json({ message: 'Invalid OTP. Please try again.' });
+      }
+
+      // OTP is valid - for customer verification, we just confirm but don't change booking status
+      // (The worker will verify and complete the service from their end)
+      
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: 'OTP verified successfully',
+        service_status: booking.service_status
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+  } catch (err) {
+    console.error('Error verifying OTP (customer):', err);
+    res.status(500).json({ message: 'Server error while verifying OTP' });
+  }
+});
+
+module.exports = router;

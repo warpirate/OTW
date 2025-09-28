@@ -7,17 +7,26 @@ import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 
+// Load Razorpay script
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 const Payment = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [paymentMethods, setPaymentMethods] = useState([]);
-  const [selectedMethod, setSelectedMethod] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [darkMode, setDarkMode] = useState(isDarkMode());
 
   // Get payment data from navigation state
-  const { amount, bookingId, description, selectedPaymentMethod: preSelectedMethod, onPaymentSuccess } = location.state || {};
+  const { amount, bookingId, description, onPaymentSuccess } = location.state || {};
 
   // Listen for theme changes
   useEffect(() => {
@@ -27,52 +36,7 @@ const Payment = () => {
     return removeListener;
   }, []);
 
-  // Load payment methods
-  useEffect(() => {
-    loadPaymentMethods();
-  }, []);
-
-  const loadPaymentMethods = async () => {
-    try {
-      setLoading(true);
-      const response = await PaymentService.upiMethods.getAll();
-      const methods = response.payment_methods || [];
-      setPaymentMethods(methods);
-      
-      // Auto-select method (prioritize pre-selected, then default, then first)
-      if (preSelectedMethod) {
-        // Find the pre-selected method in the loaded methods
-        const foundMethod = methods.find(method => method.id === preSelectedMethod.id);
-        if (foundMethod) {
-          setSelectedMethod(foundMethod);
-        } else {
-          // Fallback to default or first method
-          const defaultMethod = methods.find(method => method.is_default);
-          setSelectedMethod(defaultMethod || methods[0]);
-        }
-      } else {
-        // Auto-select default method
-        const defaultMethod = methods.find(method => method.is_default);
-        if (defaultMethod) {
-          setSelectedMethod(defaultMethod);
-        } else if (methods.length > 0) {
-          setSelectedMethod(methods[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading payment methods:', error);
-      toast.error('Failed to load payment methods');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handlePayment = async () => {
-    if (!selectedMethod) {
-      toast.error('Please select a payment method');
-      return;
-    }
-
     if (!amount || amount <= 0) {
       toast.error('Invalid payment amount');
       return;
@@ -81,73 +45,99 @@ const Payment = () => {
     setProcessing(true);
 
     try {
-      // Initiate UPI payment
-      const paymentResult = await PaymentService.upi.initiate({
+      // Load Razorpay script if not already loaded
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        toast.error('Payment gateway could not be loaded. Please try again.');
+        setProcessing(false);
+        return;
+      }
+
+      // Create Razorpay order
+      const orderResponse = await PaymentService.razorpay.createOrder({
         amount,
-        upi_id: selectedMethod.upi_id,
         description: description || 'Service Payment',
-        booking_id: bookingId
+        booking_id: bookingId,
+        user_details: {
+          name: 'Customer', // You can get this from auth context
+          email: 'customer@example.com', // You can get this from auth context
+          contact: '9999999999' // You can get this from auth context
+        }
       });
 
-      if (paymentResult.success && paymentResult.status === 'completed') {
-        toast.success(`Payment of ${PaymentService.utils.formatAmount(amount)} completed successfully!`);
-        
-        // Call success callback if provided
-        if (onPaymentSuccess) {
-          onPaymentSuccess(paymentResult.payment_id);
-        }
-        
-        // Navigate back or to success screen
-        navigate(-1);
-      } else if (paymentResult.success && paymentResult.status === 'processing') {
-        toast.info('Payment initiated. Please complete the payment in your UPI app.');
-        
-        // Navigate back - the webhook will handle the final status
-        navigate(-1);
-      } else {
-        throw new Error(paymentResult.message || 'Payment failed');
+      if (!orderResponse.success) {
+        throw new Error(orderResponse.message || 'Failed to create payment order');
       }
+
+      const { order } = orderResponse;
+
+      // Razorpay checkout options
+      const options = {
+        key: order.key,
+        amount: order.amount,
+        currency: order.currency,
+        name: order.name,
+        description: order.description,
+        order_id: order.id,
+        prefill: order.prefill,
+        theme: order.theme,
+        method: order.method,
+        config: order.config,
+        handler: async (response) => {
+          try {
+            console.log('Razorpay payment success:', response);
+            
+            // Handle payment success
+            const successResponse = await PaymentService.razorpay.handleSuccess({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature
+            });
+
+            if (successResponse.success) {
+              toast.success(`Payment of ${PaymentService.utils.formatAmount(amount)} completed successfully!`);
+              
+              // Call success callback if provided
+              if (onPaymentSuccess) {
+                onPaymentSuccess(successResponse.payment_id);
+              }
+              
+              // Navigate back or to success screen
+              navigate(-1);
+            } else {
+              toast.error('Payment verification failed. Please contact support.');
+            }
+          } catch (error) {
+            console.error('Payment verification error:', error);
+            toast.error('Payment verification failed. Please contact support.');
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            console.log('Razorpay checkout modal closed');
+            setProcessing(false);
+          }
+        }
+      };
+
+      // Open Razorpay checkout
+      const rzp = new window.Razorpay(options);
+      
+      rzp.on('payment.failed', (response) => {
+        console.error('Razorpay payment failed:', response.error);
+        toast.error(`Payment failed: ${response.error.description}`);
+        setProcessing(false);
+      });
+
+      rzp.open();
+
     } catch (error) {
       console.error('Payment error:', error);
       toast.error(error?.response?.data?.message || 'Payment could not be processed. Please try again.');
-    } finally {
       setProcessing(false);
     }
   };
 
-  const getProviderIcon = (provider) => {
-    const iconMap = {
-      'Paytm': '💳',
-      'Google Pay': '📱',
-      'PhonePe': '📲',
-      'Amazon Pay': '🛒',
-      'BHIM': '🏦',
-      'Yono SBI': '🏛️',
-      'HDFC Bank': '🏦',
-      'ICICI Bank': '🏦',
-      'Axis Bank': '🏦',
-      'Kotak Bank': '🏦',
-      'Punjab National Bank': '🏦',
-      'State Bank of India': '🏦',
-      'Bank UPI': '🏦',
-      'Other': '💳'
-    };
-    return iconMap[provider] || '💳';
-  };
-
-  if (loading) {
-    return (
-      <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-        <Header />
-        <div className="container-custom py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-          </div>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
 
   return (
     <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
@@ -207,108 +197,68 @@ const Payment = () => {
             </div>
           </div>
 
-          {/* Payment Methods */}
+          {/* Payment Options Info */}
           <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg p-6 mb-6`}>
             <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Select Payment Method
+              Payment Options
             </h2>
             
-            {paymentMethods.length === 0 ? (
-              <div className="text-center py-8">
-                <CreditCard className={`h-12 w-12 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} />
-                <h3 className={`text-lg font-medium mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  No Payment Methods
-                </h3>
-                <p className={`mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Add a UPI payment method to continue
-                </p>
-                <button
-                  onClick={() => navigate('/add-upi-method')}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                >
-                  Add UPI Method
-                </button>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="flex flex-col items-center p-3 bg-purple-50 rounded-lg">
+                <div className="text-2xl mb-2">📱</div>
+                <span className={`text-sm font-medium ${darkMode ? 'text-gray-800' : 'text-gray-700'}`}>UPI</span>
+                <span className={`text-xs ${darkMode ? 'text-gray-600' : 'text-gray-500'}`}>PhonePe, GPay, etc.</span>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {paymentMethods.map((method) => (
-                  <div
-                    key={method.id}
-                    onClick={() => setSelectedMethod(method)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                      selectedMethod?.id === method.id
-                        ? 'border-purple-500 bg-purple-50'
-                        : darkMode
-                        ? 'border-gray-600 hover:border-gray-500'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="text-2xl">
-                        {getProviderIcon(method.provider_name)}
-                      </div>
-                      
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {method.upi_id}
-                          </h3>
-                          {method.is_default && (
-                            <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {method.provider_name}
-                        </p>
-                      </div>
-                      
-                      <div className="flex-shrink-0">
-                        <div className={`w-4 h-4 rounded-full border-2 ${
-                          selectedMethod?.id === method.id
-                            ? 'border-purple-500 bg-purple-500'
-                            : 'border-gray-300'
-                        }`}>
-                          {selectedMethod?.id === method.id && (
-                            <CheckCircle className="h-4 w-4 text-white" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              
+              <div className="flex flex-col items-center p-3 bg-blue-50 rounded-lg">
+                <div className="text-2xl mb-2">💳</div>
+                <span className={`text-sm font-medium ${darkMode ? 'text-gray-800' : 'text-gray-700'}`}>Cards</span>
+                <span className={`text-xs ${darkMode ? 'text-gray-600' : 'text-gray-500'}`}>Credit/Debit</span>
               </div>
-            )}
+              
+              <div className="flex flex-col items-center p-3 bg-green-50 rounded-lg">
+                <div className="text-2xl mb-2">🏦</div>
+                <span className={`text-sm font-medium ${darkMode ? 'text-gray-800' : 'text-gray-700'}`}>Netbanking</span>
+                <span className={`text-xs ${darkMode ? 'text-gray-600' : 'text-gray-500'}`}>All Banks</span>
+              </div>
+              
+              <div className="flex flex-col items-center p-3 bg-orange-50 rounded-lg">
+                <div className="text-2xl mb-2">👛</div>
+                <span className={`text-sm font-medium ${darkMode ? 'text-gray-800' : 'text-gray-700'}`}>Wallets</span>
+                <span className={`text-xs ${darkMode ? 'text-gray-600' : 'text-gray-500'}`}>Paytm, etc.</span>
+              </div>
+            </div>
+            
+            <p className={`text-sm text-center ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              Choose your preferred payment method in the next step
+            </p>
           </div>
 
           {/* Payment Button */}
-          {paymentMethods.length > 0 && selectedMethod && (
-            <div className="space-y-4">
-              <button
-                onClick={handlePayment}
-                disabled={processing}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-4 rounded-lg font-medium transition-colors flex items-center justify-center"
-              >
-                {processing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-5 w-5 mr-2" />
-                    Pay {PaymentService.utils.formatAmount(amount)}
-                  </>
-                )}
-              </button>
-              
-              <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
-                <AlertCircle className="h-4 w-4" />
-                <span>Secure payment powered by Razorpay</span>
-              </div>
+          <div className="space-y-4">
+            <button
+              onClick={handlePayment}
+              disabled={processing}
+              className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+            >
+              {processing ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Opening Payment Gateway...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  Pay {PaymentService.utils.formatAmount(amount)}
+                </>
+              )}
+            </button>
+            
+            <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+              <AlertCircle className="h-4 w-4" />
+              <span>Secure payment powered by Razorpay</span>
             </div>
-          )}
+          </div>
         </div>
       </div>
       

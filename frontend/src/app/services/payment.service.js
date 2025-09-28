@@ -179,6 +179,31 @@ const PaymentService = {
     }
   },
 
+  // Razorpay Checkout
+  razorpay: {
+    // Create order for Razorpay checkout
+    createOrder: async (paymentData) => {
+      try {
+        const response = await apiClient.post('/razorpay/create-order', paymentData);
+        return response.data;
+      } catch (error) {
+        console.error('Error creating Razorpay order:', error);
+        throw error;
+      }
+    },
+
+    // Handle payment success
+    handleSuccess: async (paymentResponse) => {
+      try {
+        const response = await apiClient.post('/razorpay/payment-success', paymentResponse);
+        return response.data;
+      } catch (error) {
+        console.error('Error handling Razorpay payment success:', error);
+        throw error;
+      }
+    }
+  },
+
   // Utility Methods
   utils: {
     // Validate UPI ID format
