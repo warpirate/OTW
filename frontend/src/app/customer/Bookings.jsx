@@ -447,8 +447,8 @@ const Bookings = () => {
                     
                     {/* Actions */}
                     <div className="flex items-center space-x-2">
-                      {/* Track Booking Button for Active Bookings */}
-                      {(booking.status === 'accepted' || booking.status === 'started' || booking.status === 'en_route' || booking.status === 'arrived' || booking.status === 'in_progress') && (
+                      {/* Track Booking Button for Active Bookings - Available from assignment */}
+                      {(booking.status === 'assigned' || booking.status === 'accepted' || booking.status === 'started' || booking.status === 'en_route' || booking.status === 'arrived' || booking.status === 'in_progress') && (
                         <button
                           onClick={() => {
                             // Navigate to appropriate tracking page based on booking type

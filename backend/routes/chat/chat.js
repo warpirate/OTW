@@ -575,10 +575,10 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             });
         }
 
-        // Allow chat creation for accepted/assigned and progressed service statuses
+        // Allow chat creation immediately after worker assignment and throughout service lifecycle
         const allowedStatuses = ['assigned', 'accepted', 'started', 'en_route', 'arrived', 'in_progress'];
         if (!allowedStatuses.includes(booking.service_status)) {
-            return res.status(400).json({ error: 'Chat can only be created for accepted bookings' });
+            return res.status(400).json({ error: 'Chat can only be created for assigned bookings' });
         }
 
         // Create chat session

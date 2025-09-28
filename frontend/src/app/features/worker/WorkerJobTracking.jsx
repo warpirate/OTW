@@ -36,7 +36,7 @@ const WorkerJobTracking = () => {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(null);
   const [customer, setCustomer] = useState(null);
-  const [currentStatus, setCurrentStatus] = useState('accepted');
+  const [currentStatus, setCurrentStatus] = useState('assigned');
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [socket, setSocket] = useState(null);
@@ -46,6 +46,15 @@ const WorkerJobTracking = () => {
 
   // Status flow configuration for workers
   const statusFlow = {
+    assigned: { 
+      label: 'Job Accepted', 
+      icon: CheckCircle, 
+      color: 'text-green-600', 
+      bgColor: 'bg-green-100',
+      description: 'You have accepted this job. Get ready to start!',
+      nextAction: 'Start Journey',
+      nextStatus: 'started'
+    },
     accepted: { 
       label: 'Job Accepted', 
       icon: CheckCircle, 
@@ -164,7 +173,7 @@ const WorkerJobTracking = () => {
           const data = await response.json();
           setBooking(data.booking);
           setCustomer(data.customer);
-          setCurrentStatus(data.booking.service_status || 'accepted');
+          setCurrentStatus(data.booking.service_status || 'assigned');
         } else {
           const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
           console.error('API Error:', response.status, errorData);
@@ -243,8 +252,8 @@ const WorkerJobTracking = () => {
   };
 
   const messageCustomer = () => {
-    // Only allow chat when job is accepted or in progress
-    if (currentStatus === 'accepted' || currentStatus === 'started' || 
+    // Allow chat from assignment through service completion
+    if (currentStatus === 'assigned' || currentStatus === 'accepted' || currentStatus === 'started' || 
         currentStatus === 'arrived' || currentStatus === 'in_progress') {
       setShowChat(true);
     } else {
@@ -369,7 +378,7 @@ const WorkerJobTracking = () => {
     );
   }
 
-  const currentStatusInfo = statusFlow[currentStatus] || statusFlow.accepted;
+  const currentStatusInfo = statusFlow[currentStatus] || statusFlow.assigned;
 
   return (
     <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
