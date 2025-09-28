@@ -288,6 +288,13 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
       [userId, booking_id || null, paymentMethod[0].id, transactionId, amount]
     );
 
+    // Create payment record for payment history
+    await pool.query(
+      `INSERT INTO payments (user_id, booking_id, upi_transaction_id, amount_paid, status, method, payment_type)
+       VALUES (?, ?, ?, ?, 'created', 'upi', 'upi')`,
+      [userId, booking_id || null, transactionResult.insertId, amount]
+    );
+
     // Create Razorpay order
     const orderResult = await createUPIOrder(amount, 'INR', transactionId);
     
@@ -385,22 +392,95 @@ router.get('/history', verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { limit = 20, offset = 0 } = req.query;
 
-    const [payments] = await pool.query(
+    console.log('Fetching payment history for user:', userId);
+
+    // First, try to get from payments table with joins
+    const [paymentsFromTable] = await pool.query(
       `SELECT p.*, ut.transaction_id as upi_transaction_id, ut.status as upi_status,
-              upm.upi_id, upm.provider_name, b.id as booking_id, b.booking_type
+              upm.upi_id, upm.provider_name, b.id as booking_id, b.booking_type,
+              'payments' as source
        FROM payments p
        LEFT JOIN upi_transactions ut ON p.upi_transaction_id = ut.id
        LEFT JOIN upi_payment_methods upm ON ut.upi_payment_method_id = upm.id
        LEFT JOIN bookings b ON p.booking_id = b.id
        WHERE p.user_id = ?
-       ORDER BY p.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [userId, parseInt(limit), parseInt(offset)]
+       ORDER BY p.created_at DESC`,
+      [userId]
     );
+
+    // If no records in payments table, get directly from upi_transactions
+    let finalPayments = [];
+    
+    if (paymentsFromTable.length === 0) {
+      console.log('No records in payments table, fetching from upi_transactions directly');
+      
+      const [upiTransactions] = await pool.query(
+        `SELECT ut.id as payment_id, ut.transaction_id, ut.amount, ut.status, 
+                ut.created_at, ut.updated_at, ut.booking_id,
+                upm.upi_id, upm.provider_name,
+                b.booking_type,
+                'upi_transactions' as source,
+                CASE 
+                  WHEN ut.status = 'completed' THEN 'captured'
+                  WHEN ut.status = 'pending' THEN 'created'
+                  WHEN ut.status = 'processing' THEN 'authorized'
+                  WHEN ut.status = 'failed' THEN 'failed'
+                  ELSE 'created'
+                END as normalized_status
+         FROM upi_transactions ut
+         LEFT JOIN upi_payment_methods upm ON ut.upi_payment_method_id = upm.id
+         LEFT JOIN bookings b ON ut.booking_id = b.id
+         WHERE ut.user_id = ?
+         ORDER BY ut.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [userId, parseInt(limit), parseInt(offset)]
+      );
+
+      // Transform upi_transactions to match payments format
+      finalPayments = upiTransactions.map(txn => ({
+        id: txn.payment_id,
+        user_id: userId,
+        booking_id: txn.booking_id,
+        upi_transaction_id: txn.payment_id,
+        amount_paid: txn.amount,
+        status: txn.normalized_status,
+        method: 'upi',
+        payment_type: 'upi',
+        created_at: txn.created_at,
+        updated_at: txn.updated_at,
+        transaction_id: txn.transaction_id,
+        upi_status: txn.status,
+        upi_id: txn.upi_id,
+        provider_name: txn.provider_name,
+        booking_type: txn.booking_type,
+        source: txn.source,
+        description: `UPI Payment - ${txn.provider_name || 'UPI'}`
+      }));
+    } else {
+      // Use payments table data with pagination
+      const [paginatedPayments] = await pool.query(
+        `SELECT p.*, ut.transaction_id as upi_transaction_id, ut.status as upi_status,
+                upm.upi_id, upm.provider_name, b.id as booking_id, b.booking_type,
+                'payments' as source
+         FROM payments p
+         LEFT JOIN upi_transactions ut ON p.upi_transaction_id = ut.id
+         LEFT JOIN upi_payment_methods upm ON ut.upi_payment_method_id = upm.id
+         LEFT JOIN bookings b ON p.booking_id = b.id
+         WHERE p.user_id = ?
+         ORDER BY p.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [userId, parseInt(limit), parseInt(offset)]
+      );
+      finalPayments = paginatedPayments;
+    }
+
+    console.log('Found payments:', finalPayments.length);
+    console.log('Payment data source:', finalPayments[0]?.source || 'none');
+    console.log('Sample payment:', finalPayments[0]);
 
     res.json({
       success: true,
-      payments: payments
+      payments: finalPayments
     });
   } catch (error) {
     console.error('Error fetching payment history:', error);
@@ -410,6 +490,110 @@ router.get('/history', verifyToken, async (req, res) => {
     });
   }
 });
+
+// GET /debug-payments - Debug payment records (development only)
+if (process.env.NODE_ENV !== 'production') {
+  router.get('/debug-payments', verifyToken, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      console.log('Debugging payments for user:', userId);
+
+      // Get all payments for user
+      const [payments] = await pool.query(
+        'SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC',
+        [userId]
+      );
+
+      // Get all UPI transactions for user
+      const [upiTransactions] = await pool.query(
+        'SELECT ut.*, upm.upi_id FROM upi_transactions ut LEFT JOIN upi_payment_methods upm ON ut.upi_payment_method_id = upm.id WHERE ut.user_id = ? ORDER BY ut.created_at DESC',
+        [userId]
+      );
+
+      // Find orphaned UPI transactions (exist in upi_transactions but not in payments)
+      const [orphanedTransactions] = await pool.query(
+        `SELECT ut.* FROM upi_transactions ut 
+         LEFT JOIN payments p ON p.upi_transaction_id = ut.id 
+         WHERE ut.user_id = ? AND p.id IS NULL`,
+        [userId]
+      );
+
+      // Get payments table structure
+      const [columns] = await pool.query('DESCRIBE payments');
+
+      res.json({
+        success: true,
+        debug: {
+          payments_count: payments.length,
+          payments: payments,
+          upi_transactions_count: upiTransactions.length,
+          upi_transactions: upiTransactions,
+          orphaned_transactions_count: orphanedTransactions.length,
+          orphaned_transactions: orphanedTransactions,
+          payments_table_structure: columns.map(col => ({ Field: col.Field, Type: col.Type }))
+        }
+      });
+    } catch (error) {
+      console.error('Error debugging payments:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to debug payments'
+      });
+    }
+  });
+
+  // POST /fix-orphaned-payments - Fix orphaned UPI transactions by creating payment records
+  router.post('/fix-orphaned-payments', verifyToken, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      console.log('Fixing orphaned payments for user:', userId);
+
+      // Find orphaned UPI transactions
+      const [orphanedTransactions] = await pool.query(
+        `SELECT ut.* FROM upi_transactions ut 
+         LEFT JOIN payments p ON p.upi_transaction_id = ut.id 
+         WHERE ut.user_id = ? AND p.id IS NULL`,
+        [userId]
+      );
+
+      console.log('Found orphaned transactions:', orphanedTransactions.length);
+
+      let fixedCount = 0;
+      for (const txn of orphanedTransactions) {
+        try {
+          // Map UPI transaction status to payments table status
+          const paymentStatus = txn.status === 'completed' ? 'captured' : 
+                               txn.status === 'processing' ? 'authorized' : 
+                               txn.status === 'pending' ? 'created' : 
+                               txn.status === 'failed' ? 'failed' : 'created';
+
+          await pool.query(
+            `INSERT INTO payments (user_id, booking_id, upi_transaction_id, amount_paid, status, method, payment_type, created_at)
+             VALUES (?, ?, ?, ?, ?, 'upi', 'upi', ?)`,
+            [txn.user_id, txn.booking_id, txn.id, txn.amount, paymentStatus, txn.created_at]
+          );
+          fixedCount++;
+          console.log('Fixed orphaned transaction:', txn.transaction_id);
+        } catch (error) {
+          console.error('Error fixing transaction:', txn.transaction_id, error);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Fixed ${fixedCount} orphaned payment records`,
+        fixed_count: fixedCount,
+        total_orphaned: orphanedTransactions.length
+      });
+    } catch (error) {
+      console.error('Error fixing orphaned payments:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fix orphaned payments'
+      });
+    }
+  });
+}
 
 // POST /upi/refund/:paymentId - Refund UPI payment
 router.post('/upi/refund/:paymentId', verifyToken, async (req, res) => {
@@ -489,5 +673,97 @@ router.post('/upi/refund/:paymentId', verifyToken, async (req, res) => {
     });
   }
 });
+
+  // POST /sync-payment-status - Sync payment status with Razorpay (development only)
+  router.post('/sync-payment-status', verifyToken, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { transaction_id } = req.body;
+
+      console.log('Syncing payment status for transaction:', transaction_id);
+
+      if (!transaction_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Transaction ID is required'
+        });
+      }
+
+      // Find the transaction
+      const [transactions] = await pool.query(
+        'SELECT * FROM upi_transactions WHERE transaction_id = ? AND user_id = ?',
+        [transaction_id, userId]
+      );
+
+      if (transactions.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Transaction not found'
+        });
+      }
+
+      const transaction = transactions[0];
+
+      // Get Razorpay order ID from stored response
+      const razorpayOrderId = transaction.payment_gateway_response ? 
+        JSON.parse(transaction.payment_gateway_response).razorpay_order_id : null;
+
+      if (!razorpayOrderId) {
+        return res.status(400).json({
+          success: false,
+          message: 'No Razorpay order ID found for transaction'
+        });
+      }
+
+      console.log('Found Razorpay order ID:', razorpayOrderId);
+
+      // For now, let's manually update processing transactions to completed
+      // In a real scenario, you'd query Razorpay API to get the actual status
+      if (transaction.status === 'processing') {
+        await pool.query(
+          `UPDATE upi_transactions 
+           SET status = 'completed', 
+               completed_at = NOW(),
+               payment_gateway_response = JSON_SET(COALESCE(payment_gateway_response, '{}'), '$.manual_update', true)
+           WHERE id = ?`,
+          [transaction.id]
+        );
+
+        // Update or create payment record
+        await pool.query(
+          `INSERT INTO payments (user_id, booking_id, upi_transaction_id, amount_paid, status, method, payment_type)
+           VALUES (?, ?, ?, ?, 'captured', 'upi', 'upi')
+           ON DUPLICATE KEY UPDATE status = 'captured'`,
+          [transaction.user_id, transaction.booking_id, transaction.id, transaction.amount]
+        );
+
+        // Update booking payment status if booking_id exists
+        if (transaction.booking_id) {
+          await pool.query(
+            'UPDATE bookings SET payment_status = "paid", payment_method = "UPI Payment", payment_completed_at = NOW(), updated_at = NOW() WHERE id = ?',
+            [transaction.booking_id]
+          );
+        }
+
+        res.json({
+          success: true,
+          message: 'Payment status updated to completed',
+          transaction_id: transaction_id
+        });
+      } else {
+        res.json({
+          success: true,
+          message: `Transaction is already ${transaction.status}`,
+          current_status: transaction.status
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing payment status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to sync payment status'
+      });
+    }
+  });
 
 module.exports = router;

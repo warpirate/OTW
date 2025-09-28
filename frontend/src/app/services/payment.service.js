@@ -125,10 +125,55 @@ const PaymentService = {
     // Get payment history
     get: async (params = {}) => {
       try {
+        console.log('PaymentService.history.get called with params:', params);
         const response = await apiClient.get('/history', { params });
+        console.log('PaymentService.history.get response:', response);
+        console.log('PaymentService.history.get response.data:', response.data);
         return response.data;
       } catch (error) {
         console.error('Error fetching payment history:', error);
+        console.error('Error response:', error.response);
+        throw error;
+      }
+    },
+
+    // Debug payment records (development only)
+    debug: async () => {
+      try {
+        console.log('PaymentService.history.debug called');
+        const response = await apiClient.get('/debug-payments');
+        console.log('PaymentService.history.debug response:', response);
+        return response.data;
+      } catch (error) {
+        console.error('Error debugging payments:', error);
+        throw error;
+      }
+    },
+
+    // Fix orphaned UPI transactions by creating payment records (development only)
+    fixOrphaned: async () => {
+      try {
+        console.log('PaymentService.history.fixOrphaned called');
+        const response = await apiClient.post('/fix-orphaned-payments');
+        console.log('PaymentService.history.fixOrphaned response:', response);
+        return response.data;
+      } catch (error) {
+        console.error('Error fixing orphaned payments:', error);
+        throw error;
+      }
+    },
+
+    // Sync payment status with Razorpay (development only)
+    syncStatus: async (transactionId) => {
+      try {
+        console.log('PaymentService.history.syncStatus called for:', transactionId);
+        const response = await apiClient.post('/sync-payment-status', {
+          transaction_id: transactionId
+        });
+        console.log('PaymentService.history.syncStatus response:', response);
+        return response.data;
+      } catch (error) {
+        console.error('Error syncing payment status:', error);
         throw error;
       }
     }
@@ -180,18 +225,23 @@ const PaymentService = {
     // Format payment status for display
     formatStatus: (status) => {
       const statusMap = {
+        'created': 'Pending',
+        'authorized': 'Processing',
+        'captured': 'Completed',
+        'failed': 'Failed',
+        'refunded': 'Refunded',
+        // Legacy status mappings
         'pending': 'Pending',
         'processing': 'Processing',
         'completed': 'Completed',
-        'failed': 'Failed',
-        'cancelled': 'Cancelled',
-        'refunded': 'Refunded'
+        'cancelled': 'Cancelled'
       };
       return statusMap[status] || status;
     },
 
     // Format amount for display
-    formatAmount: (amount) => {
+    formatAmount: (payment) => {
+      const amount = payment.amount_paid || payment.amount || 0;
       return new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR'
