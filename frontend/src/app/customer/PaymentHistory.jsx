@@ -39,7 +39,25 @@ const PaymentHistory = () => {
         offset: (pagination.page - 1) * pagination.limit
       };
       
+      console.log('Loading payment history with params:', params);
       const response = await PaymentService.history.get(params);
+      console.log('Payment history response:', response);
+      console.log('Response success:', response.success);
+      console.log('Response payments:', response.payments);
+
+      // If no payments found, let's check if we have any UPI transactions
+      if (!response.payments || response.payments.length === 0) {
+        console.log('No payments found in API response');
+        console.log('Response success:', response.success);
+        console.log('Response message:', response.message);
+        console.log('Full response object:', JSON.stringify(response, null, 2));
+
+        // If API call failed, show error
+        if (!response.success) {
+          toast.error('Failed to load payment history: ' + (response.message || 'Unknown error'));
+        }
+      }
+      
       setPayments(response.payments || []);
       setPagination(prev => ({
         ...prev,
@@ -63,11 +81,14 @@ const PaymentHistory = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'completed':
+      case 'captured':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'failed':
         return <XCircle className="h-5 w-5 text-red-500" />;
       case 'pending':
       case 'processing':
+      case 'created':
+      case 'authorized':
         return <Clock className="h-5 w-5 text-yellow-500" />;
       case 'cancelled':
         return <XCircle className="h-5 w-5 text-gray-500" />;
@@ -81,11 +102,14 @@ const PaymentHistory = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
+      case 'captured':
         return 'text-green-600 bg-green-50 border-green-200';
       case 'failed':
         return 'text-red-600 bg-red-50 border-red-200';
       case 'pending':
       case 'processing':
+      case 'created':
+      case 'authorized':
         return 'text-yellow-600 bg-yellow-50 border-yellow-200';
       case 'cancelled':
         return 'text-gray-600 bg-gray-50 border-gray-200';
@@ -124,13 +148,57 @@ const PaymentHistory = () => {
             <ArrowLeft className="h-5 w-5 mr-2" />
             Back
           </button>
-          
-          <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-            Payment History
-          </h1>
-          <p className={`mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            View your transaction history
-          </p>
+
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Payment History
+              </h1>
+              <p className={`mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                View your transaction history
+              </p>
+            </div>
+
+            {/* Debug buttons - only show in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="flex space-x-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      const debugData = await PaymentService.history.debug();
+                      console.log('Debug data:', debugData);
+                      const orphanedCount = debugData.debug.orphaned_transactions_count || 0;
+                      toast.success(`Debug: Found ${debugData.debug.payments_count} payments, ${debugData.debug.upi_transactions_count} UPI transactions, ${orphanedCount} orphaned`);
+                    } catch (error) {
+                      console.error('Debug error:', error);
+                      toast.error('Debug failed');
+                    }
+                  }}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm"
+                >
+                  Debug
+                </button>
+                
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await PaymentService.history.fixOrphaned();
+                      console.log('Fix orphaned response:', response);
+                      toast.success(`Fixed ${response.fixed_count} orphaned payment records`);
+                      // Reload payment history after fixing
+                      loadPaymentHistory();
+                    } catch (error) {
+                      console.error('Fix orphaned error:', error);
+                      toast.error('Failed to fix orphaned payments');
+                    }
+                  }}
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm"
+                >
+                  Fix Payments
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Payment History List */}
@@ -185,12 +253,32 @@ const PaymentHistory = () => {
                   
                   <div className="text-right">
                     <p className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {PaymentService.utils.formatAmount(payment.amount)}
+                      {PaymentService.utils.formatAmount(payment)}
                     </p>
-                    {payment.status === 'completed' && (
+                    {(payment.status === 'completed' || payment.status === 'captured') && (
                       <p className="text-xs text-green-600">
                         Payment successful
                       </p>
+                    )}
+                    {/* Sync Status button for processing payments - development only */}
+                    {process.env.NODE_ENV === 'development' && (payment.status === 'processing' || payment.status === 'authorized') && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await PaymentService.history.syncStatus(payment.transaction_id);
+                            console.log('Sync status response:', response);
+                            toast.success(response.message);
+                            // Reload payment history after sync
+                            loadPaymentHistory();
+                          } catch (error) {
+                            console.error('Sync status error:', error);
+                            toast.error('Failed to sync payment status');
+                          }
+                        }}
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs mt-1"
+                      >
+                        Sync Status
+                      </button>
                     )}
                   </div>
                 </div>

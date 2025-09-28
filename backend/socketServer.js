@@ -19,7 +19,7 @@ class SocketServer {
             this.server = http.createServer(this.app);
 
             // Initialize Socket.IO
-            const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173,https://omwhub.com,https://www.omwhub.com')
+            const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173,https://omwhub.com,https://www.omwhub.com,https://api.omwhub.com')
               .split(',')
               .map(o => o.trim())
               .filter(Boolean);

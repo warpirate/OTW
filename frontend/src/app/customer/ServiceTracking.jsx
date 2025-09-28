@@ -704,7 +704,10 @@ const ServiceTracking = () => {
               <div>
                 <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Payment Method</p>
                 <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {booking.payment_method === 'pay_after_service' ? 'Pay After Service' : 'UPI Payment'}
+                  {booking.payment_method === 'pay_after_service' ? 'Pay After Service' : 
+                   booking.payment_method === 'UPI Payment' ? 'UPI Payment (Paid)' :
+                   booking.payment_method === 'upi' ? 'UPI Payment (Paid)' :
+                   booking.payment_status === 'paid' ? 'Payment Completed' : 'UPI Payment'}
                 </p>
               </div>
             </div>

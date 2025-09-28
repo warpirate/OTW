@@ -2,28 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, ArrowRight, Calendar, MapPin, Clock, Phone, Mail } from 'lucide-react';
 import { isDarkMode } from '../utils/themeUtils';
+import { useCart } from '../contexts/CartContext';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 
 const BookingSuccess = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { clearCart } = useCart();
   const [darkMode, setDarkMode] = useState(isDarkMode());
   
   // Get booking data from navigation state
-  const { bookingIds, totalAmount, scheduledDate } = location.state || {};
+  const { bookingIds, totalAmount, scheduledDate, paymentMethod, shouldClearCart } = location.state || {};
   
   // Generate order number from booking IDs
   const orderNumber = bookingIds && bookingIds.length > 0 
     ? `OMW-${bookingIds[0].toString().padStart(6, '0')}`
     : `OMW-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  // Redirect if no booking data
+  // Clear cart when booking is successful and handle redirects
   useEffect(() => {
     if (!bookingIds || bookingIds.length === 0) {
       navigate('/');
+      return;
     }
-  }, [bookingIds, navigate]);
+
+    // Clear cart only when reaching this success page (not during payment processing)
+    if (shouldClearCart) {
+      clearCart();
+      console.log('Cart cleared after successful booking completion');
+    }
+  }, [bookingIds, navigate, shouldClearCart, clearCart]);
 
   return (
     <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
@@ -94,8 +103,10 @@ const BookingSuccess = () => {
                 <span className={`font-medium ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   Payment Status:
                 </span>
-                <span className="font-medium text-orange-600">
-                  Pay After Service
+                <span className={`font-medium ${
+                  paymentMethod === 'upi' ? 'text-green-600' : 'text-orange-600'
+                }`}>
+                  {paymentMethod === 'upi' ? 'Paid' : 'Pay After Service'}
                 </span>
               </div>
               

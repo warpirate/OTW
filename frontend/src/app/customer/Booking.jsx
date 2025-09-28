@@ -13,6 +13,8 @@ import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import PaymentService from '../services/payment.service';
+import CustomerVerificationsService from '../services/customerVerifications.service';
+import ProfileService from '../services/profile.service';
 
 const Booking = () => {
   const navigate = useNavigate();
@@ -75,6 +77,15 @@ const Booking = () => {
   const [newUpiId, setNewUpiId] = useState('');
   const [paymentRetryCount, setPaymentRetryCount] = useState(0);
   const [serviceBookingId, setServiceBookingId] = useState(null);
+  const [backendCalculatedTotal, setBackendCalculatedTotal] = useState(null);
+  
+  // Discount state
+  const [discountInfo, setDiscountInfo] = useState({
+    has_discount: false,
+    discount_percentage: 0,
+    customer_type: 'Normal'
+  });
+  const [loadingDiscount, setLoadingDiscount] = useState(false);
   
   // Sync dark mode with global theme changes
   useEffect(() => {
@@ -112,6 +123,9 @@ const Booking = () => {
     
     // Load payment methods
     loadPaymentMethods();
+    
+    // Load discount information
+    loadDiscountInfo();
     
     // Set default payment method if available
     if (paymentMethods.length > 0 && !selectedPaymentMethod) {
@@ -163,16 +177,32 @@ const Booking = () => {
     }
   };
   
-  // Calculate totals
+  // Load discount information
+  const loadDiscountInfo = async () => {
+    try {
+      setLoadingDiscount(true);
+      const info = await CustomerVerificationsService.getDiscountInfo();
+      setDiscountInfo(info || { has_discount: false, discount_percentage: 0, customer_type: 'Normal' });
+    } catch (e) {
+      console.warn('Failed to load discount info', e);
+      setDiscountInfo({ has_discount: false, discount_percentage: 0, customer_type: 'Normal' });
+    } finally {
+      setLoadingDiscount(false);
+    }
+  };
+  
+  // Calculate totals with discount (matching backend logic)
   const calculateTotals = () => {
-    if (!cart || !cart.items) return { subtotal: 0, serviceFee: 0, tax: 0, total: 0 };
+    if (!cart || !cart.items) return { subtotal: 0, discount: 0, tax: 0, total: 0 };
     
     const subtotal = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const serviceFee = subtotal * 0.05; // 5% service fee
-    const tax = (subtotal + serviceFee) * 0.18; // 18% GST
-    const total = subtotal + serviceFee + tax;
+    // Ensure discountInfo is properly loaded before calculating discount
+    const discount = (discountInfo && discountInfo.has_discount) ? subtotal * (discountInfo.discount_percentage / 100) : 0;
+    const discountedSubtotal = subtotal - discount;
+    const tax = discountedSubtotal * 0.18; // 18% GST on discounted amount (matching backend)
+    const total = discountedSubtotal + tax;
     
-    return { subtotal, serviceFee, tax, total };
+    return { subtotal, discount, tax, total };
   };
   
   // Generate available dates for booking
@@ -571,8 +601,8 @@ const Booking = () => {
     return true;
   };
 
-  // Process payment for service booking
-  const processServicePayment = async (amount, bookingIds) => {
+  // Process payment for service booking with Razorpay checkout
+  const processServicePayment = async (amount, bookingIds, pendingBookingData = null) => {
     if (!selectedPaymentMethod) {
       setPaymentStatus('cash');
       return true;
@@ -589,13 +619,160 @@ const Booking = () => {
         booking_id: bookingIds[0] // Use first booking ID
       };
       
+       console.log('Initiating payment with data:', paymentData);
       const paymentResponse = await PaymentService.upi.initiate(paymentData);
+       console.log('Payment response:', paymentResponse);
       setCurrentPayment(paymentResponse);
       
       if (paymentResponse.success) {
-        // Start payment verification polling
-        const paymentSuccess = await pollServicePaymentStatus(paymentResponse.payment_id);
-        return paymentSuccess;
+         // Open Razorpay checkout modal
+         const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_1234567890';
+         
+         // Get real user info from AuthService and ProfileService
+         const currentUser = AuthService.getCurrentUser('customer');
+         
+         // Fetch fresh user profile data for accurate contact info
+         let userProfile = null;
+         try {
+           userProfile = await ProfileService.profile.get();
+         } catch (profileError) {
+           console.warn('Could not fetch user profile:', profileError);
+         }
+         
+         // Use profile data first, then fallback to auth data
+         const userContact = userProfile?.phone_number || currentUser?.phone || currentUser?.mobile || '';
+         const userName = userProfile?.name || 
+           (currentUser?.firstName && currentUser?.lastName 
+             ? `${currentUser.firstName} ${currentUser.lastName}`
+             : currentUser?.name || currentUser?.firstName || '');
+         const userEmail = userProfile?.email || currentUser?.email || '';
+         
+         // Debug: Log the configuration
+         console.log('Razorpay configuration:', {
+           key: razorpayKey,
+           amount: amount * 100,
+           order_id: paymentResponse.razorpay_order_id,
+           currency: 'INR',
+           upi_enabled: true
+         });
+         
+         // Debug: Check if UPI is available for this account/amount
+         console.log('Payment method configuration:', {
+           upi: true,
+           card: true,
+           netbanking: true,
+           wallet: true
+         });
+
+         const razorpayOptions = {
+           key: razorpayKey,
+           currency: 'INR',
+           name: 'OMW - On My Way',
+           description: paymentData.description,
+           order_id: paymentResponse.razorpay_order_id,
+           amount: amount * 100, // Convert to paise (required for UPI)
+           prefill: {
+             name: userName || '', // Let user fill if empty
+             email: userEmail || '', // Let user fill if empty
+             contact: userContact || '', // Let user fill if empty
+             'vpa': selectedPaymentMethod.upi_id // Pre-fill selected UPI ID
+           },
+           // Try the most basic UPI configuration possible
+           method: {
+             upi: true
+           },
+           // Try without any custom config - let Razorpay handle it
+           readonly: {
+             email: true,
+             contact: true
+           },
+           theme: {
+             color: '#8B5CF6'
+           },
+           handler: (response) => {
+             // Payment successful callback
+             console.log('Razorpay payment successful:', response);
+             setPaymentStatus('completed');
+             toast.success('Payment completed successfully!');
+           },
+          modal: {
+            confirm_close: true, // Ask for confirmation before closing
+            escape: false, // Disable escape key to close
+            animation: true, // Enable animation
+            backdropclose: false, // Prevent clicking outside to close
+            handleback: true,
+            ondismiss: () => {
+              setPaymentProcessing(false);
+              setPaymentStatus('cancelled');
+              toast.info('Payment cancelled');
+            }
+          }
+        };
+
+        // Ensure Razorpay script is loaded
+        if (!window.Razorpay) {
+          console.error('Razorpay SDK not loaded');
+          toast.error('Payment gateway not available. Please refresh the page and try again.');
+          setPaymentStatus('failed');
+          setPaymentError('Payment gateway not available');
+          return false;
+        }
+        
+        // Return a promise that resolves when payment is completed
+        return new Promise(async (resolve) => {
+          // Override handlers to resolve promise
+          razorpayOptions.handler = async (response) => {
+            console.log('Razorpay payment successful:', response);
+            setPaymentStatus('completed');
+            toast.success('Payment completed successfully! Finalizing booking...');
+            
+            // If we have pending booking data, complete the booking flow
+            if (pendingBookingData) {
+              try {
+                // Clear cart after successful payment
+                await clearCart();
+                
+                // Navigate to booking success
+                navigate('/booking-success', { 
+                  state: { 
+                    bookingIds: pendingBookingData.booking_ids,
+                    totalAmount: pendingBookingData.total_amount,
+                    scheduledDate: pendingBookingData.scheduled_date,
+                    paymentId: paymentResponse?.payment_id,
+                    paymentMethod: 'upi'
+                  } 
+                });
+                
+                toast.success('Booking confirmed successfully!');
+              } catch (error) {
+                console.error('Error completing booking after payment:', error);
+                toast.error('Payment successful but booking completion failed. Please contact support.');
+              }
+            }
+            
+            resolve(true);
+          };
+          
+          razorpayOptions.modal.ondismiss = () => {
+            setPaymentProcessing(false);
+            setPaymentStatus('cancelled');
+            toast.info('Payment cancelled. Booking is on hold until payment is completed.');
+            resolve(false);
+          };
+          
+          try {
+            console.log('Final Razorpay options:', razorpayOptions);
+            const razorpay = new window.Razorpay(razorpayOptions);
+            console.log('Razorpay instance created, opening modal...');
+            razorpay.open();
+          } catch (modalError) {
+            console.error('Error opening Razorpay modal:', modalError);
+            setPaymentStatus('failed');
+            setPaymentError('Failed to open payment gateway');
+            toast.error('Failed to open payment gateway. Please try again.');
+            resolve(false);
+          }
+        });
       } else {
         throw new Error(paymentResponse.message || 'Payment initiation failed');
       }
@@ -664,9 +841,9 @@ const Booking = () => {
     }
     
     setPaymentRetryCount(prev => prev + 1);
-    if (serviceBookingId) {
-      const totals = calculateTotals();
-      await processServicePayment(totals.total, [serviceBookingId]);
+    if (serviceBookingId && backendCalculatedTotal) {
+      // Use backend-calculated total for consistency
+      await processServicePayment(backendCalculatedTotal, [serviceBookingId]);
     }
   };
 
@@ -741,6 +918,7 @@ const Booking = () => {
       // Send to backend
       const result = await BookingService.bookings.create(bookingData);
       setServiceBookingId(result.booking_ids?.[0]);
+      setBackendCalculatedTotal(result.total_amount);
 
       // Handle different payment types
       if (paymentType === 'pay_after_service') {
@@ -760,29 +938,24 @@ const Booking = () => {
           } 
         });
       } else {
-        // For UPI payments, process payment inline
-        toast.success('Booking created successfully! Processing payment...');
+        // For UPI payments, process payment FIRST, then complete booking after payment success
+        toast.info('Processing payment...');
         
-        const paymentSuccess = await processServicePayment(totals.total, result.booking_ids);
+        // Store booking data for completion after payment
+        const pendingBookingData = {
+          booking_ids: result.booking_ids,
+          total_amount: result.total_amount,
+          scheduled_date: new Date(`${selectedDate}T${selectedTimeSlot.time}:00`).toISOString()
+        };
         
-        if (paymentSuccess) {
-          // Clear cart only after successful payment
-          await clearCart();
-          
-          const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
-          navigate('/booking-success', { 
-            state: { 
-              bookingIds: result.booking_ids,
-              totalAmount: result.total_amount,
-              scheduledDate: scheduledLocalDate.toISOString(),
-              paymentId: currentPayment?.payment_id,
-              paymentMethod: 'upi'
-            } 
-          });
-        } else {
-          // Payment failed, but booking is created
-          toast.error('Booking created but payment failed. You can retry payment or pay after service.');
+        // Use backend-calculated total to ensure consistency with discount
+        const paymentSuccess = await processServicePayment(result.total_amount, result.booking_ids, pendingBookingData);
+        
+        if (!paymentSuccess) {
+          // Payment failed or cancelled - booking remains in pending state
+          toast.error('Payment was cancelled or failed. Booking is on hold until payment is completed.');
         }
+        // Note: Success handling is now done in processServicePayment after payment completion
       }
 
     } catch (error) {
@@ -822,20 +995,7 @@ const Booking = () => {
     };
     return iconMap[provider] || '💳';
   };
-  
-  // Calculate total amount
-  const calculateTotal = () => {
-    const subtotal = cart.total;
-    const serviceFee = subtotal * 0.05;
-    const tax = subtotal * 0.18;
-    return {
-      subtotal,
-      serviceFee,
-      tax,
-      total: subtotal + serviceFee + tax
-    };
-  };
-  const totals = calculateTotal();
+  const totals = calculateTotals();
 
   return (
     <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
@@ -1453,14 +1613,12 @@ const Booking = () => {
                           ₹{calculateTotals().subtotal.toFixed(2)}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
-                          Service Fee (5%)
-                        </span>
-                        <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
-                          ₹{calculateTotals().serviceFee.toFixed(2)}
-                        </span>
+                      {discountInfo.has_discount && (
+                        <div className="flex justify-between text-green-600">
+                          <span>{discountInfo.customer_type} Discount ({discountInfo.discount_percentage}%)</span>
+                          <span>-₹{(calculateTotals().discount || 0).toFixed(2)}</span>
                       </div>
+                      )}
                       <div className="flex justify-between">
                         <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
                           Tax (18%)
@@ -1513,12 +1671,12 @@ const Booking = () => {
                       ₹{totals.subtotal.toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Service Fee</span>
-                    <span className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                      ₹{totals.serviceFee.toFixed(2)}
-                    </span>
+                  {discountInfo.has_discount && (
+                    <div className="flex justify-between text-green-600">
+                      <span>{discountInfo.customer_type} Discount ({discountInfo.discount_percentage}%)</span>
+                      <span>-₹{(totals.discount || 0).toFixed(2)}</span>
                   </div>
+                  )}
                   <div className="flex justify-between">
                     <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Tax (18%)</span>
                     <span className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>
