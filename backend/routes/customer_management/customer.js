@@ -254,7 +254,7 @@ router.post('/bookings/:bookingId/process-payment', verifyToken, async (req, res
 
     // Verify the customer owns this booking
     const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.user_id AS customer_id, b.service_status, b.total_amount, b.payment_status, b.payment_method
+      SELECT b.id, b.user_id AS customer_id, b.service_status, b.price as total_amount, b.payment_status
       FROM bookings b
       WHERE b.id = ? AND b.booking_type != 'ride'
     `, [bookingId]);

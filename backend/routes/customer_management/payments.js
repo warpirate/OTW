@@ -236,6 +236,122 @@ router.delete('/upi-methods/:id', verifyToken, async (req, res) => {
   }
 });
 
+// POST /razorpay/create-order - Create Razorpay order for checkout
+router.post('/razorpay/create-order', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount, description, booking_id, user_details } = req.body;
+
+    // Validation
+    if (!amount || !description) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount and description are required'
+      });
+    }
+
+    if (amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be greater than 0'
+      });
+    }
+
+    // Generate transaction ID
+    const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+    // Create payment record
+    const [paymentResult] = await pool.query(
+      `INSERT INTO payments (user_id, booking_id, amount_paid, status, method, payment_type, created_at)
+       VALUES (?, ?, ?, 'created', 'razorpay', 'razorpay', NOW())`,
+      [userId, booking_id || null, amount]
+    );
+
+    // Create Razorpay order
+    console.log('Creating Razorpay order for amount:', amount, 'transactionId:', transactionId);
+    const orderResult = await createUPIOrder(amount, 'INR', transactionId);
+    
+    if (!orderResult.success) {
+      console.error('Razorpay order creation failed:', orderResult.error);
+      
+      // Update payment as failed
+      await pool.query(
+        `UPDATE payments SET status = 'failed' WHERE id = ?`,
+        [paymentResult.insertId]
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: `Failed to create payment order: ${orderResult.error || 'Unknown error'}`,
+        error_details: orderResult.error
+      });
+    }
+
+    // Update payment record with Razorpay order details
+    await pool.query(
+      `UPDATE payments 
+       SET razorpay_order_id = ?
+       WHERE id = ?`,
+      [orderResult.order.id, paymentResult.insertId]
+    );
+
+    // Get user details for prefill
+    const [userRows] = await pool.query(
+      `SELECT u.name, u.email, u.phone_number
+       FROM users u 
+       WHERE u.id = ?`,
+      [userId]
+    );
+
+    const user = userRows[0] || {};
+    const userPhone = user.phone_number || user_details?.contact || '';
+
+    // Return payment details for Razorpay checkout
+    res.json({
+      success: true,
+      order: {
+        id: orderResult.order.id,
+        amount: orderResult.order.amount,
+        currency: orderResult.order.currency,
+        key: process.env.RAZORPAY_KEY_ID,
+        name: "OMW - On My Way",
+        description: description,
+        prefill: {
+          name: user.name || user_details?.name || '',
+          email: user.email || user_details?.email || '',
+          contact: userPhone
+        },
+        theme: {
+          color: "#8B5CF6"  // Purple theme to match OMW branding
+        },
+        method: {
+          upi: true,
+          card: true,
+          netbanking: true,
+          wallet: true
+        },
+        config: {
+          display: {
+            sequence: ['upi', 'card', 'netbanking', 'wallet'],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
+        }
+      },
+      payment_id: paymentResult.insertId,
+      transaction_id: transactionId
+    });
+
+  } catch (error) {
+    console.error('Error creating Razorpay order:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create payment order'
+    });
+  }
+});
+
 // POST /upi/initiate - Initiate UPI payment
 router.post('/upi/initiate', verifyToken, async (req, res) => {
   try {
@@ -740,7 +856,7 @@ router.post('/upi/refund/:paymentId', verifyToken, async (req, res) => {
         // Update booking payment status if booking_id exists
         if (transaction.booking_id) {
           await pool.query(
-            'UPDATE bookings SET payment_status = "paid", payment_method = "UPI Payment", payment_completed_at = NOW(), updated_at = NOW() WHERE id = ?',
+            'UPDATE bookings SET payment_status = "paid", payment_method = "UPI Payment", payment_completed_at = NOW() WHERE id = ?',
             [transaction.booking_id]
           );
         }
@@ -765,5 +881,69 @@ router.post('/upi/refund/:paymentId', verifyToken, async (req, res) => {
       });
     }
   });
+
+// POST /razorpay/payment-success - Handle Razorpay payment success
+router.post('/razorpay/payment-success', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+
+    console.log('Processing Razorpay payment success:', {
+      payment_id: razorpay_payment_id,
+      order_id: razorpay_order_id
+    });
+
+    // Find the payment record by order ID
+    const [payments] = await pool.query(
+      'SELECT * FROM payments WHERE razorpay_order_id = ? AND user_id = ?',
+      [razorpay_order_id, userId]
+    );
+
+    if (payments.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment record not found'
+      });
+    }
+
+    const payment = payments[0];
+
+    // Update payment record with success details
+    await pool.query(
+      `UPDATE payments 
+       SET razorpay_payment_id = ?, 
+           status = 'captured', 
+           captured_at = NOW()
+       WHERE id = ?`,
+      [razorpay_payment_id, payment.id]
+    );
+
+    // Update booking payment status if booking_id exists
+    if (payment.booking_id) {
+      await pool.query(
+        `UPDATE bookings 
+         SET payment_status = 'paid', 
+             payment_method = 'Razorpay', 
+             payment_completed_at = NOW()
+         WHERE id = ?`,
+        [payment.booking_id]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment processed successfully',
+      payment_id: payment.id,
+      booking_id: payment.booking_id
+    });
+
+  } catch (error) {
+    console.error('Error processing Razorpay payment success:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process payment success'
+    });
+  }
+});
 
 module.exports = router;
