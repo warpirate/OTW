@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft,
   Filter,
   Search,
   Calendar,
@@ -15,13 +13,12 @@ import {
   MoreVertical,
   Plus,
   AlertCircle,
-  Settings,
-  Bell,
   Star
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
 import WorkerService from '../../services/worker.service';
+import WorkerHeader from '../../../components/WorkerHeader';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../../config';
 import { toast } from 'react-toastify';
@@ -292,50 +289,12 @@ const WorkerJobs = () => {
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Header */}
-      <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/worker/dashboard')}
-                className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                Booking Requests
-              </h1>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <button className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-                <Bell className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={() => navigate('/worker/settings')}
-                className={`p-2 rounded-lg ${darkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Settings"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={() => navigate('/worker/profile')}
-                className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                title="Profile"
-              >
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold text-sm">
-                    {user?.firstName?.[0]}{user?.lastName?.[0]}
-                  </span>
-                </div>
-                <span className={`hidden sm:block ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                  {user?.firstName} {user?.lastName}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <WorkerHeader 
+        title="Booking Requests"
+        showBackButton={true}
+        backUrl="/worker/dashboard"
+        user={user}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Error Message */}

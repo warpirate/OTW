@@ -11,6 +11,7 @@ class ChatService {
         this.messageHandlers = new Map();
         this.connectionHandlers = new Map();
         this.pendingMessages = [];
+        this.pendingJoins = new Set();
         this.activeRole = null; // optionally set by callers to force a role-specific token
         
         // Create axios instance for chat API calls
@@ -90,6 +91,20 @@ class ChatService {
                     this.socket.emit('send_message', msg);
                 });
                 this.pendingMessages = [];
+            }
+
+            // Join any rooms queued before socket was ready
+            if (this.pendingJoins && this.pendingJoins.size > 0) {
+                this.pendingJoins.forEach((sid) => {
+                    try {
+                        this.socket.emit('join_chat', { sessionId: sid });
+                        // Optionally request history to sync
+                        this.getChatHistoryViaSocket(sid);
+                    } catch (e) {
+                        console.warn('Failed to join queued chat room:', sid, e);
+                    }
+                });
+                this.pendingJoins.clear();
             }
         });
 
@@ -204,25 +219,23 @@ class ChatService {
 
     // Socket.IO methods
     joinChat(sessionId) {
+        // If socket isn't ready yet, queue the join and let 'connect' handler flush it
         if (!this.socket) {
-            console.error('Cannot join chat: socket not initialized');
+            console.warn('Cannot join chat yet (socket not initialized). Queuing join for session:', sessionId);
+            this.pendingJoins.add(sessionId);
             return;
         }
-        
+
         if (this.isConnected) {
             this.socket.emit('join_chat', { sessionId });
             this.getChatHistoryViaSocket(sessionId);
         } else {
-            // join once connected
-            this.socket.once('connect', () => {
-                this.socket.emit('join_chat', { sessionId });
-                this.getChatHistoryViaSocket(sessionId);
-            });
-            
+            // Queue and ensure connection
+            this.pendingJoins.add(sessionId);
             // Ensure socket tries to connect
             if (!this.socket.connected && !this.socket.connecting) {
-                try { 
-                    this.socket.connect(); 
+                try {
+                    this.socket.connect();
                 } catch (error) {
                     console.error('Failed to start socket connection:', error);
                 }

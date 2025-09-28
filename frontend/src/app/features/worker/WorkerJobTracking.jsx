@@ -28,7 +28,7 @@ import { WorkerChatWindow } from '../../../components/Chat';
 import { toast } from 'react-toastify';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../../config';
-
+import WorkerHeader from '../../../components/WorkerHeader';
 const WorkerJobTracking = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();

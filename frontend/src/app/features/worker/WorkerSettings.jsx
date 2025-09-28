@@ -23,7 +23,7 @@ import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
 import workerService from '../../services/worker.service'
 import { toast } from 'react-toastify';
-
+import WorkerHeader from '../../../components/WorkerHeader';
 export default function WorkerSettings() {
   // Memoize currentUser so that its reference stays stable between renders.
   const currentUser = useMemo(() => AuthService.getCurrentUser('worker'), []);

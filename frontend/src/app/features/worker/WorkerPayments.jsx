@@ -19,7 +19,7 @@ import {
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import CashPaymentService from '../../services/cashPayment.service';
 import { toast } from 'react-toastify';
-
+import WorkerHeader from '../../../components/WorkerHeader';
 const WorkerPayments = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(isDarkMode());

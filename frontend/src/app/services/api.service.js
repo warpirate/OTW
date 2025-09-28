@@ -105,15 +105,7 @@ export const CategoryService = {
   // Delete category
   deleteCategory: async (id) => {
     try {
-      // First get all subcategories for this category
-      const subcategories = await apiClient.get(`/sub-categories?categoryId=${id}`);
-      // If there are subcategories, delete them first
-      if (subcategories.data && subcategories.data.length > 0) {
-        await Promise.all(subcategories.data.map(subcategory => {
-          return apiClient.delete(`/delete-sub-category/${id}/${subcategory.id}`);
-        }));
-      }
-      // Now delete the category
+      // Soft delete the category - backend automatically disables subcategories
       const response = await apiClient.delete(`/delete-category/${id}`);
       return response.data;
     } catch (error) {
@@ -174,6 +166,20 @@ export const CategoryService = {
       );
       return response.data;
     } catch (error) {
+      throw error;
+    }
+  },
+
+  // Toggle subcategory status
+  toggleSubcategoryStatus: async (subcategoryId, isActive) => {
+    try {
+      const response = await apiClient.put(
+        `/subcategories/${subcategoryId}/toggle-status`,
+        { is_active: isActive }
+      );
+      return response.data;
+    } catch (error) {
+      console.error(`Error toggling subcategory ${subcategoryId} status:`, error);
       throw error;
     }
   }

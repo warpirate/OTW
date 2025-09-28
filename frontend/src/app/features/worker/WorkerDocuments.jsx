@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WorkerDocumentsService from '../../services/workerDocuments.service';
-
+import WorkerHeader from '../../../components/WorkerHeader';
 const WorkerDocuments = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('banking');

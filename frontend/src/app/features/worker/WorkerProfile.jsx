@@ -21,6 +21,7 @@ import {
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
 import WorkerService from '../../services/worker.service';
+import WorkerHeader from '../../../components/WorkerHeader';
 import { toast } from 'react-toastify';
 
 const WorkerProfile = () => {

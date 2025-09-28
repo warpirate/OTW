@@ -2083,6 +2083,8 @@ router.post('/bookings/:bookingId/verify-otp', verifyToken, async (req, res) => 
     return res.status(400).json({ message: 'Please provide a valid 6-digit OTP' });
   }
 
+  console.log('OTP Verification Debug:', { bookingId, worker_id, otp });
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -2100,8 +2102,10 @@ router.post('/bookings/:bookingId/verify-otp', verifyToken, async (req, res) => 
       JOIN users u ON b.user_id = u.id
       JOIN users wu ON p.user_id = wu.id
       LEFT JOIN subcategories sc ON b.subcategory_id = sc.id
-      WHERE b.id = ? AND p.user_id = ? AND b.booking_type != 'ride'
+      WHERE b.id = ? AND p.user_id = ?
     `, [bookingId, worker_id]);
+
+    console.log('Query result:', { bookingDetails, length: bookingDetails.length });
 
     if (!bookingDetails.length) {
       await connection.rollback();
@@ -2109,6 +2113,8 @@ router.post('/bookings/:bookingId/verify-otp', verifyToken, async (req, res) => 
     }
 
     const booking = bookingDetails[0];
+
+    console.log('Booking found:', { booking_id: booking.id, status: booking.service_status, otp_code: booking.otp_code });
 
     // Check if booking is in arrived status
     if (booking.service_status !== 'arrived') {
