@@ -649,16 +649,35 @@ try {
               WHEN b.booking_type = 'ride' THEN b.estimated_cost
               ELSE b.price 
             END as display_price,
+            -- Get payment info from payments table
+            p.id as payment_id,
+            p.razorpay_payment_id,
+            p.razorpay_order_id,
+            p.amount_paid,
             CASE 
+              WHEN p.status = 'captured' THEN 'paid'
+              WHEN p.status = 'authorized' THEN 'authorized'  
+              WHEN p.status = 'created' THEN 'pending'
+              WHEN p.status = 'failed' THEN 'failed'
+              WHEN b.cash_payment_id IS NOT NULL THEN 'paid'
+              ELSE 'pending'
+            END as payment_status,
+            CASE 
+              WHEN p.payment_type = 'razorpay' THEN 'Razorpay'
+              WHEN p.payment_type = 'upi' THEN 'UPI Payment'
               WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
               WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
               ELSE 'pay_after_service'
-            END as payment_method
+            END as payment_method,
+            p.captured_at as payment_completed_at
      FROM bookings b
      LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
      LEFT JOIN service_bookings sb ON sb.booking_id = b.id
      LEFT JOIN subcategories s ON s.id = b.subcategory_id
-     WHERE b.id = ? AND b.user_id = ?`,
+     LEFT JOIN payments p ON b.id = p.booking_id AND p.status IN ('created', 'authorized', 'captured')
+     WHERE b.id = ? AND b.user_id = ?
+     ORDER BY p.created_at DESC
+     LIMIT 1`,
     [bookingId, customerId]
   );
 
