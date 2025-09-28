@@ -269,6 +269,7 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
 
     // Create Razorpay order
     console.log('Creating Razorpay order for amount:', amount, 'transactionId:', transactionId);
+    console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID ? 'Present' : 'Missing');
     const orderResult = await createUPIOrder(amount, 'INR', transactionId);
     
     if (!orderResult.success) {
@@ -328,11 +329,12 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
           upi: true,
           card: true,
           netbanking: true,
-          wallet: true
+          emi: false,
+          paylater: true
         },
         config: {
           display: {
-            sequence: ['upi', 'card', 'netbanking', 'wallet'],
+            sequence: ['upi', 'card', 'netbanking'],
             preferences: {
               show_default_blocks: true
             }

@@ -236,6 +236,14 @@ const ServiceTracking = () => {
         
         if (response.ok) {
           const data = await response.json();
+          console.log('📋 Booking Data:', {
+            id: data.booking.id,
+            service_status: data.booking.service_status,
+            payment_status: data.booking.payment_status,
+            payment_method: data.booking.payment_method,
+            payment_completed_at: data.booking.payment_completed_at
+          });
+          
           setBooking(data.booking);
           setProvider(data.provider);
           setCurrentStatus(data.booking.service_status || 'pending');
@@ -244,8 +252,14 @@ const ServiceTracking = () => {
           
           // Check if service is completed and needs payment
           if (data.booking.service_status === 'completed' && 
-              data.booking.payment_method === 'pay_after_service' && 
-              data.booking.payment_status !== 'paid') {
+              data.booking.payment_status !== 'paid' &&
+              (data.booking.payment_method === 'pay_after_service' || 
+               data.booking.payment_method === 'upi' ||
+               data.booking.payment_method === 'UPI Payment')) {
+            // Only show payment modal if payment is actually pending
+            console.log('Booking payment status:', data.booking.payment_status);
+            console.log('Booking payment method:', data.booking.payment_method);
+            
             setTimeout(() => {
               setShowPaymentModal(true);
             }, 1000);
@@ -422,7 +436,8 @@ const ServiceTracking = () => {
         config: order.config,
         handler: async (response) => {
           try {
-            console.log('Razorpay payment success:', response);
+            console.log('🎉 Razorpay payment success callback fired!', response);
+            toast.info('Payment successful! Verifying...');
             
             // Handle payment success
             const successResponse = await PaymentService.razorpay.handleSuccess({
@@ -456,7 +471,12 @@ const ServiceTracking = () => {
         modal: {
           ondismiss: () => {
             console.log('Razorpay checkout modal closed');
-            // Modal dismissed, don't show error
+            // Check if payment might have succeeded even if callback didn't fire
+            setTimeout(() => {
+              setPaymentProcessing(false);
+              // Optionally refresh booking details to check if payment status changed
+              window.location.reload();
+            }, 2000);
           }
         }
       };
@@ -977,13 +997,28 @@ const ServiceTracking = () => {
               </div>
             </div>
             
-            <div className="flex space-x-3">
+            <div className="flex space-x-2">
               <button
                 onClick={() => setShowPaymentModal(false)}
                 className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
               >
                 Cancel
               </button>
+              
+              {/* Manual completion button if payment succeeded but modal stuck */}
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  toast.success('Payment completed! Thank you.');
+                  setTimeout(() => {
+                    setShowRatingModal(true);
+                  }, 1000);
+                }}
+                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm"
+              >
+                Payment Done
+              </button>
+              
               <button
                 onClick={handlePayment}
                 disabled={paymentProcessing}
