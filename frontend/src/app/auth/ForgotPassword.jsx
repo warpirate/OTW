@@ -68,7 +68,7 @@ const ForgotPassword = () => {
             </form>
           ) : (
             <div className="text-center">
-              <p className="mb-4">If that email is in our database, a reset link has been sent.</p>
+              <p className="mb-4">If that email is registered, a reset link has been sent.</p>
               <button
                 onClick={() => navigate('/login')}
                 className="text-blue-600 hover:text-blue-700 font-medium"

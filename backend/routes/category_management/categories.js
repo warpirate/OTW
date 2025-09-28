@@ -97,25 +97,24 @@ router.delete('/delete-category/:id', verifyToken, authorizeRole(['admin', 'supe
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
-
-
 router.post('/create-sub-category', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
         
         console.log(req.body);
-        const { name, category_id, description, base_price } = req.body;
+        const { name, category_id, description, base_price, is_active } = req.body;
         if (!name || !category_id) {
             return res.status(400).json({ message: 'Name and category_id are required' });
         }
-        const sql = `INSERT INTO subcategories (name, category_id, description, base_price)
-         VALUES (?, ?, ?, ?)`;
-        const [result] = await pool.query(sql, [name, category_id, description || null, base_price || null]);
-        res.status(201).json({ id: result.insertId, name, category_id, description, base_price });
+        const sql = `INSERT INTO subcategories (name, category_id, description, base_price, is_active)
+         VALUES (?, ?, ?, ?, ?)`;
+        const [result] = await pool.query(sql, [name, category_id, description || null, base_price || null, is_active !== undefined ? is_active : 1]);
+        res.status(201).json({ id: result.insertId, name, category_id, description, base_price, is_active: is_active !== undefined ? is_active : 1 });
     } catch (err) {
         console.error('Error:', err);
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
+
 router.get('/sub-categories', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
         const { categoryId } = req.query;
@@ -128,7 +127,6 @@ router.get('/sub-categories', verifyToken, authorizeRole(['admin', 'super admin'
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
-
 
 router.get('/sub-categories/:id', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
@@ -149,19 +147,20 @@ router.put('/:category_id/subcategories/:id', verifyToken, authorizeRole(['admin
     try {
         const { category_id, id } = req.params;
         console.log("Updating subcategory with ID:", id, "in category:", category_id);
-        const { name, description, base_price } = req.body;
-        const sql = `UPDATE subcategories SET name = ?, category_id = ?, description = ?, base_price = ? 
+        const { name, description, base_price, is_active } = req.body;
+        const sql = `UPDATE subcategories SET name = ?, category_id = ?, description = ?, base_price = ?, is_active = ? 
                     WHERE id = ? AND category_id = ?`;
-        const [result] = await pool.query(sql, [name, category_id, description, base_price, id, category_id]);
+        const [result] = await pool.query(sql, [name, category_id, description, base_price, is_active !== undefined ? is_active : 1, id, category_id]);
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: 'Subcategory not found' });
         }
-        res.json({ id, name, category_id, description, base_price });
+        res.json({ id, name, category_id, description, base_price, is_active });
     } catch (err) {
         console.error('Error:', err);
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
+
 router.delete('/delete-sub-category/:categoryId/:subcategoryId', verifyToken, authorizeRole(['admin', 'super admin']), async (req, res) => {
     try {
         const { categoryId, subcategoryId } = req.params;
@@ -176,6 +175,5 @@ router.delete('/delete-sub-category/:categoryId/:subcategoryId', verifyToken, au
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
- 
 
 module.exports = router;

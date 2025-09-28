@@ -45,7 +45,10 @@ const Booking = () => {
   const [addresses, setAddresses] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(null);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [validatingAddress, setValidatingAddress] = useState(false);
+  const [addressValidationResult, setAddressValidationResult] = useState(null);
   const [newAddress, setNewAddress] = useState({
     address: '',
     pin_code: '',
@@ -364,6 +367,31 @@ const Booking = () => {
       [field]: value
     }));
   };
+
+  // Handle pincode validation on blur
+  const handlePincodeValidation = async (pincode) => {
+    if (!pincode || pincode.length !== 6) return;
+    
+    setValidatingAddress(true);
+    try {
+      const validation = await BookingService.utils.validatePincode(pincode);
+      if (validation.isValid && validation.data) {
+        // Auto-fill city and state
+        setNewAddress(prev => ({
+          ...prev,
+          city: validation.data.city,
+          state: validation.data.state
+        }));
+        toast.success(`Pincode validated! Auto-filled: ${validation.data.city}, ${validation.data.state}`);
+      } else if (validation.error) {
+        toast.error(validation.error);
+      }
+    } catch (error) {
+      console.warn('Pincode validation error:', error);
+    } finally {
+      setValidatingAddress(false);
+    }
+  };
   
   // Geocode address using Google Maps API to get latitude and longitude
   const geocodeAddress = async (addressData) => {
@@ -382,35 +410,40 @@ const Booking = () => {
       
       for (const addr of addressCombinations) {
         // Get Google Maps API key from environment
-        const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE';
+        const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_REACT_APP_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE';
         
         if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
-          console.warn('Google Maps API key not configured');
-          continue;
+          console.warn('Google Maps API key not configured, skipping geocoding');
+          break; // Skip geocoding entirely if no API key
         }
         
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addr)}&key=${GOOGLE_MAPS_API_KEY}`;
-        const response = await fetch(url);
+        try {
+          const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addr)}&key=${GOOGLE_MAPS_API_KEY}`;
+          const response = await fetch(url);
         
-        if (!response.ok) {
-          console.error('Geocoding API error:', response.statusText);
+          if (!response.ok) {
+            console.error('Geocoding API error:', response.statusText);
+            continue;
+          }
+          
+          const data = await response.json();
+          
+          if (data.status === 'OK' && data.results && data.results.length > 0) {
+            const location = data.results[0].geometry.location;
+            latitude = location.lat;
+            longitude = location.lng;
+            console.log('Google Maps geocoding successful:', {
+              address: addr,
+              coordinates: { lat: latitude, lng: longitude },
+              formatted_address: data.results[0].formatted_address
+            });
+            break;
+          } else if (data.status !== 'OK') {
+            console.warn('Google Maps geocoding failed for address:', addr, 'Status:', data.status, data.error_message);
+          }
+        } catch (fetchError) {
+          console.warn('Error fetching geocoding data for address:', addr, fetchError);
           continue;
-        }
-        
-        const data = await response.json();
-        
-        if (data.status === 'OK' && data.results && data.results.length > 0) {
-          const location = data.results[0].geometry.location;
-          latitude = location.lat;
-          longitude = location.lng;
-          console.log('Google Maps geocoding successful:', {
-            address: addr,
-            coordinates: { lat: latitude, lng: longitude },
-            formatted_address: data.results[0].formatted_address
-          });
-          break;
-        } else if (data.status !== 'OK') {
-          console.warn('Google Maps geocoding failed for address:', addr, 'Status:', data.status, data.error_message);
         }
       }
       
@@ -440,11 +473,15 @@ const Booking = () => {
   // Add new address
   const handleAddAddress = async () => {
     try {
-      const validation = BookingService.utils.validateAddress(newAddress);
+      const validation = await BookingService.utils.validateAddress(newAddress);
       if (!validation.isValid) {
         const errorMessages = Object.values(validation.errors).join(', ');
         toast.error(errorMessages);
         return;
+      }
+      
+      if (validation.suggestions) {
+        toast.info(`Address validated. Suggested: ${validation.suggestions.city}, ${validation.suggestions.state}`);
       }
       
       // Get coordinates before saving
@@ -483,6 +520,82 @@ const Booking = () => {
       console.error('Error adding address:', error);
       toast.error('Failed to add address');
     }
+  };
+
+  // Edit address
+  const handleEditAddress = (address) => {
+    setEditingAddress(address);
+    setNewAddress({
+      address: address.address || '',
+      pin_code: address.pin_code || '',
+      city: address.city || '',
+      state: address.state || '',
+      country: address.country || 'India',
+      address_type: address.address_type || 'home',
+      address_label: address.address_label || '',
+      is_default: address.is_default || false
+    });
+    setShowAddressForm(true);
+    setAddressValidationResult(null);
+  };
+
+  // Update address
+  const handleUpdateAddress = async () => {
+    try {
+      const validation = await BookingService.utils.validateAddress(newAddress);
+      if (!validation.isValid) {
+        const errorMessages = Object.values(validation.errors).join(', ');
+        toast.error(errorMessages);
+        return;
+      }
+      
+      if (validation.suggestions) {
+        toast.info(`Address validated. Suggested: ${validation.suggestions.city}, ${validation.suggestions.state}`);
+      }
+      
+      // Get coordinates before saving
+      const coordinates = await geocodeAddress(newAddress);
+      
+      // Create address object with coordinates
+      const addressWithCoords = {
+        ...newAddress,
+        ...coordinates
+      };
+      
+      const result = await BookingService.addresses.update(editingAddress.address_id, addressWithCoords);
+      toast.success('Address updated successfully');
+      
+      // Refresh addresses
+      await loadAddresses();
+      
+      // Reset form
+      resetAddressForm();
+      
+      // Update selected address if it was the one being edited
+      if (selectedAddress?.address_id === editingAddress.address_id && result.address) {
+        setSelectedAddress(result.address);
+      }
+    } catch (error) {
+      console.error('Error updating address:', error);
+      toast.error('Failed to update address');
+    }
+  };
+
+  // Reset address form
+  const resetAddressForm = () => {
+    setNewAddress({
+      address: '',
+      pin_code: '',
+      city: '',
+      state: '',
+      country: 'India',
+      address_type: 'home',
+      address_label: '',
+      is_default: false
+    });
+    setShowAddressForm(false);
+    setEditingAddress(null);
+    setAddressValidationResult(null);
   };
   
   // Delete address
@@ -1101,7 +1214,7 @@ const Booking = () => {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // Edit functionality can be added here
+                                    handleEditAddress(address);
                                   }}
                                   className={`p-2 rounded-full ${darkMode ? 'text-gray-400 hover:text-white hover:bg-gray-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}
                                 >
@@ -1128,7 +1241,7 @@ const Booking = () => {
                   {showAddressForm && (
                     <div className={`mt-6 p-4 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
                       <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        Add New Address
+                        {editingAddress ? 'Edit Address' : 'Add New Address'}
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
@@ -1151,9 +1264,16 @@ const Booking = () => {
                             type="text"
                             value={newAddress.pin_code}
                             onChange={(e) => handleAddressInput('pin_code', e.target.value)}
+                            onBlur={(e) => handlePincodeValidation(e.target.value)}
                             className={`w-full px-3 py-2 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-500' : 'border-gray-300 bg-white text-gray-900'}`}
                             placeholder="123456"
                           />
+                          {validatingAddress && (
+  <div className="mt-2 flex items-center text-sm text-blue-600">
+    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-600 mr-2"></div>
+    Validating pincode...
+  </div>
+)}
                         </div>
                         <div>
                           <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1220,13 +1340,13 @@ const Booking = () => {
                       </div>
                       <div className="flex space-x-4 mt-6">
                         <button
-                          onClick={handleAddAddress}
+                          onClick={editingAddress ? handleUpdateAddress : handleAddAddress}
                           className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                         >
-                          Add Address
+                          {editingAddress ? 'Update Address' : 'Add Address'}
                         </button>
                         <button
-                          onClick={() => setShowAddressForm(false)}
+                          onClick={resetAddressForm}
                           className={`px-4 py-2 border rounded-lg ${darkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-600' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
                         >
                           Cancel

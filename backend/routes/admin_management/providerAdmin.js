@@ -819,17 +819,22 @@ router.get('/providers/:id/qualifications', verifyToken, authorizeRole(['admin',
 
     const providerId = provider[0].id;
 
-    // Get qualifications
+    // Get qualifications with new schema fields
     const query = `
       SELECT 
         id,
         qualification_name,
         issuing_institution,
         issue_date,
-        certificate_number
+        certificate_number,
+        certificate_url,
+        status,
+        remarks,
+        created_at,
+        updated_at
       FROM provider_qualifications 
       WHERE provider_id = ?
-      ORDER BY issue_date DESC
+      ORDER BY created_at DESC
     `;
 
     const [qualifications] = await pool.query(query, [providerId]);
@@ -842,7 +847,12 @@ router.get('/providers/:id/qualifications', verifyToken, authorizeRole(['admin',
         institution: qual.issuing_institution,
         issue_date: qual.issue_date,
         certificate_number: qual.certificate_number,
-        status: 'verified' // Default status since schema doesn't have status column
+        certificate_url: qual.certificate_url,
+        status: qual.status || 'pending_review',
+        remarks: qual.remarks,
+        created_at: qual.created_at,
+        updated_at: qual.updated_at,
+        has_certificate: Boolean(qual.certificate_url)
       }))
     });
 
@@ -851,6 +861,199 @@ router.get('/providers/:id/qualifications', verifyToken, authorizeRole(['admin',
     res.status(500).json({
       success: false,
       message: 'Failed to fetch qualifications',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Approve/Reject provider qualification
+ * PATCH /api/admin/providers/qualifications/:qualificationId/status
+ */
+router.patch('/providers/qualifications/:qualificationId/status', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const { qualificationId } = req.params;
+    const { status, remarks } = req.body;
+    
+    // Validate status
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be either approved or rejected'
+      });
+    }
+    
+    // Update qualification status
+    const updateQuery = `
+      UPDATE provider_qualifications 
+      SET status = ?, remarks = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `;
+    
+    const [result] = await pool.query(updateQuery, [status, remarks || null, qualificationId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Qualification not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Qualification ${status} successfully`,
+      data: {
+        status,
+        remarks
+      }
+    });
+  } catch (error) {
+    console.error('Error updating qualification status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update qualification status',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Get presigned URL to view qualification certificate
+ * GET /api/admin/providers/qualifications/:qualificationId/certificate
+ */
+router.get('/providers/qualifications/:qualificationId/certificate', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const { qualificationId } = req.params;
+
+    // Get qualification details
+    const [qualifications] = await pool.query(
+      'SELECT certificate_url FROM provider_qualifications WHERE id = ?',
+      [qualificationId]
+    );
+
+    if (qualifications.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Qualification not found'
+      });
+    }
+
+    const certificateUrl = qualifications[0].certificate_url;
+    if (!certificateUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'No certificate uploaded for this qualification'
+      });
+    }
+
+    // Handle local files (legacy)
+    if (certificateUrl.startsWith('/uploads/')) {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      return res.json({ 
+        success: true, 
+        url: `${baseUrl}${certificateUrl}`, 
+        storage: 'local' 
+      });
+    }
+
+    // Handle S3 files
+    if (!S3_BUCKET || !S3_REGION) {
+      return res.status(500).json({
+        success: false,
+        message: 'S3 is not configured on the server'
+      });
+    }
+
+    const params = {
+      Bucket: S3_BUCKET,
+      Key: certificateUrl,
+      Expires: 300,
+      ResponseContentDisposition: 'attachment'
+    };
+
+    const url = await s3.getSignedUrlPromise('getObject', params);
+    return res.json({ 
+      success: true, 
+      url, 
+      storage: 's3', 
+      expiresIn: 300 
+    });
+  } catch (error) {
+    console.error('Error generating qualification certificate presigned URL:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get certificate link',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Get all qualifications pending review (for admin dashboard)
+ * GET /api/admin/qualifications/pending
+ */
+router.get('/qualifications/pending', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const { status = 'pending_review', page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+    
+    // Get qualifications with provider information
+    const [qualifications] = await pool.query(
+      `SELECT pq.*, p.id as provider_id, u.name as provider_name, u.email as provider_email,
+              u.phone_number as provider_phone
+       FROM provider_qualifications pq
+       JOIN providers p ON pq.provider_id = p.id
+       JOIN users u ON p.user_id = u.id
+       WHERE pq.status = ?
+       ORDER BY pq.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [status, parseInt(limit), parseInt(offset)]
+    );
+    
+    // Get total count
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) as total FROM provider_qualifications WHERE status = ?',
+      [status]
+    );
+    
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
+    
+    res.json({
+      success: true,
+      data: {
+        qualifications: qualifications.map(qual => ({
+          id: qual.id,
+          qualification_name: qual.qualification_name,
+          institution: qual.issuing_institution,
+          issue_date: qual.issue_date,
+          certificate_number: qual.certificate_number,
+          certificate_url: qual.certificate_url,
+          status: qual.status,
+          remarks: qual.remarks,
+          created_at: qual.created_at,
+          updated_at: qual.updated_at,
+          has_certificate: Boolean(qual.certificate_url),
+          provider: {
+            id: qual.provider_id,
+            name: qual.provider_name,
+            email: qual.provider_email,
+            phone: qual.provider_phone
+          }
+        })),
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching pending qualifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pending qualifications',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

@@ -31,21 +31,8 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid password' });
     }
 
-    // Fetch actual role from DB
-    const [[dbRole]] = await pool.query(
-      `SELECT r.id AS role_id, r.name AS role_name
-       FROM roles r
-       JOIN user_roles ur ON ur.role_id = r.id
-       WHERE ur.user_id = ?
-       LIMIT 1`,
-      [user.id]
-    );
-
-    // More flexible role checking - normalize role names
-    const dbRoleName = dbRole.role_name.toLowerCase();
-    const requestedRole = role.toLowerCase();
-    
     // Handle role mapping for worker/provider synonyms
+    const requestedRole = role.toLowerCase();
     const roleMapping = {
       'worker': ['worker', 'provider', 'service provider'],
       'provider': ['worker', 'provider', 'service provider'],
@@ -54,9 +41,33 @@ router.post('/login', async (req, res) => {
     
     const allowedRoles = roleMapping[requestedRole] || [requestedRole];
     
-    if (!dbRole || !allowedRoles.includes(dbRoleName)) {
-      return res.status(403).json({ message: `Access denied for role ${role}. User has role: ${dbRole.role_name}` });
+    // Check if user has the requested role (or its synonyms)
+    const [userRoles] = await pool.query(
+      `SELECT r.id AS role_id, r.name AS role_name
+       FROM roles r
+       JOIN user_roles ur ON ur.role_id = r.id
+       WHERE ur.user_id = ? AND LOWER(r.name) IN (${allowedRoles.map(() => '?').join(',')})
+       LIMIT 1`,
+      [user.id, ...allowedRoles]
+    );
+
+    if (userRoles.length === 0) {
+      // Get user's actual roles for error message
+      const [allUserRoles] = await pool.query(
+        `SELECT r.name AS role_name
+         FROM roles r
+         JOIN user_roles ur ON ur.role_id = r.id
+         WHERE ur.user_id = ?`,
+        [user.id]
+      );
+      
+      const userRoleNames = allUserRoles.map(r => r.role_name).join(', ');
+      return res.status(403).json({ 
+        message: `Access denied for role ${role}. User has role(s): ${userRoleNames}` 
+      });
     }
+
+    const dbRole = userRoles[0];
 
     const token = jwt.sign(
       {
@@ -107,24 +118,42 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    const [existing] = await pool.query(
-      'SELECT id FROM users WHERE email = ? LIMIT 1',
+    // Check if email + role combination already exists
+    const [existingUserRole] = await pool.query(
+      `SELECT u.id FROM users u 
+       INNER JOIN user_roles ur ON u.id = ur.user_id 
+       WHERE u.email = ? AND ur.role_id = ? LIMIT 1`,
+      [email, role_id]
+    );
+
+    if (existingUserRole.length > 0) {
+      return res.status(409).json({ message: 'Email already registered for this role' });
+    }
+
+    // Check if user exists with different role
+    const [existingUser] = await pool.query(
+      'SELECT id, password FROM users WHERE email = ? LIMIT 1',
       [email]
     );
 
-    if (existing.length > 0) {
-      return res.status(409).json({ message: 'Email already registered' });
+    let userId;
+    
+    if (existingUser.length > 0) {
+      // User exists with different role, use existing user
+      userId = existingUser[0].id;
+      console.log('User exists with different role, adding customer role to existing user:', userId);
+    } else {
+      // New user, create user record
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const [userResult] = await pool.query(
+        'INSERT INTO users (name, email, password, phone_number, is_active, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+        [name, email, hashedPassword, phone_number, 1]
+      );
+
+      userId = userResult.insertId;
+      console.log('Created new user:', userId);
     }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert into users
-    const [userResult] = await pool.query(
-      'INSERT INTO users (name, email, password, phone_number, is_active, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
-      [name, email, hashedPassword, phone_number, 1]
-    );
-
-    const userId = userResult.insertId;
 
     // Assign role
     await pool.query(

@@ -716,23 +716,11 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
     if (booking.service_status === 'cancelled') {
       return res.status(400).json({ message: 'Booking is already cancelled' });
     }
-
     if (booking.service_status === 'completed') {
       return res.status(400).json({ message: 'Cannot cancel completed booking' });
     }
 
-    // Check if booking is too close to scheduled time (e.g., within 2 hours)
-    // Use client-provided UTC time if available, else fall back to server time
-    const scheduledTime = new Date(booking.scheduled_time);
-    const now = new Date();
-    const timeDiff = scheduledTime.getTime() - now.getTime();
-    const hoursDiff = timeDiff / (1000 * 3600);
-
-    if (hoursDiff > 2) {
-      return res.status(400).json({ 
-        message: 'Cannot cancel booking more than 2 hours before scheduled time' 
-      });
-    }
+    // Allow cancellation at any time - no time restrictions
 
     // Cancel the booking
     await pool.query(

@@ -34,11 +34,13 @@ const webhookRoute = require('./routes/customer_management/webhooks');
 const chatRoute = require('./routes/chat/chat');
 const customerAdminRoute = require('./routes/admin_management/customerAdmin');
 const emailTestRoute = require('./routes/test/emailTest');
+const registrationTestRoute = require('./routes/test/registrationTest');
 const baseURL = process.env.BASE_URL1 || '/api';
 
 // Test routes (only in development)
 if (process.env.NODE_ENV !== 'production') {
     app.use(`${baseURL}/test/email`, emailTestRoute);
+    app.use(`${baseURL}/test/registration`, registrationTestRoute);
 }
 
 app.use(`${baseURL}/categories`, categoryRoute); 

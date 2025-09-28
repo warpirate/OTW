@@ -201,20 +201,125 @@ const BookingService = {
       return `${y}-${m}-${d}`;
     },
 
-    // Validate address data
-    validateAddress: (addressData) => {
+    // Validate Indian postal code and get location details
+    validatePincode: async (pincode) => {
+      try {
+        if (!/^\d{6}$/.test(pincode)) {
+          return { isValid: false, error: 'Pin code must be 6 digits' };
+        }
+
+        // Use India Post API for pincode validation
+        const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+        const data = await response.json();
+
+        if (data && data[0] && data[0].Status === 'Success') {
+          const postOffices = data[0].PostOffice;
+          if (postOffices && postOffices.length > 0) {
+            const firstOffice = postOffices[0];
+            return {
+              isValid: true,
+              data: {
+                pincode: pincode,
+                city: firstOffice.District,
+                state: firstOffice.State,
+                region: firstOffice.Region,
+                division: firstOffice.Division,
+                postOffices: postOffices.map(office => ({
+                  name: office.Name,
+                  district: office.District,
+                  state: office.State,
+                  region: office.Region
+                }))
+              }
+            };
+          }
+        }
+
+        return { isValid: false, error: 'Invalid pin code' };
+      } catch (error) {
+        console.warn('Pincode validation API error:', error);
+        // Fallback validation - just check format
+        if (!/^\d{6}$/.test(pincode)) {
+          return { isValid: false, error: 'Pin code must be 6 digits' };
+        }
+        return { isValid: true, warning: 'Could not verify pincode online, but format is correct' };
+      }
+    },
+
+    // Enhanced address validation with pincode verification
+    validateAddress: async (addressData) => {
       const required = ['address', 'pin_code', 'city', 'state', 'country'];
       const errors = {};
 
+      // Check required fields
       required.forEach(field => {
         if (!addressData[field] || addressData[field].trim() === '') {
           errors[field] = `${field.replace('_', ' ')} is required`;
         }
       });
 
-      // Validate pin code format (assuming Indian pin codes)
-      if (addressData.pin_code && !/^\d{6}$/.test(addressData.pin_code)) {
+      // If basic validation fails, return early
+      if (Object.keys(errors).length > 0) {
+        return {
+          isValid: false,
+          errors
+        };
+      }
+
+      // Validate pin code format first
+      if (!/^\d{6}$/.test(addressData.pin_code)) {
         errors.pin_code = 'Pin code must be 6 digits';
+        return {
+          isValid: false,
+          errors
+        };
+      }
+
+      // Validate pincode and cross-check with city/state
+      try {
+        const pincodeValidation = await BookingService.utils.validatePincode(addressData.pin_code);
+        
+        if (!pincodeValidation.isValid) {
+          errors.pin_code = pincodeValidation.error;
+          return {
+            isValid: false,
+            errors
+          };
+        }
+
+        // If pincode validation succeeded, cross-check city and state
+        if (pincodeValidation.data) {
+          const { city: validCity, state: validState } = pincodeValidation.data;
+          
+          // Normalize strings for comparison (lowercase, remove extra spaces)
+          const normalizeString = (str) => str.toLowerCase().trim().replace(/\s+/g, ' ');
+          
+          const inputCity = normalizeString(addressData.city);
+          const inputState = normalizeString(addressData.state);
+          const validCityNorm = normalizeString(validCity);
+          const validStateNorm = normalizeString(validState);
+
+          // Check if city matches (allow partial matches for districts)
+          if (!inputCity.includes(validCityNorm) && !validCityNorm.includes(inputCity)) {
+            errors.city = `City "${addressData.city}" does not match pincode ${addressData.pin_code}. Expected: ${validCity}`;
+          }
+
+          // Check if state matches
+          if (!inputState.includes(validStateNorm) && !validStateNorm.includes(inputState)) {
+            errors.state = `State "${addressData.state}" does not match pincode ${addressData.pin_code}. Expected: ${validState}`;
+          }
+
+          // Return validation result with suggested corrections
+          return {
+            isValid: Object.keys(errors).length === 0,
+            errors,
+            suggestions: pincodeValidation.data,
+            warning: pincodeValidation.warning
+          };
+        }
+      } catch (error) {
+        console.warn('Address validation error:', error);
+        // If API fails, just do basic format validation
       }
 
       return {

@@ -91,6 +91,44 @@ const ProviderDetailsPage = () => {
     }
   };
 
+  const handleQualificationVerification = async (qualificationId, status, remarks = '') => {
+    try {
+      setVerificationLoading(prev => ({ ...prev, [`qual_${qualificationId}`]: true }));
+      
+      await AdminService.verifyQualification(qualificationId, {
+        status,
+        remarks
+      });
+      
+      // Refresh qualifications
+      const updatedQualifications = await AdminService.getProviderQualifications(providerId);
+      setProviderDetails(prev => ({
+        ...prev,
+        qualifications: updatedQualifications.data
+      }));
+    } catch (error) {
+      console.error('Error verifying qualification:', error);
+      alert('Failed to verify qualification');
+    } finally {
+      setVerificationLoading(prev => ({ ...prev, [`qual_${qualificationId}`]: false }));
+    }
+  };
+
+  const openQualificationCertificate = async (qualificationId) => {
+    try {
+      const resp = await AdminService.getQualificationCertificatePresignedUrl(qualificationId);
+      const url = resp?.url;
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        alert('No certificate available for this qualification');
+      }
+    } catch (error) {
+      console.error('Error opening qualification certificate:', error);
+      alert('Failed to open certificate');
+    }
+  };
+
   const openDocument = async (documentId, fallbackFileUrl) => {
     try {
       const resp = await AdminService.getDocumentPresignedUrl(documentId);
@@ -480,30 +518,97 @@ const ProviderDetailsPage = () => {
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold mb-6">Qualifications</h2>
             {providerDetails.qualifications && providerDetails.qualifications.length > 0 ? (
-              <div className="grid gap-6">
+              <div className="space-y-6">
                 {providerDetails.qualifications.map((qual) => (
                   <div key={qual.id} className="border rounded-lg p-6">
                     <div className="flex justify-between items-start mb-4">
-                      <h3 className="text-lg font-medium text-gray-900">{qual.qualification_name}</h3>
-                      <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${getStatusBadgeClass(qual.status)}`}>
-                        {qual.status || 'Verified'}
-                      </span>
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900">{qual.qualification_name}</h3>
+                        <p className="text-gray-600">{qual.institution}</p>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${getStatusBadgeClass(qual.status)}`}>
+                          {qual.status ? qual.status.replace('_', ' ') : 'Pending Review'}
+                        </span>
+                      </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-600">Institution</label>
-                        <p className="mt-1 text-gray-900">{qual.issuing_institution}</p>
+                        <p className="mt-1 text-gray-900">{qual.institution}</p>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600">Issue Date</label>
-                        <p className="mt-1 text-gray-900">{new Date(qual.issue_date).toLocaleDateString()}</p>
-                      </div>
+                      {qual.issue_date && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Issue Date</label>
+                          <p className="mt-1 text-gray-900">{new Date(qual.issue_date).toLocaleDateString()}</p>
+                        </div>
+                      )}
                       {qual.certificate_number && (
                         <div>
                           <label className="block text-sm font-medium text-gray-600">Certificate Number</label>
                           <p className="mt-1 text-gray-900">{qual.certificate_number}</p>
                         </div>
+                      )}
+                      {qual.created_at && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Submitted On</label>
+                          <p className="mt-1 text-gray-900">{new Date(qual.created_at).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                      {qual.updated_at && qual.status !== 'pending_review' && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Last Updated</label>
+                          <p className="mt-1 text-gray-900">{new Date(qual.updated_at).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {qual.remarks && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded">
+                        <label className="block text-sm font-medium text-gray-600">Admin Remarks</label>
+                        <p className="mt-1 text-gray-900">{qual.remarks}</p>
+                      </div>
+                    )}
+
+                    <div className="flex space-x-3">
+                      {qual.has_certificate && (
+                        <button
+                          onClick={() => openQualificationCertificate(qual.id)}
+                          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          <EyeIcon className="h-4 w-4 mr-2" />
+                          View Certificate
+                        </button>
+                      )}
+                      
+                      {qual.status !== 'approved' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              const remarks = prompt('Enter approval remarks (optional):');
+                              handleQualificationVerification(qual.id, 'approved', remarks || '');
+                            }}
+                            disabled={verificationLoading[`qual_${qual.id}`]}
+                            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                          >
+                            <CheckCircleIcon className="h-4 w-4 mr-2" />
+                            {verificationLoading[`qual_${qual.id}`] ? 'Approving...' : 'Approve'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const remarks = prompt('Enter rejection reason:');
+                              if (remarks) {
+                                handleQualificationVerification(qual.id, 'rejected', remarks);
+                              }
+                            }}
+                            disabled={verificationLoading[`qual_${qual.id}`]}
+                            className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                          >
+                            <XCircleIcon className="h-4 w-4 mr-2" />
+                            Reject
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

@@ -16,7 +16,10 @@ import {
   Shield,
   CheckCircle,
   XCircle,
-  Settings
+  Settings,
+  AlertTriangle,
+  FileText,
+  Upload
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
@@ -335,6 +338,36 @@ const WorkerProfile = () => {
             </p>
           </div>
 
+          {/* Verification Status Banner */}
+          {!profile.verified && (
+            <div className={`${darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'} border rounded-lg p-6 mb-8`}>
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-red-200' : 'text-red-800'}`}>
+                    Profile Not Verified
+                  </h3>
+                  <p className={`mb-4 ${darkMode ? 'text-red-300' : 'text-red-700'}`}>
+                    Your profile is not verified yet. To complete your registration and start receiving job requests, 
+                    you need to upload your identity documents and banking information.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => navigate('/worker/documents')}
+                      className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Documents
+                    </button>
+                   
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Profile Completion Setup Guide */}
           <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm border ${darkMode ? 'border-gray-700' : 'border-gray-200'} mb-8`}>
             <div className="flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}">
@@ -404,6 +437,45 @@ const WorkerProfile = () => {
                   }`}>
                     {profile.name && profile.phone_number && profile.bio ? 'Complete' : 'Incomplete'}
                   </span>
+                </div>
+
+                {/* Document Verification Section */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                      profile.verified
+                        ? 'bg-green-500' 
+                        : 'bg-red-500'
+                    }`}>
+                      {profile.verified ? (
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <X className="w-3 h-3 text-white" />
+                      )}
+                    </div>
+                    <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Document Verification
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs ${
+                      profile.verified
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    }`}>
+                      {profile.verified ? 'Verified' : 'Required'}
+                    </span>
+                    {!profile.verified && (
+                      <button
+                        onClick={() => navigate('/worker/documents')}
+                        className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
+                      >
+                        Upload Now
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Permanent Address Section */}
