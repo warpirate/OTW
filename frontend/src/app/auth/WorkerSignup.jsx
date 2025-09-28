@@ -72,7 +72,6 @@ const WorkerSignup = () => {
   // Service type, category and subcategory states
   const [serviceType, setServiceType] = useState(''); // 'maintenance', 'maid', or 'driver'
   const [categories, setCategories] = useState([]);
-  const [filteredCategories, setFilteredCategories] = useState([]);
   const [subcategories, setSubcategories] = useState({});
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
@@ -81,6 +80,7 @@ const WorkerSignup = () => {
   const [categoryError, setCategoryError] = useState('');
   const [bioError, setBioError] = useState('');
   const [bioWordCount, setBioWordCount] = useState(0);
+  const [validationErrors, setValidationErrors] = useState({});
 
   // Bio validation function
   const validateBio = (bioText) => {
@@ -103,7 +103,6 @@ const WorkerSignup = () => {
       /\b\d{10,}\b/, // Phone numbers
       /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/, // Email addresses
       /\b(best|top|#1|number\s*1|cheapest|lowest\s*price)\b/i, // Superlative claims
-      /\b(guarantee|100%|money\s*back)\b/i, // Unrealistic promises
       /(.{1,10})\1{3,}/i, // Repeated phrases
     ];
     
@@ -111,12 +110,11 @@ const WorkerSignup = () => {
       if (pattern.test(bioText)) {
         return {
           isValid: false,
-          error: 'Bio contains inappropriate content. Please write a professional description.',
+          error: 'Bio contains spam patterns. Please write a professional description.',
           wordCount
         };
       }
     }
-    
     // Check minimum length
     if (wordCount > 0 && wordCount < 5) {
       return {
@@ -125,7 +123,6 @@ const WorkerSignup = () => {
         wordCount
       };
     }
-    
     return {
       isValid: true,
       error: '',
@@ -133,15 +130,49 @@ const WorkerSignup = () => {
     };
   };
 
+  // Additional validation functions
+  const validateName = (name) => {
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!name.trim()) return 'Name is required';
+    if (!nameRegex.test(name)) return 'Name can only contain letters and spaces';
+    if (name.trim().length < 2) return 'Name must be at least 2 characters';
+    if (name.trim().length > 50) return 'Name must be less than 50 characters';
+    return '';
+  };
+
+  const validatePhone = (phone) => {
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phone.trim()) return 'Phone number is required';
+    if (!phoneRegex.test(phone.replace(/\s/g, ''))) return 'Phone number must be exactly 10 digits';
+    return '';
+  };
+
+  // Real-time validation handler
+  const handleValidation = (field, value, validationFunc) => {
+    const error = validationFunc(value);
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+    return error === '';
+  };
 
   const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
     
-    // Handle bio validation in real-time
+    // Handle real-time validation for different fields
     if (name === 'bio') {
       const validation = validateBio(value);
       setBioError(validation.error);
       setBioWordCount(validation.wordCount);
+    } else if (name === 'firstName' || name === 'lastName' || name === 'emergencyContactName') {
+      handleValidation(name, value, validateName);
+    } else if (name === 'phone' || name === 'emergencyContactPhone') {
+      // Only allow digits for phone fields
+      const cleanedValue = value.replace(/\D/g, '');
+      handleValidation(name, cleanedValue, validatePhone);
+      // Update the actual input value to cleaned version
+      e.target.value = cleanedValue;
     }
     
     // Handle nested fields (like permanentAddress)
@@ -579,10 +610,13 @@ const WorkerSignup = () => {
                   onChange={handleInputChange}
                   required
                   className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    validationErrors.firstName ? 'border-red-500' : darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                   }`}
-                  placeholder="First Name"
+                  placeholder="First Name (letters and spaces only)"
                 />
+                {validationErrors.firstName && (
+                  <p className="mt-1 text-sm text-red-500">{validationErrors.firstName}</p>
+                )}
               </div>
               <div>
                 <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
@@ -594,11 +628,14 @@ const WorkerSignup = () => {
                   value={formData.lastName}
                   onChange={handleInputChange}
                   required
-                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                  placeholder="Last Name"
+                  pattern="[a-zA-Z\s]*"
+                  className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${validationErrors.lastName ? 'border-red-500' : darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
+                  placeholder="Last Name (letters and spaces only)"
+                  title="Last name should only contain letters and spaces"
                 />
+                {validationErrors.lastName && (
+                  <p className="mt-1 text-sm text-red-500">{validationErrors.lastName}</p>
+                )}
               </div>
             </div>
 
@@ -760,6 +797,7 @@ const WorkerSignup = () => {
                     <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
                       Contact Number *
                     </label>
+                    
                     <input
                       type="tel"
                       name="emergencyContactPhone"
@@ -767,10 +805,14 @@ const WorkerSignup = () => {
                       onChange={handleInputChange}
                       required
                       className={`w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        validationErrors.emergencyContactPhone ? 'border-red-500' : 
                         darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
                       }`}
-                      placeholder="Enter contact number"
+                      placeholder="Enter contact number (10 digits only)"
                     />
+                    {validationErrors.emergencyContactPhone && (
+                      <p className="mt-1 text-sm text-red-500">{validationErrors.emergencyContactPhone}</p>
+                    )}
                   </div>
                 </div>
               </div>

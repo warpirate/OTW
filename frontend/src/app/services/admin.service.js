@@ -231,6 +231,48 @@ class AdminService {
     }
   }
 
+  /**
+   * Verify qualification (approve/reject)
+   */
+  static async verifyQualification(qualificationId, data) {
+    try {
+      const response = await apiClient.patch(`/providers/qualifications/${qualificationId}/status`, data);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get presigned URL for qualification certificate
+   */
+  static async getQualificationCertificatePresignedUrl(qualificationId) {
+    try {
+      const response = await apiClient.get(`/providers/qualifications/${qualificationId}/certificate`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get all pending qualifications for admin review
+   */
+  static async getPendingQualifications(params = {}) {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (params.status) queryParams.append('status', params.status);
+      if (params.page) queryParams.append('page', params.page);
+      if (params.limit) queryParams.append('limit', params.limit);
+
+      const response = await apiClient.get(`/qualifications/pending?${queryParams}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // ===== Customers & Types Management =====
   static async getCustomerTypes() {
     try {

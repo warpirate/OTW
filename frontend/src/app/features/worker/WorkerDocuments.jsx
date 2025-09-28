@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WorkerDocumentsService from '../../services/workerDocuments.service';
 import WorkerHeader from '../../../components/WorkerHeader';
+
 const WorkerDocuments = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('banking');
@@ -35,7 +36,8 @@ const WorkerDocuments = () => {
     qualification_name: '',
     issuing_institution: '',
     issue_date: '',
-    certificate_number: ''
+    certificate_number: '',
+    certificate: null
   });
   
   // Driver Details State
@@ -49,7 +51,9 @@ const WorkerDocuments = () => {
     years_of_commercial_driving_exp: '',
     vehicle_registration_number: ''
   });
-
+  
+  // Validation errors state
+  const [validationErrors, setValidationErrors] = useState({});
 
   useEffect(() => {
     fetchBankingDetails();
@@ -128,6 +132,28 @@ const WorkerDocuments = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
+    // Validate all banking fields
+    const nameError = validateName(bankingForm.account_holder_name);
+    const accountError = validateAccountNumber(bankingForm.account_number);
+    const ifscError = validateIFSC(bankingForm.ifsc_code);
+    const bankNameError = validateName(bankingForm.bank_name);
+
+    const errors = {
+      account_holder_name: nameError,
+      account_number: accountError,
+      ifsc_code: ifscError,
+      bank_name: bankNameError
+    };
+
+    setValidationErrors(errors);
+
+    // Check if there are any validation errors
+    if (Object.values(errors).some(error => error !== '')) {
+      setMessage({ type: 'error', text: 'Please fix the validation errors before submitting' });
+      setLoading(false);
+      return;
+    }
+
     try {
       if (editingBankId) {
         await WorkerDocumentsService.updateBankingDetails(editingBankId, bankingForm);
@@ -138,6 +164,7 @@ const WorkerDocuments = () => {
       }
       fetchBankingDetails();
       resetBankingForm();
+      setValidationErrors({});
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Failed to save banking details' });
     } finally {
@@ -151,12 +178,23 @@ const WorkerDocuments = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
+    // Validate document file
+    const fileError = validateFile(documentForm.document);
+    
+    if (fileError) {
+      setValidationErrors({ document: fileError });
+      setMessage({ type: 'error', text: fileError });
+      setLoading(false);
+      return;
+    }
+
     try {
       await WorkerDocumentsService.uploadDocument(documentForm);
       setMessage({ type: 'success', text: 'Document uploaded successfully!' });
       fetchDocuments();
       setDocumentForm({ document_type: 'identity_proof', document: null });
       document.getElementById('document-file').value = '';
+      setValidationErrors({});
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Failed to upload document' });
     } finally {
@@ -170,11 +208,34 @@ const WorkerDocuments = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
+    // Validate qualification fields
+    const qualNameError = validateName(qualificationForm.qualification_name);
+    const institutionError = validateName(qualificationForm.issuing_institution);
+    const certificateError = qualificationForm.certificate ? validateFile(qualificationForm.certificate) : '';
+
+    const errors = {
+      qualification_name: qualNameError,
+      issuing_institution: institutionError,
+      certificate: certificateError
+    };
+
+    setValidationErrors(errors);
+
+    if (Object.values(errors).some(error => error !== '')) {
+      setMessage({ type: 'error', text: 'Please fix the validation errors before submitting' });
+      setLoading(false);
+      return;
+    }
+
     try {
       await WorkerDocumentsService.createQualification(qualificationForm);
       setMessage({ type: 'success', text: 'Qualification added successfully!' });
       fetchQualifications();
       resetQualificationForm();
+      // Clear file input
+      const fileInput = document.getElementById('qualification-certificate');
+      if (fileInput) fileInput.value = '';
+      setValidationErrors({});
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Failed to add qualification' });
     } finally {
@@ -188,10 +249,29 @@ const WorkerDocuments = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
+    // Validate driver fields
+    const licenseError = validateLicenseNumber(driverForm.license_number);
+    const vehicleRegError = driverForm.vehicle_registration_number ? 
+      validateVehicleRegistration(driverForm.vehicle_registration_number) : '';
+
+    const errors = {
+      license_number: licenseError,
+      vehicle_registration_number: vehicleRegError
+    };
+
+    setValidationErrors(errors);
+
+    if (Object.values(errors).some(error => error !== '')) {
+      setMessage({ type: 'error', text: 'Please fix the validation errors before submitting' });
+      setLoading(false);
+      return;
+    }
+
     try {
       await WorkerDocumentsService.saveDriverDetails(driverForm);
       setMessage({ type: 'success', text: 'Driver details saved successfully!' });
       fetchDriverDetails();
+      setValidationErrors({});
     } catch (error) {
       setMessage({ type: 'error', text: error.message || 'Failed to save driver details' });
     } finally {
@@ -253,6 +333,21 @@ const WorkerDocuments = () => {
     }
   };
 
+  // View Qualification Certificate
+  const viewQualificationCertificate = async (id) => {
+    try {
+      const resp = await WorkerDocumentsService.getQualificationCertificatePresignedUrl(id);
+      const url = resp?.url;
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        setMessage({ type: 'error', text: 'Unable to get certificate link' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Failed to get certificate link' });
+    }
+  };
+
   // Edit Banking Details
   const editBankingDetails = (bank) => {
     setBankingForm({
@@ -287,8 +382,85 @@ const WorkerDocuments = () => {
       qualification_name: '',
       issuing_institution: '',
       issue_date: '',
-      certificate_number: ''
+      certificate_number: '',
+      certificate: null
     });
+  };
+
+  // Validation functions
+  const validateName = (name) => {
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!name.trim()) return 'Name is required';
+    if (!nameRegex.test(name)) return 'Name can only contain letters and spaces';
+    if (name.trim().length < 2) return 'Name must be at least 2 characters';
+    if (name.trim().length > 50) return 'Name must be less than 50 characters';
+    return '';
+  };
+
+  const validatePhone = (phone) => {
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phone.trim()) return 'Phone number is required';
+    if (!phoneRegex.test(phone.replace(/\s/g, ''))) return 'Phone number must be exactly 10 digits';
+    return '';
+  };
+
+  const validateIFSC = (ifsc) => {
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    if (!ifsc.trim()) return 'IFSC code is required';
+    if (!ifscRegex.test(ifsc.toUpperCase())) return 'IFSC code must be 11 characters (e.g., SBIN0001234)';
+    return '';
+  };
+
+  const validateAccountNumber = (accountNumber) => {
+    const accountRegex = /^[0-9]{9,18}$/;
+    if (!accountNumber.trim()) return 'Account number is required';
+    if (!accountRegex.test(accountNumber)) return 'Account number must be 9-18 digits';
+    return '';
+  };
+
+  const validateFile = (file, maxSizeMB = 5) => {
+    if (!file) return 'File is required';
+    
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+    
+    if (!allowedTypes.includes(file.type)) {
+      return 'File must be PDF, JPG, JPEG, or PNG format';
+    }
+    
+    if (file.size > maxSizeBytes) {
+      return `File size must be less than ${maxSizeMB}MB`;
+    }
+    
+    return '';
+  };
+
+  const validateLicenseNumber = (licenseNumber) => {
+    const licenseRegex = /^[A-Z]{2}[0-9]{2}[0-9]{4}[0-9]{7}$/;
+    if (!licenseNumber.trim()) return 'License number is required';
+    if (!licenseRegex.test(licenseNumber.toUpperCase().replace(/\s/g, ''))) {
+      return 'Invalid license number format (e.g., MH1420110012345)';
+    }
+    return '';
+  };
+
+  const validateVehicleRegistration = (regNumber) => {
+    const regRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$/;
+    if (!regNumber.trim()) return 'Vehicle registration number is required';
+    if (!regRegex.test(regNumber.toUpperCase().replace(/\s/g, ''))) {
+      return 'Invalid registration format (e.g., MH12AB1234)';
+    }
+    return '';
+  };
+
+  // Real-time validation handler
+  const handleValidation = (field, value, validationFunc) => {
+    const error = validationFunc(value);
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+    return error === '';
   };
 
   const getDocumentTypeLabel = WorkerDocumentsService.getDocumentTypeLabel;
@@ -382,7 +554,11 @@ const WorkerDocuments = () => {
                       <input
                         type="text"
                         value={bankingForm.account_holder_name}
-                        onChange={(e) => setBankingForm({...bankingForm, account_holder_name: e.target.value})}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setBankingForm({...bankingForm, account_holder_name: value});
+                          handleValidation('account_holder_name', value, validateName);
+                        }}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         required
                       />
@@ -660,6 +836,17 @@ const WorkerDocuments = () => {
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       />
                     </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700">Certificate Document</label>
+                      <input
+                        type="file"
+                        id="qualification-certificate"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setQualificationForm({...qualificationForm, certificate: e.target.files[0]})}
+                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Upload certificate document (PDF, JPG, JPEG, PNG - Max 5MB)</p>
+                    </div>
                   </div>
                   <button
                     type="submit"
@@ -675,7 +862,7 @@ const WorkerDocuments = () => {
                   {qualifications.map((qual) => (
                     <div key={qual.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start">
-                        <div>
+                        <div className="flex-1">
                           <h3 className="font-semibold">{qual.qualification_name}</h3>
                           <p className="text-sm text-gray-600">{qual.issuing_institution}</p>
                           {qual.issue_date && (
@@ -686,16 +873,43 @@ const WorkerDocuments = () => {
                           {qual.certificate_number && (
                             <p className="text-sm text-gray-600">Certificate: {qual.certificate_number}</p>
                           )}
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-2 ${getStatusBadge(qual.status)}`}>
-                            {qual.status}
-                          </span>
+                          <div className="mt-2 flex items-center space-x-2">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(qual.status || 'pending_review')}`}>
+                              {(qual.status || 'pending_review').replace('_', ' ')}
+                            </span>
+                            {qual.certificate_url && (
+                              <button
+                                onClick={() => viewQualificationCertificate(qual.id)}
+                                className="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                View Certificate
+                              </button>
+                            )}
+                          </div>
+                          {qual.remarks && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              <span className="font-medium">Admin Remarks:</span> {qual.remarks}
+                            </p>
+                          )}
+                          {qual.created_at && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Added: {new Date(qual.created_at).toLocaleDateString()}
+                            </p>
+                          )}
                         </div>
-                        <button
-                          onClick={() => deleteQualification(qual.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          {!(qual.status && (qual.status.toLowerCase() === 'approved')) && (
+                            <button
+                              onClick={() => deleteQualification(qual.id)}
+                              className="text-red-600 hover:text-red-800"
+                              title="Delete"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

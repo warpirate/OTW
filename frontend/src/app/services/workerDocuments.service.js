@@ -230,15 +230,74 @@ class WorkerDocumentsService {
   }
   
   /**
-   * Create new qualification
+   * Create new qualification with certificate upload support
    */
   static async createQualification(qualificationData) {
+    const file = qualificationData.certificate;
+    
+    // If no file, create qualification without certificate
+    if (!file) {
+      try {
+        const response = await apiClient.post('/qualifications', {
+          qualification_name: qualificationData.qualification_name,
+          issuing_institution: qualificationData.issuing_institution,
+          issue_date: qualificationData.issue_date,
+          certificate_number: qualificationData.certificate_number
+        });
+        return response.data;
+      } catch (error) {
+        console.error('Error creating qualification:', error);
+        throw new Error(error.response?.data?.message || 'Failed to create qualification');
+      }
+    }
+
+    // Try presigned upload flow for certificate
     try {
-      const response = await apiClient.post('/qualifications', qualificationData);
+      // 1) Request presigned PUT URL for certificate
+      const presignResp = await apiClient.post('/qualifications/presign', {
+        file_name: file.name,
+        content_type: file.type || 'application/octet-stream'
+      });
+
+      const { uploadUrl, objectKey } = presignResp.data || {};
+      if (!uploadUrl || !objectKey) {
+        throw new Error('Invalid presign response');
+      }
+
+      // 2) Upload certificate directly to S3
+      await axios.put(uploadUrl, file, {
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+      });
+
+      // 3) Create qualification with certificate URL
+      const response = await apiClient.post('/qualifications', {
+        qualification_name: qualificationData.qualification_name,
+        issuing_institution: qualificationData.issuing_institution,
+        issue_date: qualificationData.issue_date,
+        certificate_number: qualificationData.certificate_number,
+        certificate_url: objectKey
+      });
+      
       return response.data;
-    } catch (error) {
-      console.error('Error creating qualification:', error);
-      throw new Error(error.response?.data?.message || 'Failed to create qualification');
+    } catch (presignErr) {
+      console.warn('Presigned upload failed for qualification certificate; creating without certificate', presignErr);
+      
+      // Fallback: create qualification without certificate
+      try {
+        const response = await apiClient.post('/qualifications', {
+          qualification_name: qualificationData.qualification_name,
+          issuing_institution: qualificationData.issuing_institution,
+          issue_date: qualificationData.issue_date,
+          certificate_number: qualificationData.certificate_number
+        });
+        return response.data;
+      } catch (fallbackErr) {
+        console.error('Fallback qualification creation failed:', fallbackErr);
+        const err = fallbackErr.response?.data?.message || presignErr.response?.data?.message || 'Failed to create qualification';
+        throw new Error(err);
+      }
     }
   }
   
@@ -252,6 +311,19 @@ class WorkerDocumentsService {
     } catch (error) {
       console.error('Error deleting qualification:', error);
       throw new Error(error.response?.data?.message || 'Failed to delete qualification');
+    }
+  }
+  
+  /**
+   * Get a presigned GET URL for a specific qualification certificate
+   */
+  static async getQualificationCertificatePresignedUrl(qualificationId) {
+    try {
+      const response = await apiClient.get(`/qualifications/${qualificationId}/presign`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting qualification certificate presigned URL:', error);
+      throw new Error(error.response?.data?.message || 'Failed to get certificate link');
     }
   }
   

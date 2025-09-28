@@ -640,23 +640,31 @@ const LandingPage = () => {
                             return (
                               <div 
                                 key={cat.id}
-                                className={`service-card cursor-pointer ${darkMode ? 'border-gray-700' : 'border-gray-200'} transition transform hover:shadow-lg hover:-translate-y-0.5`}
+                                className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:-translate-y-1`}
                                 onClick={() => {
                                   // Navigate to the category services page instead of showing subcategories inline
+                                  window.scrollTo(0, 0);
                                   navigate(`/category/${cat.id}/${cat.name}`);
                                 }}
                               >
-                                <div className="p-6">
-                                  <div className="mb-4">
-                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="3xl" tone="brand" />
+                                <div className="p-6 flex items-center gap-6 h-full">
+                                  {/* Icon Section - Left Side */}
+                                  <div className="flex-shrink-0">
+                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="6xl" tone="brand" />
                                   </div>
-                                  <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
-                                  <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>
-                                  <div className="flex justify-between items-center">
-                                    <button className="text-sm text-brand hover:text-brand-dark transition-colors font-medium">
-                                      View Services
-                                    </button>
-                                    <ChevronRight className="h-5 w-5 text-brand" />
+                                  
+                                  {/* Content Section - Right Side */}
+                                  <div className="flex-grow flex flex-col justify-center">
+                                    <h3 className={`font-bold text-xl mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
+                                    <p className={`text-sm leading-relaxed mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>
+                                    
+                                    {/* Button Section */}
+                                    <div>
+                                      <button className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 group">
+                                        View Services
+                                        <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>

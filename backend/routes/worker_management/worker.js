@@ -4,6 +4,7 @@ const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 const { generateOTP, sendOTPEmail } = require('../../services/emailService');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 /**
  * WorkerService class merged from backend/services/worker.service.js
@@ -21,29 +22,8 @@ class WorkerService {
       const { first_name, last_name, email, phone, password, provider_data, subcategory_ids = [] } = userData;
       const name = `${first_name} ${last_name}`;
       console.log('Worker registration attempt:', { email, first_name, last_name, hasProviderData: !!provider_data });
-      // Check if email already exists
-      const [existingUsers] = await connection.query(
-        'SELECT id FROM users WHERE email = ? LIMIT 1',
-        [email]
-      );
-
-      if (existingUsers.length > 0) {
-        throw new Error('Email already registered');
-      }
-
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      // Insert into users table
-      const [userResult] = await connection.query(
-        `INSERT INTO users (name, email, password, phone_number, is_active, created_at) 
-         VALUES (?, ?, ?, ?, 1, NOW())`,
-        [name, email, hashedPassword, phone]
-      );
-
-      const userId = userResult.insertId;
-
-      // Get worker role ID (check for various possible worker role names)
+      
+      // Get worker role ID first (check for various possible worker role names)
       const [roleResult] = await connection.query(
         'SELECT id, name FROM roles WHERE LOWER(name) IN (?, ?, ?) LIMIT 1',
         ['worker', 'provider', 'service provider']
@@ -54,6 +34,44 @@ class WorkerService {
       }
 
       const roleId = roleResult[0].id;
+      
+      // Check if email + role combination already exists
+      const [existingUserRole] = await connection.query(
+        `SELECT u.id FROM users u 
+         INNER JOIN user_roles ur ON u.id = ur.user_id 
+         WHERE u.email = ? AND ur.role_id = ? LIMIT 1`,
+        [email, roleId]
+      );
+
+      if (existingUserRole.length > 0) {
+        throw new Error('Email already registered for this role');
+      }
+
+      // Check if user exists with different role
+      const [existingUser] = await connection.query(
+        'SELECT id, password FROM users WHERE email = ? LIMIT 1',
+        [email]
+      );
+
+      let userId;
+      
+      if (existingUser.length > 0) {
+        // User exists with different role, use existing user
+        userId = existingUser[0].id;
+        console.log('User exists with different role, adding worker role to existing user:', userId);
+      } else {
+        // New user, create user record
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const [userResult] = await connection.query(
+          `INSERT INTO users (name, email, password, phone_number, is_active, created_at) 
+           VALUES (?, ?, ?, ?, 1, NOW())`,
+          [name, email, hashedPassword, phone]
+        );
+
+        userId = userResult.insertId;
+        console.log('Created new user:', userId);
+      }
 
       // Assign worker role to user
       await connection.query(
@@ -467,7 +485,7 @@ router.post('/worker/register', async (req, res) => {
   } catch (error) {
     console.error('Worker registration error:', error);
 
-    if (error.message === 'Email already registered') {
+    if (error.message === 'Email already registered for this role') {
       return res.status(409).json({ message: error.message });
     }
 
