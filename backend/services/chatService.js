@@ -226,8 +226,7 @@ class ChatService {
                     p.user_id as provider_user_id,
                     CASE 
                         WHEN cs.customer_id = ? THEN 'customer'
-                        WHEN cs.provider_id = ? THEN 'provider'
-                        WHEN p.user_id = ? THEN 'provider'
+                        WHEN cs.provider_id = ? OR p.user_id = ? THEN 'provider'
                         ELSE NULL
                     END as sender_type
                  FROM chat_sessions cs
@@ -297,7 +296,11 @@ class ChatService {
             };
 
             // Broadcast message to all participants in the session (including sender)
+            console.log('📡 Broadcasting message to session:', sessionId);
+            console.log('📡 Broadcasting to other participants...');
             socket.to(`session_${sessionId}`).emit('new_message', message);
+            
+            console.log('📡 Broadcasting to sender...');
             socket.emit('new_message', message);
             
             // Send confirmation to sender

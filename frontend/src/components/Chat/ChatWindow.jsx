@@ -66,22 +66,45 @@ const ChatWindow = ({
             setIsLoading(true);
             setError(null);
 
-            // Get current user
-            const user = AuthService.getCurrentUser();
+            // Determine the effective role first to get the correct user context
+            const effectiveRole = forceRole || localStorage.getItem('current_role') || 'customer';
+            
+            // CRITICAL: Get current user based on the role being used
+            const user = AuthService.getCurrentUser(effectiveRole);
+            
+            // Validate that we have the correct token for this role
+            const token = AuthService.getToken(effectiveRole);
+            if (!token) {
+                throw new Error(`No authentication token found for role: ${effectiveRole}. Please log in again.`);
+            }
+            
+            // Enhanced validation to ensure user matches the expected role
+            if (!user) {
+                throw new Error(`User not authenticated for role: ${effectiveRole}. Please log in again.`);
+            }
+            
+            // Validate role consistency
+            if (forceRole && user.role && user.role !== forceRole) {
+                console.warn(`⚠️ Role mismatch detected: user.role=${user.role}, forceRole=${forceRole}`);
+                // For forced role scenarios, prioritize the forced role but keep user data
+                user.role = forceRole;
+            }
+            
             setCurrentUser(user);
 
-            if (!user) {
-                throw new Error('User not authenticated. Please log in again.');
-            }
-
-            console.log('Chat session loading for user:', {
+            // Enhanced logging for debugging authentication issues
+            console.log('🔍 Authentication Context:', {
+                effectiveRole,
+                forceRole,
                 userId: user.id,
                 userRole: user.role,
+                userName: user.name,
+                tokenPresent: !!token,
+                tokenSubstring: token ? token.substring(0, 20) + '...' : 'None',
                 bookingId: bookingId
             });
 
             // Ensure chat requests use the correct role token
-            const effectiveRole = forceRole || user.role;
             chatService.activeRole = effectiveRole;
 
             // Create or get existing chat session (do NOT error if not yet available)
@@ -161,8 +184,14 @@ const ChatWindow = ({
 
                 // Load chat history
                 try {
+                    console.log('📚 Loading chat history for session:', actualSessionId);
                     const history = await chatService.getChatHistory(actualSessionId);
                     const formattedMessages = history.messages.map(msg => chatService.formatMessage(msg));
+                    console.log('📚 Loaded chat history:', {
+                        sessionId: actualSessionId,
+                        messageCount: formattedMessages.length,
+                        messages: formattedMessages.map(m => ({ id: m.id, content: m.content?.substring(0, 30) + '...', senderId: m.senderId }))
+                    });
                     setMessages(formattedMessages);
                 } catch (historyError) {
                     console.warn('Failed to load chat history:', historyError);
@@ -201,14 +230,46 @@ const ChatWindow = ({
                 setMessages([]);
             }
 
-            // Initialize socket connection
+            // Initialize socket connection with enhanced error handling
             try {
-                const token = AuthService.getToken(forceRole || user.role);
+                const token = AuthService.getToken(effectiveRole);
+                console.log('🔑 Initializing socket with token:', token ? 'Present (' + token.substring(0, 20) + '...)' : 'Missing');
+                console.log('👤 User role:', effectiveRole, 'User ID:', user.id);
+                
                 if (token) {
-                    chatService.initializeSocket(token);
+                    console.log('🔌 Starting socket initialization...');
+                    const socket = chatService.initializeSocket(token);
+                    
+                    if (socket) {
+                        console.log('✅ Socket instance created successfully');
+                        
+                        // Wait for socket connection before proceeding
+                        socket.on('connect', () => {
+                            console.log('🎉 Socket connected successfully! ID:', socket.id);
+                            setIsConnected(true);
+                        });
+                        
+                        socket.on('disconnect', (reason) => {
+                            console.log('🔌 Socket disconnected:', reason);
+                            setIsConnected(false);
+                        });
+                        
+                        socket.on('connect_error', (error) => {
+                            console.error('❌ Socket connection error:', error);
+                            setError('Failed to connect to chat server: ' + error.message);
+                        });
+                        
+                    } else {
+                        console.error('❌ Failed to create socket instance');
+                        setError('Failed to initialize chat connection');
+                    }
+                } else {
+                    console.error('❌ No authentication token available for socket connection');
+                    setError('Authentication required for chat functionality');
                 }
             } catch (socketError) {
-                console.warn('Socket connection failed, continuing without real-time features:', socketError);
+                console.error('❌ Socket connection failed:', socketError);
+                setError('Failed to initialize chat: ' + socketError.message);
             }
 
             setIsLoading(false);
@@ -222,56 +283,84 @@ const ChatWindow = ({
     // Connect to socket and join chat room
     const connectToChat = useCallback(() => {
         try {
-            if (!sessionId) return;
+            if (!sessionId) {
+                console.log('⚠️ No sessionId available for socket connection');
+                return;
+            }
 
             const socket = chatService.getSocket();
             socketRef.current = socket;
 
-            // Join the chat room
-            chatService.joinChat(sessionId);
+            if (!socket) {
+                console.log('⚠️ Socket not available, cannot connect to chat');
+                return;
+            }
 
-            // Handle connection events
-            chatService.onConnection('connected', () => {
-                console.log('Connected to chat socket');
-                setIsConnected(true);
+            console.log('🔍 Current socket state:', {
+                socketExists: !!socket,
+                socketId: socket.id,
+                connected: socket.connected,
+                chatServiceConnected: chatService.isSocketConnected()
             });
 
-            chatService.onConnection('disconnected', () => {
-                console.log('Disconnected from chat socket');
-                setIsConnected(false);
-            });
-
-            chatService.onConnection('error', (error) => {
-                console.error('Socket connection error:', error);
-                setError('Failed to connect to chat server');
-            });
-
-            // Handle incoming messages
-            chatService.onMessage('new_message', (newMessage) => {
-                console.log('Received new message:', newMessage);
+            // Set up message handlers first (only once per component instance)
+            const messageHandlerId = `chat-${sessionId}-${Date.now()}`;
+            
+            // Define handler functions that will be reused
+            const handleNewMessage = (newMessage) => {
+                console.log('📨 Received new message:', {
+                    id: newMessage.id,
+                    session_id: newMessage.session_id,
+                    sender_id: newMessage.sender_id
+                });
+            
+                // Only process messages for the current session
+                if (Number(sessionId) !== Number(newMessage.session_id)) {
+                    return;
+                }
+            
                 const formattedMessage = chatService.formatMessage(newMessage);
+            
                 setMessages(prev => {
-                    // Remove any optimistic temp messages that match this real message
+                    // Remove any temp messages that match this real message
                     const withoutTemps = prev.filter(msg => {
-                        if (msg.isTemp && msg.content === formattedMessage.content && String(msg.senderId) === String(formattedMessage.senderId)) {
-                            console.log('Removing temp message:', msg.id);
+                        if (msg.isTemp && msg.content === formattedMessage.content && 
+                            String(msg.senderId) === String(formattedMessage.senderId)) {
                             return false;
                         }
                         return true;
                     });
-                    // Skip if this message already exists (deduplication)
-                    if (withoutTemps.some(msg => String(msg.id) === String(formattedMessage.id))) {
-                        console.log('Message already exists, skipping:', formattedMessage.id);
+                    
+                    // Enhanced duplicate check - check by ID, content, and sender
+                    const isDuplicate = withoutTemps.some(msg => {
+                        // Check by ID first (most reliable)
+                        if (msg.id && formattedMessage.id && String(msg.id) === String(formattedMessage.id)) {
+                            return true;
+                        }
+                        // Check by content and sender as fallback
+                        if (msg.content === formattedMessage.content && 
+                            String(msg.senderId) === String(formattedMessage.senderId) &&
+                            Math.abs(new Date(msg.createdAt) - new Date(formattedMessage.createdAt)) < 1000) {
+                            return true;
+                        }
+                        return false;
+                    });
+                    
+                    if (isDuplicate) {
                         return withoutTemps;
                     }
-                    console.log('Adding new message:', formattedMessage.id);
-                    return [...withoutTemps, formattedMessage];
+                    
+                    const newMessages = [...withoutTemps, formattedMessage];
+                    return newMessages;
                 });
-                scrollToBottom();
-            });
-
-            // Handle chat history
-            chatService.onMessage('chat_history', (data) => {
+            
+                // Scroll to bottom after a short delay to ensure message is rendered
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 100);
+            };
+            
+            const handleChatHistory = (data) => {
                 if (data.sessionId === sessionId) {
                     const formattedMessages = data.messages.map(msg => chatService.formatMessage(msg));
                     setMessages(prev => {
@@ -286,10 +375,9 @@ const ChatWindow = ({
                     });
                     scrollToBottom();
                 }
-            });
-
-            // Handle typing indicators
-            chatService.onMessage('user_typing', (data) => {
+            };
+            
+            const handleUserTyping = (data) => {
                 if (data.userId !== currentUser?.id) {
                     setIsTyping(true);
                     if (typingTimeoutRef.current) {
@@ -299,10 +387,9 @@ const ChatWindow = ({
                         setIsTyping(false);
                     }, 3000);
                 }
-            });
-
-            // Handle read receipts
-            chatService.onMessage('messages_read', (data) => {
+            };
+            
+            const handleMessagesRead = (data) => {
                 if (data.sessionId === sessionId && data.readerId !== currentUser?.id) {
                     // Update messages to show as read
                     setMessages(prev => prev.map(msg => 
@@ -311,13 +398,78 @@ const ChatWindow = ({
                             : msg
                     ));
                 }
-            });
-
-            // Handle errors
-            chatService.onMessage('error', (error) => {
-                console.error('Chat error:', error);
+            };
+            
+            const handleJoinedChat = (data) => {
+                console.log('✅ Successfully joined chat session:', data.sessionId);
+                setIsConnected(true);
+            };
+            
+            const handleChatError = (error) => {
+                console.error('❌ Chat error:', error);
                 setError(error.message || 'Chat error occurred');
-            });
+            };
+            
+            // Set up all message handlers
+            chatService.onMessage('new_message', handleNewMessage);
+            chatService.onMessage('chat_history', handleChatHistory);
+            chatService.onMessage('user_typing', handleUserTyping);
+            chatService.onMessage('messages_read', handleMessagesRead);
+            chatService.onMessage('joined_chat', handleJoinedChat);
+            chatService.onMessage('error', handleChatError);
+            
+            // Function to join chat (simplified)
+            const joinChatRoom = () => {
+                // Join the chat room
+                chatService.joinChat(sessionId);
+
+                // Handle connection events
+                const onConnected = () => {
+                    setIsConnected(true);
+                };
+                
+                const onDisconnected = () => {
+                    setIsConnected(false);
+                };
+                
+                const onConnectionError = (error) => {
+                    console.error('Chat connection error:', error);
+                    setError('Chat connection error: ' + (error?.message || error));
+                };
+                
+                chatService.onConnection('connected', onConnected);
+                chatService.onConnection('disconnected', onDisconnected);
+                chatService.onConnection('error', onConnectionError);
+
+                // Message handlers are already set up above
+
+                // All message handlers are set up above this function
+            };
+
+            // If socket is already connected, join immediately
+            if (socket.connected) {
+                joinChatRoom();
+            } else {
+                // Wait for connection, then join
+                socket.once('connect', () => {
+                    joinChatRoom();
+                });
+                
+                // Try to connect if not already connecting
+                if (!socket.connecting) {
+                    socket.connect();
+                }
+            }
+            
+            // Cleanup function for handlers
+            return () => {
+                chatService.offMessage('new_message', handleNewMessage);
+                chatService.offMessage('chat_history', handleChatHistory);
+                chatService.offMessage('user_typing', handleUserTyping);
+                chatService.offMessage('messages_read', handleMessagesRead);
+                chatService.offMessage('joined_chat', handleJoinedChat);
+                chatService.offMessage('error', handleChatError);
+            }
 
         } catch (error) {
             console.error('Error connecting to chat:', error);
@@ -331,16 +483,28 @@ const ChatWindow = ({
 
         try {
             // Create a temporary message object for immediate UI update
+            const effectiveRole = forceRole || currentUser?.role || 'customer';
             const tempMessage = {
                 id: `temp_${Date.now()}`,
                 content: messageText.trim(),
                 senderId: currentUser?.id,
                 senderName: currentUser?.name || 'You',
+                senderType: effectiveRole === 'customer' ? 'customer' : 'provider',
                 createdAt: new Date().toISOString(),
                 messageType: 'text',
                 isRead: false,
                 isTemp: true
             };
+
+            console.log('📤 Sending message:', {
+                content: messageText.trim(),
+                senderId: currentUser?.id,
+                senderType: effectiveRole === 'customer' ? 'customer' : 'provider',
+                sessionId,
+                userRole: currentUser?.role,
+                effectiveRole,
+                forceRole
+            });
 
             // Add to local messages immediately for better UX
             setMessages(prev => [...prev, tempMessage]);
@@ -428,7 +592,8 @@ const ChatWindow = ({
     // Connect to socket after session is loaded
     useEffect(() => {
         if (sessionId && !socketRef.current) {
-            connectToChat();
+            const cleanup = connectToChat();
+            return cleanup;
         }
     }, [sessionId, connectToChat]);
 
@@ -581,8 +746,40 @@ const ChatWindow = ({
                     </div>
                 ) : (
                     messages.map((message, index) => {
-                        const isOwn = String(message.senderId) === String(currentUser?.id);
+                        // ENHANCED MESSAGE OWNERSHIP LOGIC
+                        // Primary check: Compare sender ID with current user ID
+                        const senderIdMatch = String(message.senderId) === String(currentUser?.id);
+                        
+                        // Secondary check: Compare sender type with current user role for additional validation
+                        const effectiveRole = forceRole || currentUser?.role || 'customer';
+                        const expectedSenderType = effectiveRole === 'customer' ? 'customer' : 'provider';
+                        const senderTypeMatch = message.senderType === expectedSenderType;
+                        
+                        // For forced role scenarios, prioritize role-based matching
+                        const isOwn = forceRole ? senderTypeMatch : senderIdMatch;
+                        
                         const showAvatar = index === 0 || messages[index - 1]?.senderId !== message.senderId;
+
+                        // Enhanced message debugging with role context
+                        console.log('🎯 Message Ownership Debug:', {
+                            index,
+                            messageId: message.id,
+                            content: message.content?.substring(0, 30) + '...',
+                            messageSenderId: message.senderId,
+                            messageSenderType: message.senderType,
+                            currentUserId: currentUser?.id,
+                            currentUserRole: currentUser?.role,
+                            effectiveRole,
+                            expectedSenderType,
+                            forceRole,
+                            senderIdMatch,
+                            senderTypeMatch,
+                            isOwn: isOwn,
+                            senderName: message.senderName,
+                            createdAt: message.createdAt,
+                            isTemp: message.isTemp
+                        });
+                        
                         return (
                             <MessageBubble
                                 key={message.id}
