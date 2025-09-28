@@ -287,19 +287,17 @@ const ChatWindow = ({
                 console.log('⚠️ No sessionId available for socket connection');
                 return;
             }
-
             const socket = chatService.getSocket();
             socketRef.current = socket;
 
             if (!socket) {
-                console.log('⚠️ Socket not available, cannot connect to chat');
-                return;
+                console.log('⚠️ Socket not available yet; will queue join and proceed to register handlers.');
             }
 
             console.log('🔍 Current socket state:', {
                 socketExists: !!socket,
-                socketId: socket.id,
-                connected: socket.connected,
+                socketId: socket ? socket.id : null,
+                connected: socket ? socket.connected : false,
                 chatServiceConnected: chatService.isSocketConnected()
             });
 
@@ -446,16 +444,14 @@ const ChatWindow = ({
                 // All message handlers are set up above this function
             };
 
-            // If socket is already connected, join immediately
-            if (socket.connected) {
-                joinChatRoom();
-            } else {
-                // Wait for connection, then join
+            // Always attempt to join; chatService will queue if socket not ready
+            joinChatRoom();
+
+            // If a socket instance exists but isn't connected, ensure join after connect
+            if (socket && !socket.connected) {
                 socket.once('connect', () => {
-                    joinChatRoom();
+                    chatService.joinChat(sessionId);
                 });
-                
-                // Try to connect if not already connecting
                 if (!socket.connecting) {
                     socket.connect();
                 }

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
-
+import WorkerHeader from '../../../components/WorkerHeader';
 const WorkerSchedule = () => {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(isDarkMode());
