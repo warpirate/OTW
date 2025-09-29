@@ -26,12 +26,12 @@ if (hasRazorpayKeys) {
 
 // Mock functions for when Razorpay is not available
 const createMockOrder = async (amount, currency = 'INR', receipt = null) => {
-  console.log(`🔧 MOCK: Creating order for ₹${amount/100} (${currency})`);
+  console.log(`🔧 MOCK: Creating order for ₹${amount} (${currency})`);
   return {
     success: true,
     order: {
       id: `mock_order_${Date.now()}`,
-      amount: Math.round(amount * 100),
+      amount: Math.round(amount), // Amount is already in paise when passed to this function
       currency: currency,
       receipt: receipt || `mock_receipt_${Date.now()}`,
       status: 'created'
@@ -40,13 +40,13 @@ const createMockOrder = async (amount, currency = 'INR', receipt = null) => {
 };
 
 const createMockPayment = async (orderId, upiId, amount, description) => {
-  console.log(`🔧 MOCK: Processing UPI payment for ₹${amount/100} via ${upiId}`);
+  console.log(`🔧 MOCK: Processing UPI payment for ₹${amount} via ${upiId}`);
   return {
     success: true,
     payment: {
       id: `mock_payment_${Date.now()}`,
       order_id: orderId,
-      amount: Math.round(amount * 100),
+      amount: Math.round(amount), // Amount is already in paise when passed to this function
       currency: 'INR',
       status: 'captured',
       method: 'upi',
@@ -87,16 +87,49 @@ const UPI_CONFIG = {
   }
 };
 
-// Helper function to create UPI payment order
+// Helper function to create UPI payment order (amount expected in rupees)
 const createUPIOrder = async (amount, currency = 'INR', receipt = null) => {
   // Use mock function if Razorpay is not available
   if (!hasRazorpayKeys || !razorpay) {
-    return await createMockOrder(amount, currency, receipt);
+    return await createMockOrder(amount * 100, currency, receipt); // Convert to paise for mock
   }
 
   try {
     const options = {
       amount: Math.round(amount * 100), // Convert to paise
+      currency: currency,
+      receipt: receipt || `receipt_${Date.now()}`,
+      payment_capture: 1, // Auto capture payment
+      notes: {
+        payment_type: 'upi',
+        created_via: 'omw_mobile_app'
+      }
+    };
+
+    const order = await razorpay.orders.create(options);
+    return {
+      success: true,
+      order: order
+    };
+  } catch (error) {
+    console.error('Error creating Razorpay UPI order:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Helper function to create UPI payment order (amount already in paise)
+const createUPIOrderDirectPaise = async (amountInPaise, currency = 'INR', receipt = null) => {
+  // Use mock function if Razorpay is not available
+  if (!hasRazorpayKeys || !razorpay) {
+    return await createMockOrder(amountInPaise, currency, receipt);
+  }
+
+  try {
+    const options = {
+      amount: Math.round(amountInPaise), // Amount is already in paise
       currency: currency,
       receipt: receipt || `receipt_${Date.now()}`,
       payment_capture: 1, // Auto capture payment
@@ -300,6 +333,7 @@ module.exports = {
   hasRazorpayKeys,
   UPI_CONFIG,
   createUPIOrder,
+  createUPIOrderDirectPaise,
   createUPIPaymentRequest,
   verifyPayment,
   capturePayment,
