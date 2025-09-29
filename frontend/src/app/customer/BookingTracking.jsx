@@ -51,9 +51,6 @@ const BookingTracking = () => {
   const [currentStatus, setCurrentStatus] = useState('pending');
   const [driverLocation, setDriverLocation] = useState(null);
   const [eta, setEta] = useState(null);
-  const [showOTPModal, setShowOTPModal] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpVerified, setOtpVerified] = useState(false);
   const [socket, setSocket] = useState(null);
   const [tripProgress, setTripProgress] = useState(0);
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -181,10 +178,6 @@ const BookingTracking = () => {
         toast.info(`Status updated: ${statusInfo.label}`);
       }
 
-      // Show OTP modal when provider arrives
-      if (data.status === 'arrived') {
-        setShowOTPModal(true);
-      }
 
       // Handle payment required status
       if (data.status === 'payment_required') {
@@ -210,11 +203,6 @@ const BookingTracking = () => {
       setEta(data.eta);
     });
 
-    newSocket.on('otp_code', (data) => {
-      setOtpCode(data.otp);
-      setShowOTPModal(true);
-      toast.info('Your service provider has arrived. Please share this OTP with them.');
-    });
 
     setSocket(newSocket);
     newSocket.connect();
@@ -259,62 +247,6 @@ const BookingTracking = () => {
     }
   }, [bookingId, navigate]);
 
-  const generateOTP = async () => {
-    try {
-      const token = AuthService.getToken('customer');
-      const response = await fetch(`${API_BASE_URL}/api/customer/bookings/${bookingId}/generate-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setOtpCode(data.otp);
-        setShowOTPModal(true);
-        toast.success('OTP generated successfully! Share this code with your service provider.');
-      } else {
-        toast.error(data.message || 'Failed to generate OTP.');
-      }
-    } catch (error) {
-      console.error('OTP generation error:', error);
-      toast.error('Failed to generate OTP. Please try again.');
-    }
-  };
-
-  const handleOTPVerification = async () => {
-    if (!otpCode.trim()) {
-      toast.error('Please enter the OTP code');
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/customer/bookings/${bookingId}/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('jwt_token_customer')}`
-        },
-        body: JSON.stringify({ otp: otpCode })
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setOtpVerified(true);
-        setShowOTPModal(false);
-        toast.success('OTP verified successfully! Service can now begin.');
-      } else {
-        toast.error(data.message || 'Invalid OTP code');
-      }
-    } catch (error) {
-      console.error('OTP verification error:', error);
-      toast.error('Failed to verify OTP');
-    }
-  };
 
   const handlePayment = async () => {
     if (!booking) return;
@@ -370,7 +302,7 @@ const BookingTracking = () => {
     }
   };
 
-  const handleRazorpayPayment = async () => {
+  const handleRatingSubmit = async () => {
     if (!booking) return;
 
     setSubmittingRating(true);
@@ -513,14 +445,6 @@ const BookingTracking = () => {
                     </div>
                   )}
                   
-                  {currentStatus === 'arrived' && (
-                    <button
-                      onClick={generateOTP}
-                      className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                      Generate OTP
-                    </button>
-                  )}
                   
                   {currentStatus === 'completed' && !hasRated && (
                     <button
@@ -669,42 +593,6 @@ const BookingTracking = () => {
         </div>
       </div>
 
-      {/* OTP Display Modal */}
-      {showOTPModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className={`rounded-lg p-6 max-w-md w-full mx-4 ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              Service Provider Arrived
-            </h3>
-            <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Your service provider has arrived at your location. Please share this OTP code with them to verify their arrival.
-            </p>
-            
-            <div className="mb-6">
-              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                Your OTP Code
-              </label>
-              <div className={`p-6 rounded-lg border-2 border-dashed text-center ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-300'}`}>
-                <div className="text-4xl font-bold tracking-widest text-blue-600 mb-2">
-                  {otpCode}
-                </div>
-                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Share this code with your service provider
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowOTPModal(false)}
-                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Payment Modal */}
       {showPaymentModal && (
