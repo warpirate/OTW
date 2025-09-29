@@ -141,6 +141,7 @@ const CustomerSignup = () => {
           lastName: formData.lastName,
           email: formData.email,
           password: formData.password,
+          gender: formData.gender,
           role_id: 1
         };
         
@@ -188,9 +189,10 @@ const CustomerSignup = () => {
         const userData = {
           firstName: formData.firstName,
           lastName: formData.lastName,
-          phone: formData.phone,
+          phone_number: formData.phone,
           password: formData.password,
           otp: formData.otp,
+          gender: formData.gender,
           role_id: 1
         };
         
@@ -525,14 +527,6 @@ const CustomerSignup = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={handleSendInitialVerification}
-                          className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-                          disabled={isLoading}
-                        >
-                          {isLoading ? 'Sending...' : 'Send Email'}
-                        </button>
-                        <button
-                          type="button"
                           onClick={handleResendVerification}
                           className="flex-1 py-3 px-4 border border-blue-600 text-blue-600 rounded-lg font-medium hover:bg-blue-50"
                           disabled={isLoading}
@@ -541,7 +535,7 @@ const CustomerSignup = () => {
                         </button>
                       </div>
                       <p className="text-xs text-[var(--text-secondary)] text-center">
-                        Use "Send Email" for first-time sending or "Resend Email" if you already received one before.
+                        Didn't get the email? Click "Resend Email".
                       </p>
                     </div>
                   ) : (

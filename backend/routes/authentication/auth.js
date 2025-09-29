@@ -116,7 +116,8 @@ router.post('/register', async (req, res) => {
     lastName,
     email,
     password,
-    phone_number
+    phone_number,
+    gender
   } = req.body;
 
   const name = `${firstName} ${lastName}`;
@@ -151,13 +152,21 @@ router.post('/register', async (req, res) => {
       // User exists with different role, use existing user
       userId = existingUser[0].id;
       console.log('User exists with different role, adding customer role to existing user:', userId);
+      // If gender provided, update existing user's gender
+      try {
+        if (gender) {
+          await pool.query('UPDATE users SET gender = ? WHERE id = ? LIMIT 1', [gender, userId]);
+        }
+      } catch (e) {
+        console.warn('Failed to update gender for existing user', { userId, error: e.message });
+      }
     } else {
       // New user, create user record
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const [userResult] = await pool.query(
-        'INSERT INTO users (name, email, password, phone_number, is_active, email_verified, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())',
-        [name, email, hashedPassword, phone_number, 1]
+        'INSERT INTO users (name, email, password, phone_number, gender, is_active, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, NOW())',
+        [name, email, hashedPassword, phone_number || null, gender || null, 1]
       );
 
       userId = userResult.insertId;
@@ -198,6 +207,7 @@ router.post('/register', async (req, res) => {
         name,
         email,
         phone_number,
+        gender: gender || null,
         role: 'customer',
         role_id
       },

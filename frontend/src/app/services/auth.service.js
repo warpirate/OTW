@@ -71,6 +71,8 @@ const AuthService = {
         lastName: userData.lastName,
         email: userData.email,
         password: userData.password,
+        phone_number: userData.phone_number || userData.phone || null,
+        gender: userData.gender || null,
         role_id: userData.role_id || 1 // Default to customer role
       };
       
