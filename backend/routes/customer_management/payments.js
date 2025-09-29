@@ -4,6 +4,7 @@ const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 const { 
   createUPIOrder, 
+  createUPIOrderDirectPaise,
   verifyPayment, 
   capturePayment,
   refundPayment,
@@ -260,17 +261,20 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
     // Generate transaction ID
     const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-    // Create payment record
+    // Create payment record (amount is already in paise from mobile app)
     const [paymentResult] = await pool.query(
       `INSERT INTO payments (user_id, booking_id, amount_paid, status, method, payment_type, created_at)
        VALUES (?, ?, ?, 'created', 'razorpay', 'razorpay', NOW())`,
-      [userId, booking_id || null, amount]
+      [userId, booking_id || null, amount] // amount is in paise
     );
 
     // Create Razorpay order
-    console.log('Creating Razorpay order for amount:', amount, 'transactionId:', transactionId);
+    console.log('Creating Razorpay order for amount (paise):', amount, 'transactionId:', transactionId);
+    console.log('Amount in rupees:', amount / 100);
     console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID ? 'Present' : 'Missing');
-    const orderResult = await createUPIOrder(amount, 'INR', transactionId);
+    
+    // Mobile app already sends amount in paise, so pass directly without conversion
+    const orderResult = await createUPIOrderDirectPaise(amount, 'INR', transactionId);
     
     if (!orderResult.success) {
       console.error('Razorpay order creation failed:', orderResult.error);
