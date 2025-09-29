@@ -75,6 +75,7 @@ const WorkerSignup = () => {
   const [subcategories, setSubcategories] = useState({});
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedSubcategories, setSelectedSubcategories] = useState([]);
+  const [filteredCategories, setFilteredCategories] = useState([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isLoadingSubcategories, setIsLoadingSubcategories] = useState(false);
   const [categoryError, setCategoryError] = useState('');
