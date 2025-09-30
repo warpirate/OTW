@@ -182,34 +182,34 @@ const Header = () => {
     // Call logout function from imported AuthService with customer role
     AuthService.logout(navigate, 'customer');
     
-    // Clear cart state
     setCartItemCount(0);
     
     setIsAuthenticated(false);
     setUser(null);
     setShowProfileDropdown(false);
-    
-    navigate('/');
-  };
+  
+  navigate('/');
+};
 
-  return (
-    <header className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} shadow-sm border-b transition-colors sticky top-0 z-50`}>
-      <div className="container-custom">
-        <div className="flex justify-between items-center h-14 sm:h-16">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
+return (
+  <header className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} shadow-sm border-b transition-colors sticky top-0 z-50`}>
+    <div className="container-custom">
+      <div className="flex justify-between items-center h-20 sm:h-24">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">
               <button
                 className="flex items-center cursor-pointer focus:outline-none"
                 onClick={() => navigate('/')}
                 aria-label="OMW Home"
               >
-                <Logo size="md" alt="OMW logo" className="h-10 sm:h-12 md:h-16 transition-opacity hover:opacity-90" />
+                <Logo responsive alt="OMW logo" className="h-14 sm:h-16 md:h-20 lg:h-24 xl:h-24 transition-opacity hover:opacity-90" />
               </button>
             </div>
 
             {/* Search Bar (visible on wider screens) */}
-            <div className="hidden md:block ml-6 relative w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <div className="hidden md:block ml-6 relative w-80 lg:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-6 w-6" />
+              {/* Search form */}
               <form onSubmit={handleSearchSubmit} className="w-full">
                 <input
                   type="text"
@@ -217,7 +217,7 @@ const Header = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyPress={handleSearchKeyPress}
-                  className={`pl-10 pr-4 py-2 rounded-lg text-sm w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
+                  className={`pl-11 pr-4 py-3 rounded-lg text-sm w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
                 />
               </form>
 
@@ -259,13 +259,13 @@ const Header = () => {
             {/* Cart Icon */}
             <button 
               onClick={() => navigate('/cart')}
-              className={`relative p-1.5 sm:p-2 rounded-lg transition-colors ${
+              className={`relative p-2 sm:p-3 rounded-lg transition-colors ${
                 darkMode 
                   ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' 
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              <ShoppingCart className="h-5 w-5" />
+              <ShoppingCart className="h-6 w-6" />
               {cartItemCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   {cartItemCount}
@@ -280,13 +280,13 @@ const Header = () => {
                   const newDarkMode = toggleTheme();
                   setDarkMode(newDarkMode);
                 }}
-                className={`hidden sm:inline-flex p-2 rounded-lg transition-colors ${
+                className={`hidden sm:inline-flex p-3 rounded-lg transition-colors ${
                   darkMode 
                     ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
               </button>
             )}
             
@@ -294,7 +294,7 @@ const Header = () => {
               <div className="relative profile-dropdown">
                 <button
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className={`flex items-center space-x-2 px-2 sm:px-3 py-2 rounded-lg transition-colors ${
+                  className={`flex items-center space-x-2 px-3 sm:px-4 py-2.5 rounded-lg transition-colors ${
                     darkMode 
                       ? 'text-white hover:bg-gray-800' 
                       : 'text-gray-700 hover:bg-gray-100'
@@ -303,8 +303,8 @@ const Header = () => {
                   <span className="font-medium hidden sm:inline">
                     {user.firstName || user.first_name || (user.name ? user.name.split(' ')[0] : 'User')}
                   </span>
-                  <User className="h-5 w-5" />
-                  <ChevronDown className={`h-4 w-4 transition-transform hidden sm:inline ${
+                  <User className="h-6 w-6" />
+                  <ChevronDown className={`h-5 w-5 transition-transform hidden sm:inline ${
                     showProfileDropdown ? 'rotate-180' : ''
                   }`} />
                 </button>
@@ -397,13 +397,13 @@ const Header = () => {
                 <button
                   onClick={() => navigate('/login')}
                   aria-label="Sign In"
-                  className={`inline-flex p-1.5 rounded-lg transition-colors ${
+                  className={`inline-flex p-2.5 rounded-lg transition-colors ${
                     darkMode
                       ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  <User className="h-5 w-5" />
+                  <User className="h-6 w-6" />
                 </button>
 
                 {/* Medium and up: full text buttons */}
@@ -426,9 +426,9 @@ const Header = () => {
           </div>
         </div>
         {/* Mobile Search Bar */}
-        <div className="md:hidden mt-2 pb-2">
+        <div className="md:hidden mt-4 pb-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 h-8 w-8" />
             <form onSubmit={handleSearchSubmit}>
               <input
                 type="text"
@@ -436,15 +436,14 @@ const Header = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyPress={handleSearchKeyPress}
-                className={`pl-10 pr-4 py-2 rounded-lg text-sm w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
+                className={`pl-12 pr-6 py-4 rounded-lg text-base w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
               />
             </form>
             {(searchResults.categories.length > 0 || searchResults.subcategories.length > 0) && searchQuery.trim().length > 0 && (
-              <div className={`absolute left-0 right-0 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto z-50 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              <div className={`absolute left-0 right-0 mt-2 rounded-md shadow-lg max-h-60 overflow-y-auto z-50 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
                 {searchResults.categories.map((cat) => (
                   <div
                     key={`mobile-header-cat-${cat.id}`}
-                    onClick={() => handleSuggestionClick(cat, 'category')}
                     className={`px-4 py-2 cursor-pointer flex items-center ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'}`}
                   >
                     <Wrench className="h-4 w-4 text-brand mr-2" />
