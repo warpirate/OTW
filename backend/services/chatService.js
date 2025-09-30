@@ -460,7 +460,10 @@ class ChatService {
                 return;
             }
 
-            // Get chat history
+            // Get chat history - Note: LIMIT and OFFSET need to be integers, not parameters
+            const limitInt = parseInt(limit) || 50;
+            const offsetInt = parseInt(offset) || 0;
+            
             const [messages] = await pool.execute(
                 `SELECT 
                     cm.id, cm.sender_id, cm.sender_type, cm.message_type, 
@@ -471,8 +474,8 @@ class ChatService {
                  JOIN users u ON cm.sender_id = u.id
                  WHERE cm.session_id = ?
                  ORDER BY cm.created_at DESC
-                 LIMIT ? OFFSET ?`,
-                [sessionId, limit, offset]
+                 LIMIT ${limitInt} OFFSET ${offsetInt}`,
+                [sessionId]
             );
 
             socket.emit('chat_history', {

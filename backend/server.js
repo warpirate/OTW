@@ -7,16 +7,35 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 
-// Configure CORS for production
+// Configure CORS for production and development
 const corsOptions = {
-  origin: [
-    'http://localhost:5173',
-    'https://omwhub.com',
-    'https://www.omwhub.com',
-    'http://localhost:3000',
-    'capacitor://localhost',
-    'http://localhost'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      // Production domains
+      'https://omwhub.com',
+      'https://www.omwhub.com',
+      // Development domains (only if NODE_ENV is not production)
+      ...(process.env.NODE_ENV !== 'production' ? [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:5001',
+        'capacitor://localhost',
+        'http://localhost'
+      ] : []),
+      // Add any additional production frontend URLs from environment
+      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
