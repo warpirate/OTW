@@ -5,7 +5,6 @@ import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import Header from '../../components/Header';
-import Logo from '../../components/Logo';
 
 const CustomerSignup = () => {
   const navigate = useNavigate();
@@ -249,10 +248,6 @@ const CustomerSignup = () => {
 
           {/* Right Side: Form Content */}
           <div className="lg:w-1/2">
-            {/* Logo */}
-            <div className="flex items-center mb-6">
-              <Logo size="xl" alt="OMW" className="mr-3" />
-            </div>
             
             {/* Progress Indicator */}
             <div className="flex items-center justify-center space-x-4 mb-8">

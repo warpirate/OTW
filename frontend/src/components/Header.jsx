@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Moon, Sun, User, ChevronDown, ShoppingCart, LogOut, Search, Wrench, Sparkles, Package } from 'lucide-react';
 import AuthService from '../app/services/auth.service';
 import { LandingPageService } from '../app/services/landing_page.service';
@@ -10,6 +10,7 @@ import Logo from './Logo';
 
 const Header = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { getItemCount } = useCart();
   const [darkMode, setDarkMode] = useState(isDarkMode());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -21,6 +22,27 @@ const Header = () => {
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState({ categories: [], subcategories: [] });
+  
+  // Auth button state - tracks which button was last clicked
+  const [activeAuthButton, setActiveAuthButton] = useState(() => {
+    // Get from localStorage or default to 'signup'
+    return localStorage.getItem('activeAuthButton') || 'signup';
+  });
+  
+  // Update localStorage whenever activeAuthButton changes
+  useEffect(() => {
+    localStorage.setItem('activeAuthButton', activeAuthButton);
+  }, [activeAuthButton]);
+  
+  // Sync active button with current route
+  useEffect(() => {
+    const currentPath = location.pathname;
+    if (currentPath === '/login') {
+      setActiveAuthButton('signin');
+    } else if (currentPath === '/signup') {
+      setActiveAuthButton('signup');
+    }
+  }, [location.pathname]);
   
   // Check if we're on a customer page (Header is only used on customer pages)
   const isCustomerPage = () => {
@@ -259,10 +281,10 @@ return (
             {/* Cart Icon */}
             <button 
               onClick={() => navigate('/cart')}
-              className={`relative p-2 sm:p-3 rounded-lg transition-colors ${
+              className={`relative p-2 sm:p-3 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
                 darkMode 
-                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white active:bg-gray-600' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 active:bg-gray-300'
               }`}
             >
               <ShoppingCart className="h-6 w-6" />
@@ -280,10 +302,10 @@ return (
                   const newDarkMode = toggleTheme();
                   setDarkMode(newDarkMode);
                 }}
-                className={`hidden sm:inline-flex p-3 rounded-lg transition-colors ${
+                className={`hidden sm:inline-flex p-3 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
                   darkMode 
-                    ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700 hover:text-yellow-300 active:bg-gray-600' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 active:bg-gray-300'
                 }`}
               >
                 {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
@@ -294,10 +316,10 @@ return (
               <div className="relative profile-dropdown">
                 <button
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className={`flex items-center space-x-2 px-3 sm:px-4 py-2.5 rounded-lg transition-colors ${
+                  className={`flex items-center space-x-2 px-3 sm:px-4 py-2.5 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
                     darkMode 
-                      ? 'text-white hover:bg-gray-800' 
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'text-white hover:bg-gray-800 hover:text-gray-100 active:bg-gray-700' 
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-800 active:bg-gray-200'
                   }`}
                 >
                   <span className="font-medium hidden sm:inline">
@@ -393,30 +415,35 @@ return (
             ) : (
               // Sign In/Sign Up buttons for non-authenticated users
               <>
-                {/* Always-visible: compact login icon (all sizes) */}
-                <button
-                  onClick={() => navigate('/login')}
-                  aria-label="Sign In"
-                  className={`inline-flex p-2.5 rounded-lg transition-colors ${
-                    darkMode
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  <User className="h-6 w-6" />
-                </button>
-
-                {/* Medium and up: full text buttons */}
-                <div className="hidden md:flex items-center space-x-2">
+                {/* Full text buttons for all screen sizes */}
+                <div className="flex items-center space-x-2">
                   <button 
-                    onClick={() => navigate('/login')} 
-                    className={`btn-ghost ${darkMode ? 'text-white hover:bg-gray-800' : ''}`}
+                    onClick={() => {
+                      setActiveAuthButton('signin');
+                      navigate('/login');
+                    }} 
+                    className={`transition-all duration-200 transform hover:scale-105 active:scale-95 px-4 py-2 rounded-lg font-medium ${
+                      activeAuthButton === 'signin'
+                        ? 'bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 hover:shadow-lg active:shadow-md'
+                        : darkMode 
+                          ? 'text-white hover:bg-gray-800 hover:text-gray-100 active:bg-gray-700 border border-gray-600' 
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-800 active:bg-gray-200 border border-gray-300'
+                    }`}
                   >
                     Sign In
                   </button>
                   <button 
-                    onClick={() => navigate('/signup')} 
-                    className="btn-brand"
+                    onClick={() => {
+                      setActiveAuthButton('signup');
+                      navigate('/signup');
+                    }} 
+                    className={`transition-all duration-200 transform hover:scale-105 active:scale-95 px-4 py-2 rounded-lg font-medium ${
+                      activeAuthButton === 'signup'
+                        ? 'bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 hover:shadow-lg active:shadow-md'
+                        : darkMode 
+                          ? 'text-white hover:bg-gray-800 hover:text-gray-100 active:bg-gray-700 border border-gray-600' 
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-800 active:bg-gray-200 border border-gray-300'
+                    }`}
                   >
                     Sign Up
                   </button>

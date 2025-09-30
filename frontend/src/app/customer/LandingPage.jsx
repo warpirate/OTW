@@ -421,6 +421,13 @@ const LandingPage = () => {
             <div className="w-full md:w-5/12">
               <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 transition-colors`}>
                 
+                {/* Service Description */}
+                <div className="mb-6 text-center">
+                  <h3 className={`text-lg sm:text-xl font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                    Professional Services at Your Doorstep
+                  </h3>
+                </div>
+                
                 {/* Search Bar */}
                 <div className="mb-6">
                   <div className="relative">
@@ -437,7 +444,7 @@ const LandingPage = () => {
                       <div className="absolute left-12 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 transition-all duration-500">
                         <span className="text-sm sm:text-base">Search for </span>
                         <span className={`text-sm sm:text-base font-semibold ${darkMode ? 'text-brand-light' : 'text-brand'} transition-all duration-500`}>
-                          {currentServiceName || 'services'}
+                          {currentServiceName || 'Ac Services'}
                         </span>
                       </div>
                     )}
@@ -777,7 +784,7 @@ const LandingPage = () => {
               Why Choose OMW?
             </h2>
             <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} max-w-2xl mx-auto`}>
-              Experience the best in-home services with our trusted platform
+              From home maintenance and repairs to cleaning and specialized services, we connect you with verified professionals who deliver quality work with reliability and care.
             </p>
           </div>
 

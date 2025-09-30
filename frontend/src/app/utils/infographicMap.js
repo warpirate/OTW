@@ -32,7 +32,8 @@ const ICON_MAPPINGS = {
   'gas-refilling': '/src/assets/infographics/Icons/Ac_services/gas_refilling.png',
   'repair-maintenance': '/src/assets/infographics/Icons/Ac_services/repair_maintenance.png',
   'thermostat-installation': '/src/assets/infographics/Icons/Ac_services/thermostat_installation.png',
-  'ac-service-cat': '/src/assets/infographics/Icons/Ac_services/Ac_service_cat.png',
+  'ac-service-cat': '/infographics/Icons/Ac_services/ac_services_category.jpg',
+  'ac-services-cat': '/infographics/Icons/Ac_services/ac_services_category.jpg',
   
   // Carpenter
   'custom-shelving': '/src/assets/infographics/Icons/carpenter_cat/custom_shelving.png',
@@ -43,7 +44,7 @@ const ICON_MAPPINGS = {
   'kitchen-cabinets': '/src/assets/infographics/Icons/carpenter_cat/kitchen_cabinets.png',
   'roof-framing': '/src/assets/infographics/Icons/carpenter_cat/roof_framing.png',
   'window-frames': '/src/assets/infographics/Icons/carpenter_cat/window_frames.png',
-  'carpenter-cat': '/src/assets/infographics/Icons/carpenter_cat/carpenter_cat.png',
+  'carpenter-cat': '/src/assets/infographics/Icons/carpenter_cat/carpenter_cat.jpg',
   
   // Cleaning
   'carpet-cleaning': '/src/assets/infographics/Icons/cleaning/carpet_cleaning.png',
@@ -55,6 +56,8 @@ const ICON_MAPPINGS = {
   'move-in-move-out-cleaning': '/src/assets/infographics/Icons/cleaning/move-in-outcleaning.png',
   'house-cleaning': '/src/assets/infographics/Icons/cleaning/house_cleaning.png',
   'post-construction-cleanup': '/src/assets/infographics/Icons/cleaning/post_construction_cleanup.png',
+  'cleaner-cat': '/infographics/Icons/cleaning/cleaner_cat.png',
+  'cleaning-cat': '/infographics/Icons/cleaning/cleaner_cat.png',
   
   // Cook
   'bulk-cooking': '/src/assets/infographics/Icons/cook/bulk_cooking.png',
@@ -66,6 +69,8 @@ const ICON_MAPPINGS = {
   'meal-planning': '/src/assets/infographics/Icons/cook/meal_planning.png',
   'party-catering': '/src/assets/infographics/Icons/cook/party_catering.png',
   'special-occasion-cooking': '/src/assets/infographics/Icons/cook/special_occasion_cooking.png',
+  'cook-cat': '/infographics/Icons/cook/cooking_cat.png',
+  'cooking-cat': '/infographics/Icons/cook/cooking_cat.png',
   
   // Electrician
   'circuit-breaker-repair': '/src/assets/infographics/Icons/electrition/circuit_breaker_repair.png',
@@ -76,6 +81,8 @@ const ICON_MAPPINGS = {
   'fan-installation': '/src/assets/infographics/Icons/electrition/fan_install.png',
   'outlet-installation': '/src/assets/infographics/Icons/electrition/outlet_installation.png',
   'wiring-installation': '/src/assets/infographics/Icons/electrition/wiring_installation.png',
+  'electrician-cat': '/infographics/Icons/electrition/circuit_breaker_repair.jpg',
+  'electrition-cat': '/infographics/Icons/electrition/circuit_breaker_repair.jpg',
   
   // General Help
   'furniture-assembly': '/src/assets/infographics/Icons/general help/furniture_assembly.png',
@@ -85,6 +92,8 @@ const ICON_MAPPINGS = {
   'organizing-services': '/src/assets/infographics/Icons/general help/organizing_services.png',
   'painting': '/src/assets/infographics/Icons/general help/painting.png',
   'yard-work': '/src/assets/infographics/Icons/general help/yard_work.png',
+  'general-help-cat': '/infographics/Icons/general help/general_help_cat.png',
+  'general-cat': '/infographics/Icons/general help/general_help_cat.png',
   
   // Pest Control
   'ant-control': '/src/assets/infographics/Icons/pest_control/Ant_control.png',
@@ -99,6 +108,8 @@ const ICON_MAPPINGS = {
   'rat-extermination': '/src/assets/infographics/Icons/pest_control/rat_extermination.png',
   // explicit alias for Rodent Control -> use rat_extermination image
   'rodent-control': '/src/assets/infographics/Icons/pest_control/rat_extermination.png',
+  'pest-control-cat': '/infographics/Icons/pest_control/Ant_control.jpg',
+  'pest-cat': '/infographics/Icons/pest_control/Ant_control.jpg',
   
   // Plumber
   'bathroom-renovation': '/src/assets/infographics/Icons/plumber/bathroom_renovation.png',
@@ -109,6 +120,8 @@ const ICON_MAPPINGS = {
   'pipe-repair': '/src/assets/infographics/Icons/plumber/pipe_repair.png',
   'toilet-installations': '/src/assets/infographics/Icons/plumber/toilet_installations.png',
   'water-heater-service': '/src/assets/infographics/Icons/plumber/water_heater_service.png',
+  'plumber-cat': '/infographics/Icons/plumber/plumber_category.jpg',
+  'plumbing-cat': '/infographics/Icons/plumber/plumber_category.jpg',
 };
 
 // Category folder mappings
@@ -147,7 +160,6 @@ const SYNONYMS = {
   'general help': 'general-help',
   'general-help': 'general-help',
   'cleaning': 'cleaner',
-  'maid': 'cleaner',
   'housekeeping': 'cleaner',
   'pest control': 'pest',
   'pest': 'pest',
@@ -313,6 +325,14 @@ const createBadgeSvg = (label, options = {}) => {
   return encodeSvg(svg);
 };
 
+// Type image mappings for main service types
+const TYPE_IMAGE_MAPPINGS = {
+  'maintenance': '/infographics/maintence.jpg',
+  'maid': '/infographics/maid.png',
+  'cleaner': '/infographics/maid.png', // Also map cleaner to maid image
+  'driver': '/infographics/67409.jpg',
+};
+
 const TYPE_STYLES = {
   maintenance: { bgColor: '#EEF2FF', fgColor: '#6366F1', subText: 'Maintenance', symbol: '🧰' },
   maid: { bgColor: '#FDF2F8', fgColor: '#EC4899', subText: 'Maid', symbol: '🧹' },
@@ -333,8 +353,17 @@ const CATEGORY_STYLES = {
 
 export const getTypeImageSrc = (typeIdOrName) => {
   const key = canonicalize(typeIdOrName);
+  
+  // First check for specific type image mappings
+  if (TYPE_IMAGE_MAPPINGS[key]) {
+    return TYPE_IMAGE_MAPPINGS[key];
+  }
+  
+  // Then try local assets
   const asset = getLocalAssetUrl(key);
   if (asset) return asset;
+  
+  // Fall back to SVG generation
   const style = TYPE_STYLES[key] || { bgColor: '#F1F5F9', fgColor: '#3B82F6', subText: 'Services', symbol: '🔧' };
   const label = key ? key[0].toUpperCase() : 'S';
   return createBadgeSvg(label, style);

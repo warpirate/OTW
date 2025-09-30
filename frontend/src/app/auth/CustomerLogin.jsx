@@ -5,7 +5,6 @@ import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import Header from '../../components/Header';
-import Logo from '../../components/Logo';
 
 const CustomerLogin = () => {
   const navigate = useNavigate();
@@ -134,10 +133,6 @@ const CustomerLogin = () => {
           <div className="lg:w-1/2">
             {/* Login Form */}
             <div className="bg-[var(--bg-primary)] rounded-xl shadow-lg p-8 border border-[var(--border-color)]">
-              {/* Logo */}
-              <div className="flex items-center mb-6">
-                <Logo size="xl" alt="OMW" className="mr-3" />
-              </div>
               <form onSubmit={handleLogin} className="space-y-6">
                 {/* Login Method Toggle */}
                 <div className="flex p-1 rounded-lg bg-[var(--bg-secondary)]">
