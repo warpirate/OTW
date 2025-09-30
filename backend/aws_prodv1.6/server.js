@@ -6,7 +6,42 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-app.use(cors());
+
+// Configure CORS for production and development
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      // Production domains
+      'https://omwhub.com',
+      'https://www.omwhub.com',
+      // Development domains (only if NODE_ENV is not production)
+      ...(process.env.NODE_ENV !== 'production' ? [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://localhost:5001',
+        'capacitor://localhost',
+        'http://localhost'
+      ] : []),
+      // Add any additional production frontend URLs from environment
+      ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Load route
@@ -41,9 +76,27 @@ app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker`, workerDocsRoute);
 // Create HTTP server and attach Socket.IO
 const server = http.createServer(app);
+
+// Socket.IO CORS configuration (same as Express CORS)
+const socketCorsOrigins = [
+  // Production domains
+  'https://omwhub.com',
+  'https://www.omwhub.com',
+  // Development domains (only if NODE_ENV is not production)
+  ...(process.env.NODE_ENV !== 'production' ? [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:5001',
+    'capacitor://localhost',
+    'http://localhost'
+  ] : []),
+  // Add any additional production frontend URLs from environment
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
+];
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.SOCKET_CORS_ORIGIN || '*',
+    origin: socketCorsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true
   }

@@ -215,9 +215,46 @@ const AuthService = {
       localStorage.removeItem(tokenKey);
       localStorage.removeItem(userKey);
       
-      // If we're logging out the current role, clear the current_role marker
+      // Only clear current_role if we're explicitly logging out the current active role
+      // AND no other roles are still logged in
       if (localStorage.getItem('current_role') === currentRole) {
-        localStorage.removeItem('current_role');
+        // Check if any other roles are still logged in
+        const otherRoles = ['admin', 'customer', 'worker', 'super admin'].filter(r => r !== currentRole);
+        const hasOtherActiveRoles = otherRoles.some(r => {
+          const { tokenKey } = AuthService._getStorageKeys(r);
+          const token = localStorage.getItem(tokenKey);
+          if (!token) return false;
+          
+          try {
+            const decoded = jwtDecode(token);
+            return decoded.exp > Date.now() / 1000; // Token is still valid
+          } catch {
+            return false;
+          }
+        });
+        
+        // Only clear current_role if no other roles are active
+        if (!hasOtherActiveRoles) {
+          localStorage.removeItem('current_role');
+        } else {
+          // Set current_role to the first available active role
+          const nextActiveRole = otherRoles.find(r => {
+            const { tokenKey } = AuthService._getStorageKeys(r);
+            const token = localStorage.getItem(tokenKey);
+            if (!token) return false;
+            
+            try {
+              const decoded = jwtDecode(token);
+              return decoded.exp > Date.now() / 1000;
+            } catch {
+              return false;
+            }
+          });
+          
+          if (nextActiveRole) {
+            localStorage.setItem('current_role', nextActiveRole);
+          }
+        }
       }
       
       // Dispatch custom event for this role logout
@@ -268,6 +305,40 @@ const AuthService = {
     // Return true to indicate successful logout
     return true;
   },
+
+  // Helper function to manually switch active role (for testing/debugging)
+  switchRole: (role) => {
+    const roles = ['admin', 'customer', 'worker', 'super admin'];
+    if (!roles.includes(role)) {
+      console.error('Invalid role:', role);
+      return false;
+    }
+    
+    // Check if the role has a valid token
+    const { tokenKey } = AuthService._getStorageKeys(role);
+    const token = localStorage.getItem(tokenKey);
+    
+    if (!token) {
+      console.error(`No token found for role: ${role}`);
+      return false;
+    }
+    
+    try {
+      const decoded = jwtDecode(token);
+      if (decoded.exp <= Date.now() / 1000) {
+        console.error(`Token expired for role: ${role}`);
+        return false;
+      }
+      
+      // Switch to the role
+      localStorage.setItem('current_role', role);
+      console.log(`Switched to role: ${role}`);
+      return true;
+    } catch (error) {
+      console.error(`Invalid token for role: ${role}`, error);
+      return false;
+    }
+  },
   
   // Store tokens with role-based support
   _storeTokens: (token, user) => {
@@ -281,8 +352,33 @@ const AuthService = {
     localStorage.setItem(tokenKey, token);
     localStorage.setItem(userKey, JSON.stringify(user));
     
-    // Store the current active role
-    localStorage.setItem('current_role', user.role);
+    // Only update current_role if no role is currently set, or if this is the first login
+    const existingCurrentRole = localStorage.getItem('current_role');
+    if (!existingCurrentRole) {
+      localStorage.setItem('current_role', user.role);
+    }
+    // If current_role exists but the token for that role is invalid/expired, switch to this role
+    else {
+      const { tokenKey: currentTokenKey } = AuthService._getStorageKeys(existingCurrentRole);
+      const currentToken = localStorage.getItem(currentTokenKey);
+      
+      if (!currentToken) {
+        // Current role has no valid token, switch to this role
+        localStorage.setItem('current_role', user.role);
+      } else {
+        try {
+          const decoded = jwtDecode(currentToken);
+          if (decoded.exp <= Date.now() / 1000) {
+            // Current role token is expired, switch to this role
+            localStorage.setItem('current_role', user.role);
+          }
+          // Otherwise, keep the existing current_role (don't overwrite)
+        } catch {
+          // Current role token is invalid, switch to this role
+          localStorage.setItem('current_role', user.role);
+        }
+      }
+    }
     
     // Dispatch custom event for login
     const loginEvent = new Event(`${user.role}_login`);
