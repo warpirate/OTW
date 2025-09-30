@@ -6,7 +6,23 @@ require('dotenv').config();
 const jwt = require('jsonwebtoken');
 
 const app = express();
-app.use(cors());
+
+// Configure CORS for production
+const corsOptions = {
+  origin: [
+    'http://localhost:5173',
+    'https://omwhub.com',
+    'https://www.omwhub.com',
+    'http://localhost:3000',
+    'capacitor://localhost',
+    'http://localhost'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Load route
