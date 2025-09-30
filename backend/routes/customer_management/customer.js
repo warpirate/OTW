@@ -3,6 +3,19 @@ const router = express.Router();
 const pool = require('../../config/db');
 const verifyToken = require('../middlewares/verify_token');
 
+// GET /api/customer/types - Get available customer types for document verification
+router.get('/types', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, name, discount_percentage FROM customer_types ORDER BY id ASC'
+    );
+    res.json({ success: true, customer_types: rows });
+  } catch (error) {
+    console.error('Error fetching customer types:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch customer types' });
+  }
+});
+
  router.get('/get-categories', async (req, res) => {
   try {
 
@@ -127,7 +140,16 @@ router.get('/profile', verifyToken, async (req, res) => {
           ct.discount_percentage AS customer_discount_percentage,
           u.name, u.email, u.phone_number, u.gender, 
           ca.address, ca.city, ca.state, ca.country, ca.pin_code, 
-          ca.location_lat, ca.location_lng
+          ca.location_lat, ca.location_lng,
+          COALESCE(
+            (SELECT cv.verification_status 
+             FROM customer_verifications cv 
+             WHERE cv.customer_id = c.id 
+             AND cv.verification_status IN ('pending', 'verified', 'rejected')
+             ORDER BY cv.uploaded_at DESC 
+             LIMIT 1),
+            'none'
+          ) AS verification_status
        FROM customers c
        LEFT JOIN customer_types ct ON ct.id = c.customer_type_id
        LEFT JOIN users u 
