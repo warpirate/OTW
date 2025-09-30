@@ -342,6 +342,12 @@ class ChatService {
                 hasMore: response.data.hasMore || false
             };
         } catch (error) {
+            // Treat missing history as an empty conversation (no error toast)
+            const status = error?.response?.status;
+            const code = error?.response?.data?.code || error?.code;
+            if (status === 404 || code === 'NO_HISTORY') {
+                return { messages: [], hasMore: false };
+            }
             console.error('Error getting chat history:', error);
             throw error;
         }

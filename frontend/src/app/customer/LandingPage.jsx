@@ -61,6 +61,64 @@ const LandingPage = () => {
 
   // Realtime search results
   const [searchResults, setSearchResults] = useState({ categories: [], subcategories: [] });
+  
+  // Dynamic placeholder states
+  const [allSubcategories, setAllSubcategories] = useState([]);
+  const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
+  const [dynamicPlaceholder, setDynamicPlaceholder] = useState('Are you looking for services?');
+  const [dynamicExploreText, setDynamicExploreText] = useState('Explore our services');
+  const [currentServiceName, setCurrentServiceName] = useState('');
+
+  // Fetch all subcategories for dynamic placeholder
+  useEffect(() => {
+    const fetchAllSubcategories = async () => {
+      try {
+        const allSubs = [];
+        // Fetch subcategories from all available categories
+        for (const category of categories) {
+          try {
+            const subCategoriesResponse = await LandingPageService.getAllSubCategories(category.id);
+            if (subCategoriesResponse && subCategoriesResponse.length > 0) {
+              allSubs.push(...subCategoriesResponse);
+            }
+          } catch (err) {
+            console.error(`Error fetching subcategories for category ${category.id}:`, err);
+          }
+        }
+        setAllSubcategories(allSubs);
+      } catch (error) {
+        console.error('Error fetching subcategories:', error);
+      }
+    };
+
+    if (categories.length > 0) {
+      fetchAllSubcategories();
+    }
+  }, [categories]);
+
+  // Dynamic placeholder cycling effect
+  useEffect(() => {
+    if (allSubcategories.length === 0) return;
+
+    const interval = setInterval(() => {
+      setCurrentPlaceholderIndex((prevIndex) => {
+        const nextIndex = (prevIndex + 1) % allSubcategories.length;
+        const currentSub = allSubcategories[nextIndex];
+        
+        // Update both placeholder and explore text
+        // Use full service name since we have responsive design
+        const serviceName = currentSub.name;
+        
+        setCurrentServiceName(serviceName);
+        setDynamicPlaceholder(`Search for ${serviceName}`);
+        setDynamicExploreText(`Try ${serviceName}`);
+        
+        return nextIndex;
+      });
+    }, 2500); // Change every 2.5 seconds
+
+    return () => clearInterval(interval);
+  }, [allSubcategories]);
 
   // Debounce search query changes and fetch results
   useEffect(() => {
@@ -182,7 +240,6 @@ const LandingPage = () => {
               icon: icon,
               description: category.description || `Professional ${category.name} services`,
               imageUrl: category.image_url,
-              hasSubcategories: true // We'll assume all categories can have subcategories
             });
           });
           
@@ -190,11 +247,15 @@ const LandingPage = () => {
           
           setDynamicServiceCategories(groupedCategories);
           
-          // Set active tab to the first available category type
+          // Set active tab from navigation state if available, else first available
           if (Object.keys(groupedCategories).length > 0) {
-            const firstTab = Object.keys(groupedCategories)[0];
-            setActiveTab(firstTab);
+            const stateTab = location.state?.activeTab;
+            const initialTab = stateTab && groupedCategories[stateTab] ? stateTab : Object.keys(groupedCategories)[0];
+            setActiveTab(initialTab);
           }
+          
+          
+          
         }
         
         setError(null);
@@ -209,6 +270,14 @@ const LandingPage = () => {
     
     fetchCategories();
   }, []);
+
+  // Respect activeTab passed via navigation state after categories are available
+  useEffect(() => {
+    const stateTab = location.state?.activeTab;
+    if (stateTab && dynamicServiceCategories[stateTab]) {
+      setActiveTab(stateTab);
+    }
+  }, [location.state, dynamicServiceCategories]);
   
   // Check for user authentication status
   useEffect(() => {
@@ -350,23 +419,28 @@ const LandingPage = () => {
             
             {/* Right side with search & quick access */}
             <div className="w-full md:w-5/12">
-              <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-6 md:p-8 transition-colors`}>
-                <div className="flex items-center mb-2">
-                  <Logo size="xl" className="mr-3" alt="OMW" />
-                </div>
-                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-6`}>Explore our services</p>
+              <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-800'} rounded-2xl shadow-xl p-4 sm:p-6 md:p-8 transition-colors`}>
                 
                 {/* Search Bar */}
                 <div className="mb-6">
                   <div className="relative">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 z-10" />
                     <input
                       type="text"
-                      placeholder="Are you looking for services?"
+                      placeholder=""
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="input-search"
+                      className="input-search transition-all duration-500"
                     />
+                    {/* Custom highlighted placeholder overlay */}
+                    {!searchQuery && (
+                      <div className="absolute left-12 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400 transition-all duration-500">
+                        <span className="text-sm sm:text-base">Search for </span>
+                        <span className={`text-sm sm:text-base font-semibold ${darkMode ? 'text-brand-light' : 'text-brand'} transition-all duration-500`}>
+                          {currentServiceName || 'services'}
+                        </span>
+                      </div>
+                    )}
                     {/* Suggestions Dropdown */}
                     {(searchResults.categories.length > 0 || searchResults.subcategories.length > 0) && searchQuery.trim().length > 0 && (
                       <div className={`absolute z-10 left-0 right-0 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
@@ -638,31 +712,40 @@ const LandingPage = () => {
                           {dynamicServiceCategories[activeTab].categories.map((cat) => {
                             const IconComponent = cat.icon;
                             return (
-                              <div 
+                              <div
                                 key={cat.id}
-                                className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:-translate-y-1`}
+                                className={`group relative overflow-hidden ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer`}
                                 onClick={() => {
-                                  // Navigate to the category services page instead of showing subcategories inline
                                   window.scrollTo(0, 0);
                                   navigate(`/category/${cat.id}/${cat.name}`);
                                 }}
                               >
+                                {/* Decorative background glow for theme blending */}
+                                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gradient-brand opacity-20 blur-2xl" />
+
                                 <div className="p-6 flex items-center gap-6 h-full">
-                                  {/* Icon Section - Left Side */}
-                                  <div className="flex-shrink-0">
-                                    <InfographicIcon src={getCategoryImageSrc(cat.name, cat.imageUrl)} alt={`${cat.name} icon`} size="6xl" tone="brand" />
+                                  {/* Image Section - prominent with gradient container */}
+                                  <div className="relative flex-shrink-0">
+                                    <div className={`relative flex items-center justify-center rounded-2xl shadow-inner ring-1 ${darkMode ? 'ring-white/10' : 'ring-black/5'} bg-gradient-brand/20 w-28 h-28 md:w-36 md:h-36`}> 
+                                      <InfographicIcon
+                                        src={getCategoryImageSrc(cat.name, cat.imageUrl)}
+                                        alt={`${cat.name} icon`}
+                                        size="4xl"
+                                        className="drop-shadow-xl transition-transform duration-300 ease-out group-hover:scale-110"
+                                      />
+                                    </div>
                                   </div>
-                                  
-                                  {/* Content Section - Right Side */}
+
+                                  {/* Content Section */}
                                   <div className="flex-grow flex flex-col justify-center">
-                                    <h3 className={`font-bold text-xl mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
-                                    <p className={`text-sm leading-relaxed mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>
-                                    
+                                    <h3 className={`font-bold text-xl mb-1 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
+                                    <p className={`text-sm leading-relaxed mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{cat.description}</p>
+
                                     {/* Button Section */}
-                                    <div>
-                                      <button className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2 group">
+                                    <div className="mt-2">
+                                      <button className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded-md font-medium text-sm transition-colors duration-200 flex items-center gap-1">
                                         View Services
-                                        <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
+                                        <ChevronRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-1" />
                                       </button>
                                     </div>
                                   </div>
