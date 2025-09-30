@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import AuthService from '../services/auth.service';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
+import Logo from '../../components/Logo';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -74,8 +75,9 @@ const AdminLogin = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-lg">
-        <div className="flex justify-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">UrbanGo Admin</h1>
+        <div className="flex flex-col items-center mb-8">
+          <Logo size="lg" className="mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900">OMW Admin</h1>
         </div>
         <h2 className="text-center text-3xl font-extrabold text-gray-900 mb-6">
           Sign in to your account
@@ -131,19 +133,7 @@ const AdminLogin = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Remember me
-              </label>
-            </div>
-
+          <div className="flex justify-end">
             <div className="text-sm">
               <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
                 Forgot your password?
