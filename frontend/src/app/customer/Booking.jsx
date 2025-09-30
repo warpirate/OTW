@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  ArrowLeft, Calendar, Clock, MapPin, Plus, Edit2, Trash2, 
+import {
+  ArrowLeft, Calendar, Clock, MapPin, Plus, Edit2, Trash2,
   CheckCircle, Home, Briefcase, Star, User, Phone, Mail,
   CreditCard, Building, ChevronRight, XCircle, AlertTriangle
 } from 'lucide-react';
@@ -21,17 +21,17 @@ const Booking = () => {
   const location = useLocation();
   const { cart, clearCart, loading: cartLoading } = useCart();
   const [darkMode, setDarkMode] = useState(isDarkMode());
-  
+
   // Booking flow steps
   const [currentStep, setCurrentStep] = useState('address'); // 'address', 'datetime', 'payment', 'confirmation'
-  
+
   // DateTime selection
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [availableDates, setAvailableDates] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  
+
   // Worker preference
   const [workerPreference, setWorkerPreference] = useState('any'); // 'any', 'male', 'female'
   const [workerAvailability, setWorkerAvailability] = useState({
@@ -40,10 +40,9 @@ const Booking = () => {
     any: true
   });
   const [loadingWorkerAvailability, setLoadingWorkerAvailability] = useState(false);
-  
+
   // Address management
   const [addresses, setAddresses] = useState([]);
-  const [selectedAddress, setSelectedAddress] = useState(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -59,17 +58,19 @@ const Booking = () => {
     address_label: '',
     is_default: false
   });
-  
+  const [gettingCurrentLocation, setGettingCurrentLocation] = useState(false);
+  const [currentLocationCoords, setCurrentLocationCoords] = useState(null);
+
   // Booking confirmation
   const [isProcessing, setIsProcessing] = useState(false);
   const [bookingNotes, setBookingNotes] = useState('');
-  
+
   // Payment methods
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
   const [paymentType, setPaymentType] = useState('upi'); // 'upi' or 'pay_after_service'
-  
+
   // Enhanced payment states
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -81,7 +82,7 @@ const Booking = () => {
   const [paymentRetryCount, setPaymentRetryCount] = useState(0);
   const [serviceBookingId, setServiceBookingId] = useState(null);
   const [backendCalculatedTotal, setBackendCalculatedTotal] = useState(null);
-  
+
   // Discount state
   const [discountInfo, setDiscountInfo] = useState({
     has_discount: false,
@@ -89,13 +90,13 @@ const Booking = () => {
     customer_type: 'Normal'
   });
   const [loadingDiscount, setLoadingDiscount] = useState(false);
-  
+
   // Sync dark mode with global theme changes
   useEffect(() => {
     const remove = addThemeListener(() => setDarkMode(isDarkMode()));
     return () => remove();
   }, []);
-  
+
   // Authentication & cart availability check
   useEffect(() => {
     // Wait until cart has finished loading
@@ -123,13 +124,13 @@ const Booking = () => {
 
     // Load customer addresses
     loadAddresses();
-    
+
     // Load payment methods
     loadPaymentMethods();
-    
+
     // Load discount information
     loadDiscountInfo();
-    
+
     // Set default payment method if available
     if (paymentMethods.length > 0 && !selectedPaymentMethod) {
       const defaultMethod = paymentMethods.find(method => method.is_default);
@@ -138,14 +139,14 @@ const Booking = () => {
       }
     }
   }, [cartLoading, cart, navigate]);
-  
+
   // Load customer addresses
   const loadAddresses = async () => {
     setLoadingAddresses(true);
     try {
       const data = await BookingService.addresses.getAll();
       setAddresses(data.addresses || []);
-      
+
       // Auto-select default address if available
       const defaultAddress = data.addresses?.find(addr => addr.is_default);
       if (defaultAddress) {
@@ -166,7 +167,7 @@ const Booking = () => {
       const response = await PaymentService.upiMethods.getAll();
       const methods = response.payment_methods || [];
       setPaymentMethods(methods);
-      
+
       // Auto-select default payment method
       const defaultMethod = methods.find(method => method.is_default);
       if (defaultMethod) {
@@ -179,7 +180,7 @@ const Booking = () => {
       setLoadingPaymentMethods(false);
     }
   };
-  
+
   // Load discount information
   const loadDiscountInfo = async () => {
     try {
@@ -193,33 +194,33 @@ const Booking = () => {
       setLoadingDiscount(false);
     }
   };
-  
+
   // Calculate totals with discount (matching backend logic)
   const calculateTotals = () => {
     if (!cart || !cart.items) return { subtotal: 0, discount: 0, tax: 0, total: 0 };
-    
+
     const subtotal = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     // Ensure discountInfo is properly loaded before calculating discount
     const discount = (discountInfo && discountInfo.has_discount) ? subtotal * (discountInfo.discount_percentage / 100) : 0;
     const discountedSubtotal = subtotal - discount;
     const tax = discountedSubtotal * 0.18; // 18% GST on discounted amount (matching backend)
     const total = discountedSubtotal + tax;
-    
+
     return { subtotal, discount, tax, total };
   };
-  
+
   // Generate available dates for booking
   const generateAvailableDates = (daysCount = 14) => {
     const dates = [];
     const today = new Date();
-    
+
     for (let i = 0; i < daysCount; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
-      
+
       // Format date as YYYY-MM-DD for consistent usage
       const dateString = date.toISOString().split('T')[0];
-      
+
       dates.push({
         date: dateString,
         displayDate: date.toLocaleDateString('en-US', {
@@ -237,7 +238,7 @@ const Booking = () => {
         isTomorrow: i === 1
       });
     }
-    
+
     return dates;
   };
 
@@ -247,19 +248,19 @@ const Booking = () => {
     const now = new Date();
     const selectedDateObj = new Date(`${date}T00:00:00`);
     const isToday = selectedDateObj.toDateString() === now.toDateString();
-    
+
     // Generate slots from 9 AM to 6 PM (every 30 minutes)
     for (let hour = 9; hour <= 18; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
         // Skip 6:30 PM slot
         if (hour === 18 && minute === 30) break;
-        
+
         const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
         const slotDateTime = new Date(`${date}T${timeString}:00`);
-        
+
         // Check if slot is in the past (for today only) - add 30 minute buffer
         const isPast = isToday && slotDateTime <= new Date(now.getTime() + 30 * 60000);
-        
+
         slots.push({
           time: timeString,
           available: !isPast,
@@ -267,14 +268,14 @@ const Booking = () => {
         });
       }
     }
-    
+
     return slots;
   };
 
   // Load time slots for selected date (frontend calculation)
   const loadTimeSlots = (date) => {
     setLoadingSlots(true);
-    
+
     // Simulate brief loading for better UX
     setTimeout(() => {
       const slots = generateTimeSlots(date);
@@ -337,7 +338,7 @@ const Booking = () => {
       setLoadingWorkerAvailability(false);
     }
   };
-  
+
   // Handle date selection
   const handleDateSelect = (date) => {
     setSelectedDate(date);
@@ -350,7 +351,7 @@ const Booking = () => {
     });
     loadTimeSlots(date);
   };
-  
+
   // Handle time slot selection
   const handleTimeSlotSelect = (slot) => {
     if (slot.available) {
@@ -359,7 +360,7 @@ const Booking = () => {
       checkWorkerAvailability(selectedDate, slot.time);
     }
   };
-  
+
   // Handle address form input
   const handleAddressInput = (field, value) => {
     setNewAddress(prev => ({
@@ -371,7 +372,7 @@ const Booking = () => {
   // Handle pincode validation on blur
   const handlePincodeValidation = async (pincode) => {
     if (!pincode || pincode.length !== 6) return;
-    
+
     setValidatingAddress(true);
     try {
       const validation = await BookingService.utils.validatePincode(pincode);
@@ -392,80 +393,245 @@ const Booking = () => {
       setValidatingAddress(false);
     }
   };
-  
-  // Geocode address using Google Maps API to get latitude and longitude
+
+  // Get current location using browser geolocation API
+  const getCurrentLocation = async () => {
+    setGettingCurrentLocation(true);
+
+    try {
+      if (!navigator.geolocation) {
+        toast.error('Geolocation is not supported by your browser');
+        return null;
+      }
+
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        });
+      });
+
+      const coords = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      };
+
+      setCurrentLocationCoords(coords);
+      console.log('✓ Current location obtained with accuracy:', coords.accuracy, 'meters');
+
+      // Reverse geocode to get address
+      const addressData = await reverseGeocode(coords.latitude, coords.longitude);
+
+      if (addressData) {
+        setNewAddress(prev => ({
+          ...prev,
+          address: addressData.address || prev.address,
+          city: addressData.city || prev.city,
+          state: addressData.state || prev.state,
+          pin_code: addressData.pin_code || prev.pin_code,
+          country: addressData.country || prev.country
+        }));
+
+        toast.success('Current location detected! Please verify the address details.');
+      }
+
+      return coords;
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      if (error.code === 1) {
+        toast.error('Location access denied. Please enable location permissions.');
+      } else if (error.code === 2) {
+        toast.error('Location unavailable. Please try again.');
+      } else if (error.code === 3) {
+        toast.error('Location request timed out. Please try again.');
+      } else {
+        toast.error('Failed to get current location');
+      }
+      return null;
+    } finally {
+      setGettingCurrentLocation(false);
+    }
+  };
+
+  // Reverse geocode coordinates to address using Google Maps API
+  const reverseGeocode = async (latitude, longitude) => {
+    try {
+      const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_REACT_APP_GOOGLE_MAPS_API_KEY;
+
+      if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
+        console.warn('Google Maps API key not configured, skipping reverse geocoding');
+        return null;
+      }
+
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        console.error('Reverse geocoding API error:', response.statusText);
+        return null;
+      }
+
+      const data = await response.json();
+
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const result = data.results[0];
+        const addressComponents = result.address_components;
+
+        let address = '';
+        let city = '';
+        let state = '';
+        let pin_code = '';
+        let country = 'India';
+
+        for (const component of addressComponents) {
+          const types = component.types;
+
+          if (types.includes('postal_code')) {
+            pin_code = component.long_name;
+          } else if (types.includes('locality')) {
+            city = component.long_name;
+          } else if (types.includes('administrative_area_level_1')) {
+            state = component.long_name;
+          } else if (types.includes('country')) {
+            country = component.long_name;
+          }
+        }
+
+        address = result.formatted_address;
+
+        console.log('✓ Reverse geocoding successful:', { address, city, state, pin_code });
+        return { address, city, state, pin_code, country };
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error in reverse geocoding:', error);
+      return null;
+    }
+  };
+
+  // Geocode address using Google Maps API to get precise latitude and longitude
   const geocodeAddress = async (addressData) => {
     try {
-      const { address, city, state, country } = addressData;
-      
-      // Try different address combinations in order of specificity
+      const { address, city, state, country, pin_code } = addressData;
+
+      // If we already have current location coordinates, use them
+      if (currentLocationCoords) {
+        console.log('Using current location coordinates:', currentLocationCoords);
+        return {
+          location_lat: currentLocationCoords.latitude,
+          location_lng: currentLocationCoords.longitude
+        };
+      }
+
+      // Try different address combinations in order of specificity for maximum precision
       const addressCombinations = [
+        pin_code ? `${address}, ${city}, ${state}, ${pin_code}, ${country}` : null,
         `${address}, ${city}, ${state}, ${country}`,
+        pin_code ? `${city}, ${state}, ${pin_code}, ${country}` : null,
         `${city}, ${state}, ${country}`,
         `${state}, ${country}`
-      ];
-      
+      ].filter(Boolean);
+
       let latitude = null;
       let longitude = null;
-      
+      let bestAccuracy = null;
+
+      // Get Google Maps API key from environment
+      const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_REACT_APP_GOOGLE_MAPS_API_KEY;
+
+      if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
+        console.warn('Google Maps API key not configured, using default coordinates');
+        toast.warning('Geocoding unavailable. Using approximate location.');
+        return {
+          location_lat: 20.5937,
+          location_lng: 78.9629
+        };
+      }
+
       for (const addr of addressCombinations) {
-        // Get Google Maps API key from environment
-        const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_REACT_APP_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE';
-        
-        if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
-          console.warn('Google Maps API key not configured, skipping geocoding');
-          break; // Skip geocoding entirely if no API key
-        }
-        
         try {
           const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addr)}&key=${GOOGLE_MAPS_API_KEY}`;
           const response = await fetch(url);
-        
+
           if (!response.ok) {
             console.error('Geocoding API error:', response.statusText);
             continue;
           }
-          
+
           const data = await response.json();
-          
+
           if (data.status === 'OK' && data.results && data.results.length > 0) {
-            const location = data.results[0].geometry.location;
-            latitude = location.lat;
-            longitude = location.lng;
-            console.log('Google Maps geocoding successful:', {
-              address: addr,
-              coordinates: { lat: latitude, lng: longitude },
-              formatted_address: data.results[0].formatted_address
-            });
-            break;
+            const result = data.results[0];
+            const location = result.geometry.location;
+            const locationType = result.geometry.location_type;
+
+            // Determine accuracy based on location_type
+            // ROOFTOP is most accurate, then RANGE_INTERPOLATED, GEOMETRIC_CENTER, APPROXIMATE
+            const accuracyScore = {
+              'ROOFTOP': 4,
+              'RANGE_INTERPOLATED': 3,
+              'GEOMETRIC_CENTER': 2,
+              'APPROXIMATE': 1
+            }[locationType] || 0;
+
+            // Use the most accurate result
+            if (!bestAccuracy || accuracyScore > bestAccuracy) {
+              latitude = location.lat;
+              longitude = location.lng;
+              bestAccuracy = accuracyScore;
+
+              console.log('✓ Geocoding result:', {
+                address: addr,
+                coordinates: { lat: latitude, lng: longitude },
+                location_type: locationType,
+                accuracy_score: accuracyScore
+              });
+
+              // If we got ROOFTOP accuracy, no need to try other combinations
+              if (locationType === 'ROOFTOP') {
+                console.log('✓ Achieved ROOFTOP precision - using this result');
+                break;
+              }
+            }
           } else if (data.status !== 'OK') {
-            console.warn('Google Maps geocoding failed for address:', addr, 'Status:', data.status, data.error_message);
+            console.warn('Geocoding failed for address:', addr, 'Status:', data.status);
           }
         } catch (fetchError) {
           console.warn('Error fetching geocoding data for address:', addr, fetchError);
           continue;
         }
       }
-      
+
       if (!latitude || !longitude) {
-        console.warn('Could not determine precise location from address, using default coordinates for India');
-        // Return default coordinates (center of India) if geocoding fails
-        return { 
-          location_lat: 20.5937, 
-          location_lng: 78.9629 
+        console.warn('Could not determine precise location from address, using default coordinates');
+        toast.warning('Could not determine precise location. Please verify the address or use current location.');
+        return {
+          location_lat: 20.5937,
+          location_lng: 78.9629
         };
       }
-      
-      return { 
-        location_lat: latitude, 
-        location_lng: longitude 
+
+      console.log('✓ Final geocoding result:', {
+        latitude,
+        longitude,
+        accuracy: bestAccuracy === 4 ? 'ROOFTOP (Highest)' :
+          bestAccuracy === 3 ? 'RANGE_INTERPOLATED (High)' :
+            bestAccuracy === 2 ? 'GEOMETRIC_CENTER (Medium)' : 'APPROXIMATE (Low)'
+      });
+
+      return {
+        location_lat: latitude,
+        location_lng: longitude
       };
     } catch (error) {
       console.error('Error in Google Maps geocoding:', error);
       // Return default coordinates (center of India) in case of error
-      return { 
-        location_lat: 20.5937, 
-        location_lng: 78.9629 
+      return {
+        location_lat: 20.5937,
+        location_lng: 78.9629
       };
     }
   };
@@ -479,26 +645,26 @@ const Booking = () => {
         toast.error(errorMessages);
         return;
       }
-      
+
       if (validation.suggestions) {
         toast.info(`Address validated. Suggested: ${validation.suggestions.city}, ${validation.suggestions.state}`);
       }
-      
+
       // Get coordinates before saving
       const coordinates = await geocodeAddress(newAddress);
-      
+
       // Create address object with coordinates
       const addressWithCoords = {
         ...newAddress,
         ...coordinates
       };
-      
+
       const result = await BookingService.addresses.create(addressWithCoords);
       toast.success('Address added successfully');
-      
+
       // Refresh addresses
       await loadAddresses();
-      
+
       // Reset form
       setNewAddress({
         address: '',
@@ -511,7 +677,7 @@ const Booking = () => {
         is_default: false
       });
       setShowAddressForm(false);
-      
+
       // Select the new address
       if (result.address) {
         setSelectedAddress(result.address);
@@ -548,29 +714,29 @@ const Booking = () => {
         toast.error(errorMessages);
         return;
       }
-      
+
       if (validation.suggestions) {
         toast.info(`Address validated. Suggested: ${validation.suggestions.city}, ${validation.suggestions.state}`);
       }
-      
+
       // Get coordinates before saving
       const coordinates = await geocodeAddress(newAddress);
-      
+
       // Create address object with coordinates
       const addressWithCoords = {
         ...newAddress,
         ...coordinates
       };
-      
+
       const result = await BookingService.addresses.update(editingAddress.address_id, addressWithCoords);
       toast.success('Address updated successfully');
-      
+
       // Refresh addresses
       await loadAddresses();
-      
+
       // Reset form
       resetAddressForm();
-      
+
       // Update selected address if it was the one being edited
       if (selectedAddress?.address_id === editingAddress.address_id && result.address) {
         setSelectedAddress(result.address);
@@ -597,20 +763,20 @@ const Booking = () => {
     setEditingAddress(null);
     setAddressValidationResult(null);
   };
-  
+
   // Delete address
   const handleDeleteAddress = async (addressId) => {
     if (!window.confirm('Are you sure you want to delete this address?')) return;
-    
+
     try {
       console.log('Deleting address with ID:', addressId);
       const result = await BookingService.addresses.delete(addressId);
       console.log('Delete result:', result);
       toast.success('Address deleted successfully');
-      
+
       // Reload addresses to reflect the change
       await loadAddresses();
-      
+
       // Clear selection if deleted address was selected
       if (selectedAddress?.address_id === addressId) {
         setSelectedAddress(null);
@@ -621,7 +787,7 @@ const Booking = () => {
       toast.error(`Failed to delete address: ${error.response?.data?.message || error.message}`);
     }
   };
-  
+
   // Proceed to next step
   const proceedToNextStep = () => {
     if (currentStep === 'address') {
@@ -659,7 +825,7 @@ const Booking = () => {
       handleCreateBooking();
     }
   };
-  
+
   // Go back to previous step
   const goToPreviousStep = () => {
     if (currentStep === 'datetime') {
@@ -670,7 +836,7 @@ const Booking = () => {
       navigate('/cart');
     }
   };
-  
+
   // Format time slot for display (24-hour to 12-hour format)
   const formatTimeSlot = (time24) => {
     const [hours, minutes] = time24.split(':');
@@ -695,22 +861,22 @@ const Booking = () => {
       toast.error('Please select date and time');
       return false;
     }
-    
+
     const now = new Date();
     const selectedDateTime = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
-    
+
     // Check if the constructed date is valid
     if (isNaN(selectedDateTime.getTime())) {
       console.error('Invalid selected date/time:', selectedDate, selectedTimeSlot.time);
       toast.error('Invalid date or time selected. Please try again.');
       return false;
     }
-    
+
     if (selectedDateTime <= now) {
       toast.error('Selected time is in the past. Please choose a future time slot.');
       return false;
     }
-    
+
     return true;
   };
 
@@ -723,7 +889,7 @@ const Booking = () => {
 
     setPaymentProcessing(true);
     setPaymentError(null);
-    
+
     try {
       const paymentData = {
         amount: amount,
@@ -731,83 +897,83 @@ const Booking = () => {
         description: `Service Payment - ${cart.items.map(item => item.name).join(', ')}`,
         booking_id: bookingIds[0] // Use first booking ID
       };
-      
-       console.log('Initiating payment with data:', paymentData);
-      const paymentResponse = await PaymentService.upi.initiate(paymentData);
-       console.log('Payment response:', paymentResponse);
-      setCurrentPayment(paymentResponse);
-      
-      if (paymentResponse.success) {
-         // Open Razorpay checkout modal
-         const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_1234567890';
-         
-         // Get real user info from AuthService and ProfileService
-         const currentUser = AuthService.getCurrentUser('customer');
-         
-         // Fetch fresh user profile data for accurate contact info
-         let userProfile = null;
-         try {
-           userProfile = await ProfileService.profile.get();
-         } catch (profileError) {
-           console.warn('Could not fetch user profile:', profileError);
-         }
-         
-         // Use profile data first, then fallback to auth data
-         const userContact = userProfile?.phone_number || currentUser?.phone || currentUser?.mobile || '';
-         const userName = userProfile?.name || 
-           (currentUser?.firstName && currentUser?.lastName 
-             ? `${currentUser.firstName} ${currentUser.lastName}`
-             : currentUser?.name || currentUser?.firstName || '');
-         const userEmail = userProfile?.email || currentUser?.email || '';
-         
-         // Debug: Log the configuration
-         console.log('Razorpay configuration:', {
-           key: razorpayKey,
-           amount: amount * 100,
-           order_id: paymentResponse.razorpay_order_id,
-           currency: 'INR',
-           upi_enabled: true
-         });
-         
-         // Debug: Check if UPI is available for this account/amount
-         console.log('Payment method configuration:', {
-           upi: true,
-           card: true,
-           netbanking: true,
-           wallet: true
-         });
 
-         const razorpayOptions = {
-           key: razorpayKey,
-           currency: 'INR',
-           name: 'OMW - On My Way',
-           description: paymentData.description,
-           order_id: paymentResponse.razorpay_order_id,
-           amount: amount * 100, // Convert to paise (required for UPI)
-           prefill: {
-             name: userName || '', // Let user fill if empty
-             email: userEmail || '', // Let user fill if empty
-             contact: userContact || '', // Let user fill if empty
-             'vpa': selectedPaymentMethod.upi_id // Pre-fill selected UPI ID
-           },
-           // Try the most basic UPI configuration possible
-           method: {
-             upi: true
-           },
-           // Try without any custom config - let Razorpay handle it
-           readonly: {
-             email: true,
-             contact: true
-           },
-           theme: {
-             color: '#8B5CF6'
-           },
-           handler: (response) => {
-             // Payment successful callback
-             console.log('Razorpay payment successful:', response);
-             setPaymentStatus('completed');
-             toast.success('Payment completed successfully!');
-           },
+      console.log('Initiating payment with data:', paymentData);
+      const paymentResponse = await PaymentService.upi.initiate(paymentData);
+      console.log('Payment response:', paymentResponse);
+      setCurrentPayment(paymentResponse);
+
+      if (paymentResponse.success) {
+        // Open Razorpay checkout modal
+        const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_1234567890';
+
+        // Get real user info from AuthService and ProfileService
+        const currentUser = AuthService.getCurrentUser('customer');
+
+        // Fetch fresh user profile data for accurate contact info
+        let userProfile = null;
+        try {
+          userProfile = await ProfileService.profile.get();
+        } catch (profileError) {
+          console.warn('Could not fetch user profile:', profileError);
+        }
+
+        // Use profile data first, then fallback to auth data
+        const userContact = userProfile?.phone_number || currentUser?.phone || currentUser?.mobile || '';
+        const userName = userProfile?.name ||
+          (currentUser?.firstName && currentUser?.lastName
+            ? `${currentUser.firstName} ${currentUser.lastName}`
+            : currentUser?.name || currentUser?.firstName || '');
+        const userEmail = userProfile?.email || currentUser?.email || '';
+
+        // Debug: Log the configuration
+        console.log('Razorpay configuration:', {
+          key: razorpayKey,
+          amount: amount * 100,
+          order_id: paymentResponse.razorpay_order_id,
+          currency: 'INR',
+          upi_enabled: true
+        });
+
+        // Debug: Check if UPI is available for this account/amount
+        console.log('Payment method configuration:', {
+          upi: true,
+          card: true,
+          netbanking: true,
+          wallet: true
+        });
+
+        const razorpayOptions = {
+          key: razorpayKey,
+          currency: 'INR',
+          name: 'OMW - On My Way',
+          description: paymentData.description,
+          order_id: paymentResponse.razorpay_order_id,
+          amount: amount * 100, // Convert to paise (required for UPI)
+          prefill: {
+            name: userName || '', // Let user fill if empty
+            email: userEmail || '', // Let user fill if empty
+            contact: userContact || '', // Let user fill if empty
+            'vpa': selectedPaymentMethod.upi_id // Pre-fill selected UPI ID
+          },
+          // Try the most basic UPI configuration possible
+          method: {
+            upi: true
+          },
+          // Try without any custom config - let Razorpay handle it
+          readonly: {
+            email: true,
+            contact: true
+          },
+          theme: {
+            color: '#8B5CF6'
+          },
+          handler: (response) => {
+            // Payment successful callback
+            console.log('Razorpay payment successful:', response);
+            setPaymentStatus('completed');
+            toast.success('Payment completed successfully!');
+          },
           modal: {
             confirm_close: true, // Ask for confirmation before closing
             escape: false, // Disable escape key to close
@@ -830,7 +996,7 @@ const Booking = () => {
           setPaymentError('Payment gateway not available');
           return false;
         }
-        
+
         // Return a promise that resolves when payment is completed
         return new Promise(async (resolve) => {
           // Override handlers to resolve promise
@@ -838,41 +1004,41 @@ const Booking = () => {
             console.log('Razorpay payment successful:', response);
             setPaymentStatus('completed');
             toast.success('Payment completed successfully! Finalizing booking...');
-            
+
             // If we have pending booking data, complete the booking flow
             if (pendingBookingData) {
               try {
                 // Clear cart after successful payment
                 await clearCart();
-                
+
                 // Navigate to booking success
-                navigate('/booking-success', { 
-                  state: { 
+                navigate('/booking-success', {
+                  state: {
                     bookingIds: pendingBookingData.booking_ids,
                     totalAmount: pendingBookingData.total_amount,
                     scheduledDate: pendingBookingData.scheduled_date,
                     paymentId: paymentResponse?.payment_id,
                     paymentMethod: 'upi'
-                  } 
+                  }
                 });
-                
+
                 toast.success('Booking confirmed successfully!');
               } catch (error) {
                 console.error('Error completing booking after payment:', error);
                 toast.error('Payment successful but booking completion failed. Please contact support.');
               }
             }
-            
+
             resolve(true);
           };
-          
+
           razorpayOptions.modal.ondismiss = () => {
             setPaymentProcessing(false);
             setPaymentStatus('cancelled');
             toast.info('Payment cancelled. Booking is on hold until payment is completed.');
             resolve(false);
           };
-          
+
           try {
             console.log('Final Razorpay options:', razorpayOptions);
             const razorpay = new window.Razorpay(razorpayOptions);
@@ -889,7 +1055,7 @@ const Booking = () => {
       } else {
         throw new Error(paymentResponse.message || 'Payment initiation failed');
       }
-      
+
     } catch (error) {
       console.error('Error processing service payment:', error);
       setPaymentError(error.response?.data?.message || error.message || 'Payment failed');
@@ -905,17 +1071,17 @@ const Booking = () => {
   const pollServicePaymentStatus = async (paymentId, attempts = 0) => {
     const maxAttempts = 30; // 30 attempts = 5 minutes
     const pollInterval = 10000; // 10 seconds
-    
+
     if (attempts >= maxAttempts) {
       setPaymentStatus('timeout');
       setPaymentError('Payment verification timed out');
       toast.error('Payment verification timed out. Please check your payment app.');
       return false;
     }
-    
+
     try {
       const statusResponse = await PaymentService.upi.verify(paymentId);
-      
+
       if (statusResponse.success && statusResponse.status === 'completed') {
         setPaymentStatus('completed');
         toast.success('Payment completed successfully!');
@@ -926,7 +1092,7 @@ const Booking = () => {
         toast.error('Payment failed. Please try again.');
         return false;
       }
-      
+
       // Continue polling if payment is still pending
       return new Promise((resolve) => {
         setTimeout(async () => {
@@ -934,7 +1100,7 @@ const Booking = () => {
           resolve(result);
         }, pollInterval);
       });
-      
+
     } catch (error) {
       console.error('Error verifying service payment:', error);
       return new Promise((resolve) => {
@@ -952,7 +1118,7 @@ const Booking = () => {
       toast.error('Maximum retry attempts reached. Please try a different payment method.');
       return;
     }
-    
+
     setPaymentRetryCount(prev => prev + 1);
     if (serviceBookingId && backendCalculatedTotal) {
       // Use backend-calculated total for consistency
@@ -966,7 +1132,7 @@ const Booking = () => {
       toast.error('Please enter a valid UPI ID');
       return;
     }
-    
+
     try {
       const providerName = PaymentService.utils.detectProvider(newUpiId);
       const response = await PaymentService.upiMethods.add({
@@ -974,15 +1140,15 @@ const Booking = () => {
         provider_name: providerName,
         is_default: paymentMethods.length === 0
       });
-      
+
       if (response.success) {
         const newMethod = response.payment_method;
         setPaymentMethods(prev => [...prev, newMethod]);
-        
+
         if (paymentMethods.length === 0) {
           setSelectedPaymentMethod(newMethod);
         }
-        
+
         setNewUpiId('');
         setShowAddPaymentMethod(false);
         toast.success('Payment method added successfully!');
@@ -1037,33 +1203,33 @@ const Booking = () => {
       if (paymentType === 'pay_after_service') {
         // For pay after service, go directly to booking success
         toast.success('Booking created successfully! Payment will be collected after service completion.');
-        
+
         // Clear cart
         await clearCart();
-        
+
         const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
-        navigate('/booking-success', { 
-          state: { 
+        navigate('/booking-success', {
+          state: {
             bookingIds: result.booking_ids,
             totalAmount: result.total_amount,
             scheduledDate: scheduledLocalDate.toISOString(),
             paymentMethod: 'pay_after_service'
-          } 
+          }
         });
       } else {
         // For UPI payments, process payment FIRST, then complete booking after payment success
         toast.info('Processing payment...');
-        
+
         // Store booking data for completion after payment
         const pendingBookingData = {
           booking_ids: result.booking_ids,
           total_amount: result.total_amount,
           scheduled_date: new Date(`${selectedDate}T${selectedTimeSlot.time}:00`).toISOString()
         };
-        
+
         // Use backend-calculated total to ensure consistency with discount
         const paymentSuccess = await processServicePayment(result.total_amount, result.booking_ids, pendingBookingData);
-        
+
         if (!paymentSuccess) {
           // Payment failed or cancelled - booking remains in pending state
           toast.error('Payment was cancelled or failed. Booking is on hold until payment is completed.');
@@ -1117,7 +1283,7 @@ const Booking = () => {
       <div className="container-custom py-8">
         {/* Header with steps */}
         <div className="mb-8">
-          <button 
+          <button
             onClick={goToPreviousStep}
             className={`flex items-center mb-4 ${darkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-purple-600'}`}
           >
@@ -1181,13 +1347,12 @@ const Booking = () => {
                         addresses.map((address) => (
                           <div
                             key={address.address_id}
-                            className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                              selectedAddress?.address_id === address.address_id
+                            className={`border rounded-lg p-4 cursor-pointer transition-colors ${selectedAddress?.address_id === address.address_id
                                 ? 'border-purple-600 bg-[var(--bg-hover)]'
                                 : darkMode
                                   ? 'border-gray-600 bg-gray-700 hover:border-purple-500'
                                   : 'border-gray-200 bg-white hover:border-purple-300'
-                            }`}
+                              }`}
                             onClick={() => setSelectedAddress(address)}
                           >
                             <div className="flex justify-between items-start">
@@ -1240,9 +1405,31 @@ const Booking = () => {
                   {/* Add Address Form */}
                   {showAddressForm && (
                     <div className={`mt-6 p-4 border rounded-lg ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
-                      <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {editingAddress ? 'Edit Address' : 'Add New Address'}
-                      </h3>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {editingAddress ? 'Edit Address' : 'Add New Address'}
+                        </h3>
+                        <button
+                          onClick={getCurrentLocation}
+                          disabled={gettingCurrentLocation}
+                          className={`flex items-center px-3 py-2 text-sm rounded-lg transition-colors ${gettingCurrentLocation
+                              ? 'bg-gray-400 cursor-not-allowed text-white'
+                              : 'bg-purple-600 hover:bg-purple-700 text-white'
+                            }`}
+                        >
+                          {gettingCurrentLocation ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                              Getting...
+                            </>
+                          ) : (
+                            <>
+                              <MapPin className="h-4 w-4 mr-2" />
+                              Use Current Location
+                            </>
+                          )}
+                        </button>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2">
                           <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1269,11 +1456,11 @@ const Booking = () => {
                             placeholder="123456"
                           />
                           {validatingAddress && (
-  <div className="mt-2 flex items-center text-sm text-blue-600">
-    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-600 mr-2"></div>
-    Validating pincode...
-  </div>
-)}
+                            <div className="mt-2 flex items-center text-sm text-blue-600">
+                              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-600 mr-2"></div>
+                              Validating pincode...
+                            </div>
+                          )}
                         </div>
                         <div>
                           <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1374,13 +1561,12 @@ const Booking = () => {
                         <button
                           key={index}
                           onClick={() => handleDateSelect(dateOption.date)}
-                          className={`p-3 rounded-lg border text-center transition-colors ${
-                            selectedDate === dateOption.date
+                          className={`p-3 rounded-lg border text-center transition-colors ${selectedDate === dateOption.date
                               ? 'border-purple-600 bg-purple-100 text-purple-700'
                               : darkMode
                                 ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
                                 : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
-                          }`}
+                            }`}
                         >
                           <div className="font-medium">{dateOption.shortDate}</div>
                           <div className="text-sm opacity-75">
@@ -1408,8 +1594,7 @@ const Booking = () => {
                               key={index}
                               onClick={() => handleTimeSlotSelect(slot)}
                               disabled={!slot.available}
-                              className={`p-3 rounded-lg border text-center transition-colors ${
-                                selectedTimeSlot?.time === slot.time
+                              className={`p-3 rounded-lg border text-center transition-colors ${selectedTimeSlot?.time === slot.time
                                   ? 'border-purple-600 bg-purple-100 text-purple-700'
                                   : slot.available
                                     ? darkMode
@@ -1418,7 +1603,7 @@ const Booking = () => {
                                     : darkMode
                                       ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                                       : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                              }`}
+                                }`}
                             >
                               <div className="font-medium">
                                 {formatTimeSlot(slot.time)}
@@ -1441,7 +1626,7 @@ const Booking = () => {
                       <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                         Worker Preference
                       </h3>
-                      
+
                       {loadingWorkerAvailability ? (
                         <div className="flex justify-center py-8">
                           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
@@ -1454,8 +1639,7 @@ const Booking = () => {
                           <button
                             onClick={() => setWorkerPreference('any')}
                             disabled={!workerAvailability.any}
-                            className={`p-4 rounded-lg border text-center transition-colors ${
-                              workerPreference === 'any'
+                            className={`p-4 rounded-lg border text-center transition-colors ${workerPreference === 'any'
                                 ? 'border-purple-600 bg-purple-100 text-purple-700'
                                 : workerAvailability.any
                                   ? darkMode
@@ -1464,7 +1648,7 @@ const Booking = () => {
                                   : darkMode
                                     ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                                     : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                            }`}
+                              }`}
                           >
                             <div className="font-medium">Any</div>
                             <div className="text-sm opacity-75">
@@ -1474,8 +1658,7 @@ const Booking = () => {
                           <button
                             onClick={() => setWorkerPreference('male')}
                             disabled={!workerAvailability.male}
-                            className={`p-4 rounded-lg border text-center transition-colors ${
-                              workerPreference === 'male'
+                            className={`p-4 rounded-lg border text-center transition-colors ${workerPreference === 'male'
                                 ? 'border-purple-600 bg-purple-100 text-purple-700'
                                 : workerAvailability.male
                                   ? darkMode
@@ -1484,7 +1667,7 @@ const Booking = () => {
                                   : darkMode
                                     ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                                     : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                            }`}
+                              }`}
                           >
                             <div className="font-medium">Male</div>
                             <div className="text-sm opacity-75">
@@ -1494,8 +1677,7 @@ const Booking = () => {
                           <button
                             onClick={() => setWorkerPreference('female')}
                             disabled={!workerAvailability.female}
-                            className={`p-4 rounded-lg border text-center transition-colors ${
-                              workerPreference === 'female'
+                            className={`p-4 rounded-lg border text-center transition-colors ${workerPreference === 'female'
                                 ? 'border-purple-600 bg-purple-100 text-purple-700'
                                 : workerAvailability.female
                                   ? darkMode
@@ -1504,7 +1686,7 @@ const Booking = () => {
                                   : darkMode
                                     ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
                                     : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                            }`}
+                              }`}
                           >
                             <div className="font-medium">Female</div>
                             <div className="text-sm opacity-75">
@@ -1513,7 +1695,7 @@ const Booking = () => {
                           </button>
                         </div>
                       )}
-                      
+
                       {!loadingWorkerAvailability && !workerAvailability.male && !workerAvailability.female && !workerAvailability.any && (
                         <div className={`text-center py-4 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
                           <p>No workers available for this time slot. Please select a different time.</p>
@@ -1530,13 +1712,13 @@ const Booking = () => {
                   <h2 className={`text-2xl font-bold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                     Review & Confirm
                   </h2>
-                  
+
                   {/* Booking Summary */}
                   <div className={`border rounded-lg p-4 mb-6 ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
                     <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                       Booking Details
                     </h3>
-                    
+
                     <div className="space-y-3">
                       <div className="flex items-center">
                         <Calendar className="h-5 w-5 text-purple-600 mr-3" />
@@ -1544,14 +1726,14 @@ const Booking = () => {
                           {availableDates.find(d => d.date === selectedDate)?.displayDate}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center">
                         <Clock className="h-5 w-5 text-purple-600 mr-3" />
                         <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                           {selectedTimeSlot && formatTimeSlot(selectedTimeSlot.time)}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-start">
                         <MapPin className="h-5 w-5 text-purple-600 mr-3 mt-1" />
                         <div className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1560,7 +1742,7 @@ const Booking = () => {
                           <div>{selectedAddress?.city}, {selectedAddress?.state} - {selectedAddress?.pin_code}</div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center">
                         <User className="h-5 w-5 text-purple-600 mr-3" />
                         <span className={`${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1569,7 +1751,7 @@ const Booking = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Special Instructions */}
                   <div className="mb-6">
                     <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -1583,24 +1765,22 @@ const Booking = () => {
                       placeholder="Any special instructions for the service provider..."
                     />
                   </div>
-                  
+
                   {/* Enhanced Payment Method Selection */}
                   <div className="mb-6">
-                    <h3 className={`text-lg font-semibold mb-4 ${
-                      darkMode ? 'text-white' : 'text-gray-900'
-                    }`}>
+                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
                       Payment Method
                     </h3>
-                    
+
                     {/* Selected Payment Method Display */}
                     <div className="mb-4">
                       <button
                         onClick={() => setShowPaymentMethods(true)}
-                        className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
-                          darkMode
+                        className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${darkMode
                             ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
                             : 'border-gray-200 bg-white hover:border-gray-300'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center space-x-3">
                           {paymentType === 'pay_after_service' ? (
@@ -1609,14 +1789,12 @@ const Booking = () => {
                                 <span className="text-green-600 font-semibold">💰</span>
                               </div>
                               <div className="text-left">
-                                <p className={`font-medium ${
-                                  darkMode ? 'text-white' : 'text-gray-900'
-                                }`}>
+                                <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'
+                                  }`}>
                                   Pay After Service
                                 </p>
-                                <p className={`text-sm ${
-                                  darkMode ? 'text-gray-400' : 'text-gray-600'
-                                }`}>
+                                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'
+                                  }`}>
                                   Pay cash or card after completion
                                 </p>
                               </div>
@@ -1629,14 +1807,12 @@ const Booking = () => {
                                 </span>
                               </div>
                               <div className="text-left">
-                                <p className={`font-medium ${
-                                  darkMode ? 'text-white' : 'text-gray-900'
-                                }`}>
+                                <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'
+                                  }`}>
                                   {selectedPaymentMethod.provider_name}
                                 </p>
-                                <p className={`text-sm ${
-                                  darkMode ? 'text-gray-400' : 'text-gray-600'
-                                }`}>
+                                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'
+                                  }`}>
                                   {selectedPaymentMethod.upi_id}
                                 </p>
                               </div>
@@ -1647,26 +1823,23 @@ const Booking = () => {
                                 <span className="text-gray-600 font-semibold">💳</span>
                               </div>
                               <div className="text-left">
-                                <p className={`font-medium ${
-                                  darkMode ? 'text-white' : 'text-gray-900'
-                                }`}>
+                                <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'
+                                  }`}>
                                   Select Payment Method
                                 </p>
-                                <p className={`text-sm ${
-                                  darkMode ? 'text-gray-400' : 'text-gray-600'
-                                }`}>
+                                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'
+                                  }`}>
                                   Choose how to pay
                                 </p>
                               </div>
                             </>
                           )}
                         </div>
-                        <ChevronRight className={`h-5 w-5 ${
-                          darkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`} />
+                        <ChevronRight className={`h-5 w-5 ${darkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`} />
                       </button>
                     </div>
-                    
+
                     {/* Payment Status Display */}
                     {paymentProcessing && (
                       <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 mb-4">
@@ -1678,7 +1851,7 @@ const Booking = () => {
                         </div>
                       </div>
                     )}
-                    
+
                     {paymentError && (
                       <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 mb-4">
                         <div className="flex items-center justify-between">
@@ -1698,7 +1871,7 @@ const Booking = () => {
                         <p className="text-sm text-red-600 dark:text-red-400 mt-1">{paymentError}</p>
                       </div>
                     )}
-                    
+
                     {paymentStatus === 'completed' && (
                       <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 mb-4">
                         <div className="flex items-center space-x-2">
@@ -1711,13 +1884,11 @@ const Booking = () => {
                     )}
                   </div>
                   {/* Service Total Display */}
-                  <div className={`p-4 rounded-xl border mb-6 ${
-                    darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'
-                  }`}>
+                  <div className={`p-4 rounded-xl border mb-6 ${darkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'
+                    }`}>
                     <div className="flex justify-between items-center">
-                      <span className={`text-lg font-semibold ${
-                        darkMode ? 'text-white' : 'text-gray-900'
-                      }`}>
+                      <span className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'
+                        }`}>
                         Total Amount
                       </span>
                       <span className="text-2xl font-bold text-purple-600">
@@ -1737,7 +1908,7 @@ const Booking = () => {
                         <div className="flex justify-between text-green-600">
                           <span>{discountInfo.customer_type} Discount ({discountInfo.discount_percentage}%)</span>
                           <span>-₹{(calculateTotals().discount || 0).toFixed(2)}</span>
-                      </div>
+                        </div>
                       )}
                       <div className="flex justify-between">
                         <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
@@ -1753,7 +1924,7 @@ const Booking = () => {
               )}
             </div>
           </div>
-          
+
           {/* Order Summary Sidebar */}
           <div className="lg:w-1/3">
             <div className={`rounded-lg shadow-md ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} border overflow-hidden sticky top-24`}>
@@ -1762,7 +1933,7 @@ const Booking = () => {
                   Order Summary
                 </h2>
               </div>
-              
+
               <div className="p-6">
                 {/* Services */}
                 <div className="space-y-4 mb-6">
@@ -1782,7 +1953,7 @@ const Booking = () => {
                     </div>
                   ))}
                 </div>
-                
+
                 {/* Price Breakdown */}
                 <div className="space-y-2 mb-6">
                   <div className="flex justify-between">
@@ -1795,7 +1966,7 @@ const Booking = () => {
                     <div className="flex justify-between text-green-600">
                       <span>{discountInfo.customer_type} Discount ({discountInfo.discount_percentage}%)</span>
                       <span>-₹{(totals.discount || 0).toFixed(2)}</span>
-                  </div>
+                    </div>
                   )}
                   <div className="flex justify-between">
                     <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Tax (18%)</span>
@@ -1810,34 +1981,32 @@ const Booking = () => {
                     </span>
                   </div>
                 </div>
-                
+
                 {/* Action Button */}
                 <button
                   onClick={proceedToNextStep}
                   disabled={isProcessing}
                   className="w-full btn-brand py-3"
                 >
-                  {isProcessing ? 'Processing...' : 
-                   currentStep === 'datetime' ? 'Continue' :
-                   currentStep === 'address' ? 'Continue' :
-                   'Confirm Booking'}
+                  {isProcessing ? 'Processing...' :
+                    currentStep === 'datetime' ? 'Continue' :
+                      currentStep === 'address' ? 'Continue' :
+                        'Confirm Booking'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
       {/* Payment Methods Modal */}
       {showPaymentMethods && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`rounded-2xl p-6 w-full max-w-md ${
-            darkMode ? 'bg-gray-800' : 'bg-white'
-          }`}>
+          <div className={`rounded-2xl p-6 w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'
+            }`}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className={`text-xl font-bold ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}>
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'
+                }`}>
                 Payment Methods
               </h3>
               <button
@@ -1856,27 +2025,24 @@ const Booking = () => {
                   setSelectedPaymentMethod(null);
                   setShowPaymentMethods(false);
                 }}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
-                  paymentType === 'pay_after_service'
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${paymentType === 'pay_after_service'
                     ? 'border-green-600 bg-green-50 dark:bg-green-900/20'
                     : darkMode
                       ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
                       : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                     <span className="text-green-600 font-semibold">💰</span>
                   </div>
                   <div className="text-left">
-                    <p className={`font-medium ${
-                      darkMode ? 'text-white' : 'text-gray-900'
-                    }`}>
+                    <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
                       Pay After Service
                     </p>
-                    <p className={`text-sm ${
-                      darkMode ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
+                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
                       Pay cash or card after completion
                     </p>
                   </div>
@@ -1897,13 +2063,12 @@ const Booking = () => {
                     setSelectedPaymentMethod(method);
                     setShowPaymentMethods(false);
                   }}
-                  className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
-                    paymentType === 'upi' && selectedPaymentMethod?.id === method.id
+                  className={`w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${paymentType === 'upi' && selectedPaymentMethod?.id === method.id
                       ? 'border-purple-600 bg-purple-50 dark:bg-purple-900/20'
                       : darkMode
                         ? 'border-gray-600 bg-gray-700 hover:border-gray-500'
                         : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
@@ -1912,14 +2077,12 @@ const Booking = () => {
                       </span>
                     </div>
                     <div className="text-left">
-                      <p className={`font-medium ${
-                        darkMode ? 'text-white' : 'text-gray-900'
-                      }`}>
+                      <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'
+                        }`}>
                         {method.provider_name}
                       </p>
-                      <p className={`text-sm ${
-                        darkMode ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
+                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
                         {method.upi_id}
                       </p>
                       {method.is_default && (
@@ -1952,13 +2115,11 @@ const Booking = () => {
       {/* Add Payment Method Modal */}
       {showAddPaymentMethod && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`rounded-2xl p-6 w-full max-w-md ${
-            darkMode ? 'bg-gray-800' : 'bg-white'
-          }`}>
+          <div className={`rounded-2xl p-6 w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'
+            }`}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className={`text-xl font-bold ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}>
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'
+                }`}>
                 Add UPI Payment Method
               </h3>
               <button
@@ -1973,9 +2134,8 @@ const Booking = () => {
             </div>
 
             <div className="mb-6">
-              <label className={`block text-sm font-medium mb-2 ${
-                darkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'
+                }`}>
                 UPI ID
               </label>
               <input
@@ -1983,15 +2143,13 @@ const Booking = () => {
                 value={newUpiId}
                 onChange={(e) => setNewUpiId(e.target.value)}
                 placeholder="example@paytm"
-                className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${
-                  darkMode
+                className={`w-full p-3 rounded-lg border transition-colors focus:ring-2 focus:ring-purple-500 focus:border-purple-500 ${darkMode
                     ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                }`}
+                  }`}
               />
-              <p className={`text-xs mt-2 ${
-                darkMode ? 'text-gray-400' : 'text-gray-600'
-              }`}>
+              <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>
                 Enter your UPI ID (e.g., yourname@paytm, yourname@gpay)
               </p>
             </div>
