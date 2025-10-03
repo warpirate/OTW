@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { getTypeImageSrc, getCategoryImageSrc, getServiceImageSrc } from '../utils/infographicMap';
 import InfographicIcon from '../../components/InfographicIcon';
+import S3Image from '../components/S3Image';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -608,11 +609,14 @@ const LandingPage = () => {
                   >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
-                            <InfographicIcon 
-                              src={subcategory.image_url || getServiceImageSrc(subcategory)} 
-                              alt={`${subcategory.name} icon`} 
-                              size="3xl" 
-                              tone="brand" 
+                            <S3Image
+                              type="subcategory"
+                              id={subcategory.id}
+                              fallbackSrc={getServiceImageSrc(subcategory)}
+                              alt={`${subcategory.name} icon`}
+                              size="3xl"
+                              tone="brand"
+                              className="w-16 h-16 object-contain"
                             />
                           </div>
                           <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{subcategory.name}</h3>
@@ -739,11 +743,14 @@ const LandingPage = () => {
                                   {/* Image Section - prominent with gradient container */}
                                   <div className="relative flex-shrink-0">
                                     <div className={`relative flex items-center justify-center rounded-2xl shadow-inner ring-1 ${darkMode ? 'ring-white/10' : 'ring-black/5'} bg-gradient-brand/20 w-28 h-28 md:w-36 md:h-36`}> 
-                                      <InfographicIcon
-                                        src={cat.imageUrl || getCategoryImageSrc(cat.name)}
+                                      <S3Image
+                                        type="category"
+                                        id={cat.id}
+                                        fallbackSrc={getCategoryImageSrc(cat.name)}
                                         alt={`${cat.name} icon`}
                                         size="4xl"
-                                        className="drop-shadow-xl transition-transform duration-300 ease-out group-hover:scale-110"
+                                        tone="brand"
+                                        className="w-full h-full object-contain drop-shadow-xl transition-transform duration-300 ease-out group-hover:scale-110"
                                       />
                                     </div>
                                   </div>

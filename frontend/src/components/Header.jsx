@@ -216,7 +216,7 @@ const Header = () => {
 return (
   <header className={`${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-100'} shadow-sm border-b transition-colors sticky top-0 z-50`}>
     <div className="container-custom">
-      <div className="flex justify-between items-center h-20 sm:h-24">
+      <div className="flex justify-between items-center h-16 sm:h-20">
         <div className="flex items-center">
           <div className="flex-shrink-0">
               <button
@@ -224,13 +224,13 @@ return (
                 onClick={() => navigate('/')}
                 aria-label="OMW Home"
               >
-                <Logo responsive alt="OMW logo" className="h-14 sm:h-16 md:h-20 lg:h-24 xl:h-24 transition-opacity hover:opacity-90" />
+                <Logo responsive alt="OMW logo" className="h-10 sm:h-14 md:h-16 lg:h-20 xl:h-20 transition-opacity hover:opacity-90" />
               </button>
             </div>
 
             {/* Search Bar (visible on wider screens) */}
-            <div className="hidden md:block ml-6 relative w-80 lg:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-6 w-6" />
+            <div className="hidden md:block ml-6 relative w-72 lg:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
               {/* Search form */}
               <form onSubmit={handleSearchSubmit} className="w-full">
                 <input
@@ -239,7 +239,7 @@ return (
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyPress={handleSearchKeyPress}
-                  className={`pl-11 pr-4 py-3 rounded-lg text-sm w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
+                  className={`pl-10 pr-4 py-2.5 rounded-lg text-sm w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
                 />
               </form>
 
@@ -277,38 +277,38 @@ return (
             </div>
           </div>
           
-          <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0">
+          <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
             {/* Cart Icon */}
             <button 
               onClick={() => navigate('/cart')}
-              className={`relative p-2 sm:p-3 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+              className={`relative p-2 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
                 darkMode 
                   ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white active:bg-gray-600' 
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 active:bg-gray-300'
               }`}
             >
-              <ShoppingCart className="h-6 w-6" />
+              <ShoppingCart className="h-5 w-5 sm:h-6 sm:w-6" />
               {cartItemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center text-xs">
                   {cartItemCount}
                 </span>
               )}
             </button>
             
-            {/* Dark Mode Toggle - Only show on customer pages */}
+            {/* Dark Mode Toggle - Always visible on customer pages */}
             {isCustomerPage() && (
               <button 
                 onClick={() => {
                   const newDarkMode = toggleTheme();
                   setDarkMode(newDarkMode);
                 }}
-                className={`hidden sm:inline-flex p-3 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                className={`p-2 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
                   darkMode 
                     ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700 hover:text-yellow-300 active:bg-gray-600' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800 active:bg-gray-300'
                 }`}
               >
-                {darkMode ? <Sun className="h-6 w-6" /> : <Moon className="h-6 w-6" />}
+                {darkMode ? <Sun className="h-5 w-5 sm:h-6 sm:w-6" /> : <Moon className="h-5 w-5 sm:h-6 sm:w-6" />}
               </button>
             )}
             
@@ -316,16 +316,16 @@ return (
               <div className="relative profile-dropdown">
                 <button
                   onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                  className={`flex items-center space-x-2 px-3 sm:px-4 py-2.5 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
+                  className={`flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 ${
                     darkMode 
                       ? 'text-white hover:bg-gray-800 hover:text-gray-100 active:bg-gray-700' 
                       : 'text-gray-700 hover:bg-gray-100 hover:text-gray-800 active:bg-gray-200'
                   }`}
                 >
-                  <span className="font-medium hidden sm:inline">
+                  <span className="font-medium text-sm sm:text-base hidden sm:inline">
                     {user.firstName || user.first_name || (user.name ? user.name.split(' ')[0] : 'User')}
                   </span>
-                  <User className="h-6 w-6" />
+                  <User className="h-5 w-5 sm:h-6 sm:w-6" />
                   <ChevronDown className={`h-5 w-5 transition-transform hidden sm:inline ${
                     showProfileDropdown ? 'rotate-180' : ''
                   }`} />
@@ -422,7 +422,7 @@ return (
                       setActiveAuthButton('signin');
                       navigate('/login');
                     }} 
-                    className={`transition-all duration-200 transform hover:scale-105 active:scale-95 px-4 py-2 rounded-lg font-medium ${
+                    className={`transition-all duration-200 transform hover:scale-105 active:scale-95 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base ${
                       activeAuthButton === 'signin'
                         ? 'bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 hover:shadow-lg active:shadow-md'
                         : darkMode 
@@ -437,7 +437,7 @@ return (
                       setActiveAuthButton('signup');
                       navigate('/signup');
                     }} 
-                    className={`transition-all duration-200 transform hover:scale-105 active:scale-95 px-4 py-2 rounded-lg font-medium ${
+                    className={`transition-all duration-200 transform hover:scale-105 active:scale-95 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm sm:text-base ${
                       activeAuthButton === 'signup'
                         ? 'bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 hover:shadow-lg active:shadow-md'
                         : darkMode 
@@ -452,49 +452,51 @@ return (
             )}
           </div>
         </div>
-        {/* Mobile Search Bar */}
-        <div className="md:hidden mt-4 pb-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 h-8 w-8" />
-            <form onSubmit={handleSearchSubmit}>
-              <input
-                type="text"
-                placeholder="Search services..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={handleSearchKeyPress}
-                className={`pl-12 pr-6 py-4 rounded-lg text-base w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
-              />
-            </form>
-            {(searchResults.categories.length > 0 || searchResults.subcategories.length > 0) && searchQuery.trim().length > 0 && (
-              <div className={`absolute left-0 right-0 mt-2 rounded-md shadow-lg max-h-60 overflow-y-auto z-50 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
-                {searchResults.categories.map((cat) => (
-                  <div
-                    key={`mobile-header-cat-${cat.id}`}
-                    className={`px-4 py-2 cursor-pointer flex items-center ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'}`}
-                  >
-                    <Wrench className="h-4 w-4 text-brand mr-2" />
-                    <span>{cat.name}</span>
-                    <span className="ml-auto text-xs text-gray-500">Category</span>
+      </div>
+      
+      {/* Mobile Search Bar */}
+      <div className="md:hidden px-4 pb-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <form onSubmit={handleSearchSubmit}>
+            <input
+              type="text"
+              placeholder="Search services..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={handleSearchKeyPress}
+              className={`pl-9 pr-4 py-2.5 rounded-lg text-sm w-full border focus:outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500' : 'bg-gray-100 border-gray-300 text-gray-800 placeholder-gray-500'}`}
+            />
+          </form>
+          {(searchResults.categories.length > 0 || searchResults.subcategories.length > 0) && searchQuery.trim().length > 0 && (
+            <div className={`absolute left-0 right-0 mt-1 rounded-md shadow-lg max-h-48 overflow-y-auto z-50 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              {searchResults.categories.map((cat) => (
+                <div
+                  key={`mobile-header-cat-${cat.id}`}
+                  onClick={() => handleSuggestionClick(cat, 'category')}
+                  className={`px-3 py-2 cursor-pointer flex items-center ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'}`}
+                >
+                  <Wrench className="h-4 w-4 text-brand mr-2" />
+                  <span className="text-sm">{cat.name}</span>
+                  <span className="ml-auto text-xs text-gray-500">Category</span>
+                </div>
+              ))}
+              {searchResults.subcategories.map((sub) => (
+                <div
+                  key={`mobile-header-sub-${sub.id}`}
+                  onClick={() => handleSuggestionClick(sub, 'subcategory')}
+                  className={`px-3 py-2 cursor-pointer flex items-center ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'}`}
+                >
+                  <Sparkles className="h-4 w-4 text-brand mr-2" />
+                  <div className="flex flex-col">
+                    <span className="text-sm">{sub.name}</span>
+                    <span className="text-xs text-gray-500">{sub.category_name}</span>
                   </div>
-                ))}
-                {searchResults.subcategories.map((sub) => (
-                  <div
-                    key={`mobile-header-sub-${sub.id}`}
-                    onClick={() => handleSuggestionClick(sub, 'subcategory')}
-                    className={`px-4 py-2 cursor-pointer flex items-center ${darkMode ? 'text-gray-200 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'}`}
-                  >
-                    <Sparkles className="h-4 w-4 text-brand mr-2" />
-                    <div className="flex flex-col">
-                      <span>{sub.name}</span>
-                      <span className="text-xs text-gray-500">{sub.category_name}</span>
-                    </div>
-                    <span className="ml-auto text-xs text-gray-500">Subcategory</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <span className="ml-auto text-xs text-gray-500">Subcategory</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </header>

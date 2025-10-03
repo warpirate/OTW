@@ -359,23 +359,160 @@ router.get('/categories/:categoryId/image/presign', verifyToken, async (req, res
         }
 
         const imageUrl = categories[0].image_url;
-        const s3Key = imageUrl.split('.amazonaws.com/')[1];
+        
+        // Handle local files (legacy)
+        if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            if (!imageUrl.includes('.amazonaws.com')) {
+                // Local file or external URL - return as is
+                return res.json({ url: imageUrl, storage: 'local' });
+            }
+        }
+        
+        // Extract S3 key from URL - handle different URL formats
+        let s3Key;
+        if (imageUrl.includes('.amazonaws.com/')) {
+            s3Key = imageUrl.split('.amazonaws.com/')[1];
+        } else if (imageUrl.startsWith('category_images/')) {
+            // Already a key
+            s3Key = imageUrl;
+        } else {
+            return res.status(400).json({ message: 'Invalid S3 URL format' });
+        }
 
         if (!s3Key) {
-            return res.status(400).json({ message: 'Invalid S3 URL' });
+            return res.status(400).json({ message: 'Could not extract S3 key from URL' });
         }
 
         // Generate presigned URL for GET operation (5 minutes expiry)
-        const presignedUrl = s3.getSignedUrl('getObject', {
+        const params = {
             Bucket: S3_BUCKET,
             Key: s3Key,
             Expires: 300
-        });
-
-        res.json({ url: presignedUrl });
+        };
+        
+        const presignedUrl = await s3.getSignedUrlPromise('getObject', params);
+        res.json({ url: presignedUrl, storage: 's3', expiresIn: 300 });
 
     } catch (err) {
         console.error('Error generating view presigned URL:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
+/**
+ * Get presigned URL to view category image (PUBLIC - for customer landing page)
+ * GET /api/categories/public/categories/:categoryId/image
+ */
+router.get('/public/categories/:categoryId/image', async (req, res) => {
+    try {
+        const { categoryId } = req.params;
+
+        if (!S3_BUCKET) {
+            return res.status(500).json({ message: 'S3 bucket not configured' });
+        }
+
+        // Get category image URL
+        const [categories] = await pool.query('SELECT image_url FROM service_categories WHERE id = ? AND is_active = 1', [categoryId]);
+        if (categories.length === 0 || !categories[0].image_url) {
+            return res.status(404).json({ message: 'Category image not found' });
+        }
+
+        const imageUrl = categories[0].image_url;
+        
+        // Handle local files (legacy)
+        if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            if (!imageUrl.includes('.amazonaws.com')) {
+                // Local file or external URL - return as is
+                return res.json({ url: imageUrl, storage: 'local' });
+            }
+        }
+        
+        // Extract S3 key from URL - handle different URL formats
+        let s3Key;
+        if (imageUrl.includes('.amazonaws.com/')) {
+            s3Key = imageUrl.split('.amazonaws.com/')[1];
+        } else if (imageUrl.startsWith('category_images/')) {
+            // Already a key
+            s3Key = imageUrl;
+        } else {
+            return res.status(400).json({ message: 'Invalid S3 URL format' });
+        }
+
+        if (!s3Key) {
+            return res.status(400).json({ message: 'Could not extract S3 key from URL' });
+        }
+
+        // Generate presigned URL for GET operation (30 minutes expiry for public access)
+        const params = {
+            Bucket: S3_BUCKET,
+            Key: s3Key,
+            Expires: 1800 // 30 minutes for public access
+        };
+        
+        const presignedUrl = await s3.getSignedUrlPromise('getObject', params);
+        res.json({ url: presignedUrl, storage: 's3', expiresIn: 1800 });
+
+    } catch (err) {
+        console.error('Error generating public category image presigned URL:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+});
+
+/**
+ * Get presigned URL to view subcategory image (PUBLIC - for customer landing page)
+ * GET /api/categories/public/subcategories/:subcategoryId/image
+ */
+router.get('/public/subcategories/:subcategoryId/image', async (req, res) => {
+    try {
+        const { subcategoryId } = req.params;
+
+        if (!S3_BUCKET) {
+            return res.status(500).json({ message: 'S3 bucket not configured' });
+        }
+
+        // Get subcategory image URL
+        const [subcategories] = await pool.query('SELECT image_url FROM subcategories WHERE id = ? AND is_active = 1', [subcategoryId]);
+        if (subcategories.length === 0 || !subcategories[0].image_url) {
+            return res.status(404).json({ message: 'Subcategory image not found' });
+        }
+
+        const imageUrl = subcategories[0].image_url;
+        
+        // Handle local files (legacy)
+        if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            if (!imageUrl.includes('.amazonaws.com')) {
+                // Local file or external URL - return as is
+                return res.json({ url: imageUrl, storage: 'local' });
+            }
+        }
+        
+        // Extract S3 key from URL - handle different URL formats
+        let s3Key;
+        if (imageUrl.includes('.amazonaws.com/')) {
+            s3Key = imageUrl.split('.amazonaws.com/')[1];
+        } else if (imageUrl.startsWith('subcategory_images/')) {
+            // Already a key
+            s3Key = imageUrl;
+        } else {
+            return res.status(400).json({ message: 'Invalid S3 URL format' });
+        }
+
+        if (!s3Key) {
+            return res.status(400).json({ message: 'Could not extract S3 key from URL' });
+        }
+
+        // Generate presigned URL for GET operation (30 minutes expiry for public access)
+        const params = {
+            Bucket: S3_BUCKET,
+            Key: s3Key,
+            Expires: 1800 // 30 minutes for public access
+        };
+        
+        const presignedUrl = await s3.getSignedUrlPromise('getObject', params);
+        res.json({ url: presignedUrl, storage: 's3', expiresIn: 1800 });
+
+    } catch (err) {
+        console.error('Error generating public subcategory image presigned URL:', err);
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 });
@@ -399,20 +536,39 @@ router.get('/subcategories/:subcategoryId/image/presign', verifyToken, async (re
         }
 
         const imageUrl = subcategories[0].image_url;
-        const s3Key = imageUrl.split('.amazonaws.com/')[1];
+        
+        // Handle local files (legacy)
+        if (imageUrl.startsWith('/uploads/') || imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            if (!imageUrl.includes('.amazonaws.com')) {
+                // Local file or external URL - return as is
+                return res.json({ url: imageUrl, storage: 'local' });
+            }
+        }
+        
+        // Extract S3 key from URL - handle different URL formats
+        let s3Key;
+        if (imageUrl.includes('.amazonaws.com/')) {
+            s3Key = imageUrl.split('.amazonaws.com/')[1];
+        } else if (imageUrl.startsWith('subcategory_images/')) {
+            // Already a key
+            s3Key = imageUrl;
+        } else {
+            return res.status(400).json({ message: 'Invalid S3 URL format' });
+        }
 
         if (!s3Key) {
-            return res.status(400).json({ message: 'Invalid S3 URL' });
+            return res.status(400).json({ message: 'Could not extract S3 key from URL' });
         }
 
         // Generate presigned URL for GET operation (5 minutes expiry)
-        const presignedUrl = s3.getSignedUrl('getObject', {
+        const params = {
             Bucket: S3_BUCKET,
             Key: s3Key,
             Expires: 300
-        });
-
-        res.json({ url: presignedUrl });
+        };
+        
+        const presignedUrl = await s3.getSignedUrlPromise('getObject', params);
+        res.json({ url: presignedUrl, storage: 's3', expiresIn: 300 });
 
     } catch (err) {
         console.error('Error generating view presigned URL:', err);
