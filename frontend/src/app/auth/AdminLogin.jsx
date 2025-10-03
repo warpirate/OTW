@@ -61,7 +61,7 @@ const AdminLogin = () => {
       
       // Add a slight delay to ensure tokens are stored before navigation
       setTimeout(() => {
-        navigate('/admin/dashboard', { replace: true });
+        navigate('/admin/customers', { replace: true });
       }, 100);
     } catch (err) {
       const errorMessage = err?.response?.data?.message || err.message || 'Login failed. Please try again.';

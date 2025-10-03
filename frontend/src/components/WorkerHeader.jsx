@@ -44,8 +44,7 @@ const WorkerHeader = ({
 
   const handleLogout = () => {
     setMenuOpen(false);
-    AuthService.logout('worker');
-    navigate('/worker/login');
+    AuthService.logout(navigate, 'worker');
   };
 
   const getWorkerDisplayName = () => {

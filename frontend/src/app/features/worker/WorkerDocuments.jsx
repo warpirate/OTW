@@ -137,12 +137,14 @@ const WorkerDocuments = () => {
     const accountError = validateAccountNumber(bankingForm.account_number);
     const ifscError = validateIFSC(bankingForm.ifsc_code);
     const bankNameError = validateName(bankingForm.bank_name);
+    const branchError = validateBranchName(bankingForm.branch_name);
 
     const errors = {
       account_holder_name: nameError,
       account_number: accountError,
       ifsc_code: ifscError,
-      bank_name: bankNameError
+      bank_name: bankNameError,
+      branch_name: branchError
     };
 
     setValidationErrors(errors);
@@ -414,7 +416,15 @@ const WorkerDocuments = () => {
   const validateAccountNumber = (accountNumber) => {
     const accountRegex = /^[0-9]{9,18}$/;
     if (!accountNumber.trim()) return 'Account number is required';
-    if (!accountRegex.test(accountNumber)) return 'Account number must be 9-18 digits';
+    if (!/^[0-9]+$/.test(accountNumber.trim())) return 'Account number can only contain digits';
+    if (!accountRegex.test(accountNumber.trim())) return 'Account number must be 9-18 digits';
+    return '';
+  };
+
+  const validateBranchName = (branchName) => {
+    if (!branchName.trim()) return 'Branch name is required';
+    if (branchName.trim().length < 2) return 'Branch name must be at least 2 characters';
+    if (branchName.trim().length > 100) return 'Branch name must be less than 100 characters';
     return '';
   };
 
@@ -559,48 +569,107 @@ const WorkerDocuments = () => {
                           setBankingForm({...bankingForm, account_holder_name: value});
                           handleValidation('account_holder_name', value, validateName);
                         }}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 ${
+                          validationErrors.account_holder_name 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : 'border-gray-300 focus:border-blue-500'
+                        }`}
                         required
                       />
+                      {validationErrors.account_holder_name && (
+                        <p className="mt-1 text-xs text-red-600">{validationErrors.account_holder_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Account Number</label>
                       <input
                         type="text"
                         value={bankingForm.account_number}
-                        onChange={(e) => setBankingForm({...bankingForm, account_number: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setBankingForm({...bankingForm, account_number: value});
+                          handleValidation('account_number', value, validateAccountNumber);
+                        }}
+                        className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 ${
+                          validationErrors.account_number 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : 'border-gray-300 focus:border-blue-500'
+                        }`}
+                        placeholder="9-18 digits"
+                        maxLength="18"
                         required
                       />
+                      {validationErrors.account_number && (
+                        <p className="mt-1 text-xs text-red-600">{validationErrors.account_number}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">IFSC Code</label>
                       <input
                         type="text"
                         value={bankingForm.ifsc_code}
-                        onChange={(e) => setBankingForm({...bankingForm, ifsc_code: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(e) => {
+                          const value = e.target.value.toUpperCase();
+                          setBankingForm({...bankingForm, ifsc_code: value});
+                          handleValidation('ifsc_code', value, validateIFSC);
+                        }}
+                        className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 ${
+                          validationErrors.ifsc_code 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : 'border-gray-300 focus:border-blue-500'
+                        }`}
+                        placeholder="e.g., SBIN0001234"
+                        maxLength="11"
+                        style={{ textTransform: 'uppercase' }}
                         required
                       />
+                      {validationErrors.ifsc_code && (
+                        <p className="mt-1 text-xs text-red-600">{validationErrors.ifsc_code}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Bank Name</label>
                       <input
                         type="text"
                         value={bankingForm.bank_name}
-                        onChange={(e) => setBankingForm({...bankingForm, bank_name: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setBankingForm({...bankingForm, bank_name: value});
+                          handleValidation('bank_name', value, validateName);
+                        }}
+                        className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 ${
+                          validationErrors.bank_name 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : 'border-gray-300 focus:border-blue-500'
+                        }`}
+                        placeholder="e.g., State Bank of India"
                         required
                       />
+                      {validationErrors.bank_name && (
+                        <p className="mt-1 text-xs text-red-600">{validationErrors.bank_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Branch Name</label>
                       <input
                         type="text"
                         value={bankingForm.branch_name}
-                        onChange={(e) => setBankingForm({...bankingForm, branch_name: e.target.value})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setBankingForm({...bankingForm, branch_name: value});
+                          handleValidation('branch_name', value, validateBranchName);
+                        }}
+                        className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 ${
+                          validationErrors.branch_name 
+                            ? 'border-red-500 focus:border-red-500' 
+                            : 'border-gray-300 focus:border-blue-500'
+                        }`}
+                        placeholder="e.g., Main Branch, Hyderabad"
+                        required
                       />
+                      {validationErrors.branch_name && (
+                        <p className="mt-1 text-xs text-red-600">{validationErrors.branch_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Account Type</label>
