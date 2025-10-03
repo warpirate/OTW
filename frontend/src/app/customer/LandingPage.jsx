@@ -608,7 +608,12 @@ const LandingPage = () => {
                   >
                         <div className="p-6">
                           <div className="flex justify-between items-start mb-4">
-                            <InfographicIcon src={getServiceImageSrc(subcategory)} alt={`${subcategory.name} icon`} size="3xl" tone="brand" />
+                            <InfographicIcon 
+                              src={subcategory.image_url || getServiceImageSrc(subcategory)} 
+                              alt={`${subcategory.name} icon`} 
+                              size="3xl" 
+                              tone="brand" 
+                            />
                           </div>
                           <h3 className={`font-bold text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{subcategory.name}</h3>
                           <p className={`text-sm mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -735,7 +740,7 @@ const LandingPage = () => {
                                   <div className="relative flex-shrink-0">
                                     <div className={`relative flex items-center justify-center rounded-2xl shadow-inner ring-1 ${darkMode ? 'ring-white/10' : 'ring-black/5'} bg-gradient-brand/20 w-28 h-28 md:w-36 md:h-36`}> 
                                       <InfographicIcon
-                                        src={getCategoryImageSrc(cat.name, cat.imageUrl)}
+                                        src={cat.imageUrl || getCategoryImageSrc(cat.name)}
                                         alt={`${cat.name} icon`}
                                         size="4xl"
                                         className="drop-shadow-xl transition-transform duration-300 ease-out group-hover:scale-110"

@@ -30,7 +30,7 @@ router.get('/types', async (req, res) => {
     const offset = (page - 1) * limit;
 
     // Get total count for pagination metadata
-    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM service_categories');
+    const [[{ total }]] = await pool.query('SELECT COUNT(*) as total FROM service_categories WHERE is_active = 1');
 
     // Fetch paginated results
     const [rows] = await pool.query(
@@ -57,7 +57,7 @@ router.get('/sub-categories', async (req, res) => {
     try {
         const { categoryId } = req.query;
         console.log("categoryId from query:", categoryId);
-        const sql = 'SELECT * FROM subcategories WHERE category_id = ?';
+        const sql = 'SELECT * FROM subcategories WHERE category_id = ? AND is_active = 1';
         const [rows] = await pool.query(sql, [categoryId]);
         res.json(rows);
     } catch (err) {
@@ -194,7 +194,7 @@ router.get('/search-services', async (req, res) => {
       `SELECT s.id, s.name, s.category_id, c.name AS category_name
        FROM subcategories s 
        JOIN service_categories c ON c.id = s.category_id
-       WHERE s.name LIKE ? 
+       WHERE s.is_active = 1 AND c.is_active = 1 AND s.name LIKE ? 
        LIMIT ?`,
       [searchTerm, resultLimit]
     );
