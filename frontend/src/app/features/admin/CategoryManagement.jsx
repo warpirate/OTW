@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CategoryService } from '../../services/api.service';
 
 const CategoryManagement = () => {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,6 +15,13 @@ const CategoryManagement = () => {
   const [showSubcategoryModal, setShowSubcategoryModal] = useState(false);
   const [subcategoryMode, setSubcategoryMode] = useState('view');
   const [filters, setFilters] = useState({search: '', status: 'all',});
+  
+  // Image upload states
+  const [categoryImageFile, setCategoryImageFile] = useState(null);
+  const [categoryImagePreview, setCategoryImagePreview] = useState(null);
+  const [subcategoryImageFile, setSubcategoryImageFile] = useState(null);
+  const [subcategoryImagePreview, setSubcategoryImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -116,23 +125,9 @@ const CategoryManagement = () => {
     return matchesSearch && matchesStatus;
   });
 
-  // Handle view category
-  const handleViewCategory = async (category) => {
-    setLoading(true);
-    try {
-      const subCategoryDetails = await CategoryService.getAllSubCategories(category.id);
-      setSelectedCategory({
-        ...category,
-        subcategories: subCategoryDetails
-      });
-      setModalMode('view');
-      setShowModal(true);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load category details. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  // Handle view category - Navigate to details page
+  const handleViewCategory = (category) => {
+    navigate(`/admin/category/${category.id}`);
   };
 
   // Handle edit category
@@ -162,6 +157,8 @@ const CategoryManagement = () => {
       subcategories: [],
       category_type: 'maintenance' // Default type
     });
+    setCategoryImageFile(null);
+    setCategoryImagePreview(null);
     setModalMode('add');
     setShowModal(true);
   };
@@ -175,26 +172,119 @@ const CategoryManagement = () => {
     });
   };
 
+  // Handle category image selection
+  const handleCategoryImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        setError('Invalid file type. Please upload an image (JPG, PNG, GIF, or WebP).');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        setError('File size too large. Maximum size is 5MB.');
+        return;
+      }
+
+      setCategoryImageFile(file);
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCategoryImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle subcategory image selection
+  const handleSubcategoryImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        setError('Invalid file type. Please upload an image (JPG, PNG, GIF, or WebP).');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        setError('File size too large. Maximum size is 5MB.');
+        return;
+      }
+
+      setSubcategoryImageFile(file);
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSubcategoryImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Handle save category
   const handleSaveCategory = async () => {
     try {
       setLoading(true);
+      setUploadingImage(false);
+      let imageUrl = selectedCategory.image_url;
 
       if (modalMode === 'add') {
+        // Create category first
         const newCategory = await CategoryService.createCategory(selectedCategory);
-        await fetchCategories(); // Re-fetch all categories to update the list
-
+        
+        // Upload image if provided
+        if (categoryImageFile && newCategory.id) {
+          try {
+            setUploadingImage(true);
+            imageUrl = await CategoryService.uploadCategoryImage(newCategory.id, categoryImageFile);
+            // Update category with image URL
+            await CategoryService.updateCategory(newCategory.id, { ...selectedCategory, image_url: imageUrl });
+            setUploadingImage(false);
+          } catch (uploadErr) {
+            console.error('Image upload failed:', uploadErr);
+            setError('Category created but image upload failed. You can add the image later.');
+          }
+        }
+        
       } else if (modalMode === 'edit') {
-        const updatedCategory = await CategoryService.updateCategory(selectedCategory.id, selectedCategory);
-        await fetchCategories(); // Re-fetch all categories to update the list
+        // Upload new image if provided
+        if (categoryImageFile && selectedCategory.id) {
+          try {
+            setUploadingImage(true);
+            imageUrl = await CategoryService.uploadCategoryImage(selectedCategory.id, categoryImageFile);
+            setUploadingImage(false);
+          } catch (uploadErr) {
+            console.error('Image upload failed:', uploadErr);
+            setError('Image upload failed. Please try again.');
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // Update category with new data and image URL
+        await CategoryService.updateCategory(selectedCategory.id, {
+          ...selectedCategory,
+          image_url: imageUrl
+        });
       }
 
+      await fetchCategories(); // Re-fetch all categories to update the list
       setShowModal(false);
+      setCategoryImageFile(null);
+      setCategoryImagePreview(null);
       setError(null);
     } catch (err) {
       setError('Failed to save category. Please try again.');
     } finally {
       setLoading(false);
+      setUploadingImage(false);
     }
   };
 
@@ -213,6 +303,8 @@ const CategoryManagement = () => {
     };
 
     setSelectedSubcategory(subcategoryToEdit);
+    setSubcategoryImageFile(null);
+    setSubcategoryImagePreview(subcategory.image_url || null);
     setSubcategoryMode('edit');
     setShowSubcategoryModal(true);
   };
@@ -229,6 +321,8 @@ const CategoryManagement = () => {
       ...selectedCategory, // Keep existing selectedCategory details
       id: categoryId // Ensure ID is set for the modal context
     })
+    setSubcategoryImageFile(null);
+    setSubcategoryImagePreview(null);
     setSubcategoryMode('add');
     setShowSubcategoryModal(true);
   };
@@ -252,27 +346,61 @@ const CategoryManagement = () => {
 
     try {
       setLoading(true);
-
-      const subcategoryData = {
-        ...selectedSubcategory,
-        category_id: categoryId
-      };
+      setUploadingImage(false);
+      let imageUrl = selectedSubcategory.image_url;
 
       let result;
       if (subcategoryMode === 'add') {
+        // Create subcategory first
         result = await CategoryService.createSubcategory(
           categoryId,
-          subcategoryData
+          selectedSubcategory
         );
+        
+        // Upload image if provided
+        if (subcategoryImageFile && result.id) {
+          try {
+            setUploadingImage(true);
+            imageUrl = await CategoryService.uploadSubcategoryImage(result.id, subcategoryImageFile);
+            // Update subcategory with image URL
+            await CategoryService.updateSubcategory(categoryId, result.id, { 
+              ...selectedSubcategory, 
+              image_url: imageUrl 
+            });
+            setUploadingImage(false);
+          } catch (uploadErr) {
+            console.error('Image upload failed:', uploadErr);
+            setError('Subcategory created but image upload failed. You can add the image later.');
+          }
+        }
+        
       } else if (subcategoryMode === 'edit') {
         if (!selectedSubcategory.id) {
           throw new Error('Subcategory ID is missing');
         }
+        
+        // Upload new image if provided
+        if (subcategoryImageFile) {
+          try {
+            setUploadingImage(true);
+            imageUrl = await CategoryService.uploadSubcategoryImage(selectedSubcategory.id, subcategoryImageFile);
+            setUploadingImage(false);
+          } catch (uploadErr) {
+            console.error('Image upload failed:', uploadErr);
+            setError('Image upload failed. Please try again.');
+            setLoading(false);
+            return;
+          }
+        }
 
+        // Update subcategory with new data and image URL
         result = await CategoryService.updateSubcategory(
           categoryId,
           selectedSubcategory.id,
-          subcategoryData
+          {
+            ...selectedSubcategory,
+            image_url: imageUrl
+          }
         );
       }
 
@@ -300,6 +428,8 @@ const CategoryManagement = () => {
       });
 
       setShowSubcategoryModal(false);
+      setSubcategoryImageFile(null);
+      setSubcategoryImagePreview(null);
       setError(null);
     } catch (err) {
       const errorMessage = err.response ?
@@ -308,6 +438,7 @@ const CategoryManagement = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      setUploadingImage(false);
     }
   };
 
@@ -759,6 +890,27 @@ const CategoryManagement = () => {
                       </div>
 
                       <div>
+                        <label htmlFor="category_image" className="block text-sm font-medium text-gray-700">Category Image</label>
+                        <input
+                          type="file"
+                          id="category_image"
+                          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                          onChange={handleCategoryImageChange}
+                          className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                        {(categoryImagePreview || selectedCategory.image_url) && (
+                          <div className="mt-2">
+                            <img 
+                              src={categoryImagePreview || selectedCategory.image_url} 
+                              alt="Category preview" 
+                              className="h-32 w-32 object-cover rounded-md border border-gray-300"
+                            />
+                          </div>
+                        )}
+                        <p className="mt-1 text-xs text-gray-500">Upload an image (JPG, PNG, GIF, or WebP - max 5MB)</p>
+                      </div>
+
+                      <div>
                         <label className="flex items-center">
                           <input
                             type="checkbox"
@@ -871,11 +1023,27 @@ const CategoryManagement = () => {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       />
                     </div>
-                  </div>
-                )}
-              </div>
-              
-              <div>
+                    <div>
+                      <label htmlFor="subcategory_image" className="block text-sm font-medium text-gray-700">Subcategory Image</label>
+                      <input
+                        type="file"
+                        id="subcategory_image"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        onChange={handleSubcategoryImageChange}
+                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                      />
+                      {(subcategoryImagePreview || selectedSubcategory.image_url) && (
+                        <div className="mt-2">
+                          <img 
+                            src={subcategoryImagePreview || selectedSubcategory.image_url} 
+                            alt="Subcategory preview" 
+                            className="h-32 w-32 object-cover rounded-md border border-gray-300"
+                          />
+                        </div>
+                      )}
+                      <p className="mt-1 text-xs text-gray-500">Upload an image (JPG, PNG, GIF, or WebP - max 5MB)</p>
+                    </div>
+                    <div>
                       <label className="flex items-center">
                         <input
                           type="checkbox"
@@ -887,6 +1055,10 @@ const CategoryManagement = () => {
                         <span className="ml-2 text-sm text-gray-700">Active</span>
                       </label>
                     </div>
+                  </div>
+                )}
+              </div>
+              
               <div className="border-t pt-4 flex justify-end space-x-3">
                 <button
                   className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
@@ -896,7 +1068,7 @@ const CategoryManagement = () => {
                 </button>
                 {subcategoryMode === 'add' && (
                   <button
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand"
                     onClick={handleSaveSubcategory}
                   >
                     Save
@@ -904,7 +1076,7 @@ const CategoryManagement = () => {
                 )}
                 {subcategoryMode === 'edit' && (
                   <button
-                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand"
                     onClick={handleSaveSubcategory}
                   >
                     Update

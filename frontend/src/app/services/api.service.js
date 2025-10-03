@@ -166,6 +166,7 @@ export const CategoryService = {
       );
       return response.data;
     } catch (error) {
+      console.error(`Error deleting subcategory ${subcategoryId}:`, error);
       throw error;
     }
   },
@@ -180,6 +181,112 @@ export const CategoryService = {
       return response.data;
     } catch (error) {
       console.error(`Error toggling subcategory ${subcategoryId} status:`, error);
+      throw error;
+    }
+  },
+
+  // ===========================
+  // Image Upload Functions
+  // ===========================
+
+  /**
+   * Upload category image to S3
+   * @param {number} categoryId - Category ID
+   * @param {File} file - Image file to upload
+   * @returns {Promise<string>} - S3 URL of uploaded image
+   */
+  uploadCategoryImage: async (categoryId, file) => {
+    try {
+      // Step 1: Get presigned URL from backend
+      const presignResponse = await apiClient.post(
+        `/categories/${categoryId}/image/presign`,
+        {
+          fileName: file.name,
+          fileType: file.type
+        }
+      );
+
+      const { uploadUrl, fileUrl } = presignResponse.data;
+
+      // Step 2: Upload file directly to S3 using presigned URL
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type
+        }
+      });
+
+      // Return the S3 URL to be saved in database
+      return fileUrl;
+    } catch (error) {
+      console.error('Error uploading category image:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Upload subcategory image to S3
+   * @param {number} subcategoryId - Subcategory ID
+   * @param {File} file - Image file to upload
+   * @returns {Promise<string>} - S3 URL of uploaded image
+   */
+  uploadSubcategoryImage: async (subcategoryId, file) => {
+    try {
+      // Step 1: Get presigned URL from backend
+      const presignResponse = await apiClient.post(
+        `/subcategories/${subcategoryId}/image/presign`,
+        {
+          fileName: file.name,
+          fileType: file.type
+        }
+      );
+
+      const { uploadUrl, fileUrl } = presignResponse.data;
+
+      // Step 2: Upload file directly to S3 using presigned URL
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type
+        }
+      });
+
+      // Return the S3 URL to be saved in database
+      return fileUrl;
+    } catch (error) {
+      console.error('Error uploading subcategory image:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get presigned URL to view category image
+   * @param {number} categoryId - Category ID
+   * @returns {Promise<string>} - Presigned URL to view image
+   */
+  getCategoryImageUrl: async (categoryId) => {
+    try {
+      const response = await apiClient.get(`/categories/${categoryId}/image/presign`);
+      return response.data.url;
+    } catch (error) {
+      console.error('Error getting category image URL:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get presigned URL to view subcategory image
+   * @param {number} subcategoryId - Subcategory ID
+   * @returns {Promise<string>} - Presigned URL to view image
+   */
+  getSubcategoryImageUrl: async (subcategoryId) => {
+    try {
+      const response = await apiClient.get(`/subcategories/${subcategoryId}/image/presign`);
+      return response.data.url;
+    } catch (error) {
+      console.error('Error getting subcategory image URL:', error);
       throw error;
     }
   }

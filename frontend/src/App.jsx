@@ -46,6 +46,7 @@ const ProviderDetailsPage = lazy(() => import('./app/features/admin/ProviderDeta
 const CustomerManagement = lazy(() => import('./app/features/admin/CustomerManagement'));
 const CustomerDetailsPage = lazy(() => import('./app/features/admin/CustomerDetailsPage'));
 const CategoryManagement = lazy(() => import('./app/features/admin/CategoryManagement'));
+const CategoryDetailsPage = lazy(() => import('./app/features/admin/CategoryDetailsPage'));
 const DisputeManagement = lazy(() => import('./app/features/admin/DisputeManagement'));
 const PricingManagement = lazy(() => import('./app/features/admin/PricingManagement'));
 const SurgeMonitoring = lazy(() => import('./app/features/admin/SurgeMonitoring'));
@@ -453,6 +454,7 @@ function App() {
               <Route path="users" element={<UserManagement />} />
               <Route path="provider/:providerId" element={<ProviderDetailsPage />} />
               <Route path="categories" element={<CategoryManagement />} />
+              <Route path="category/:categoryId" element={<CategoryDetailsPage />} />
               <Route path="disputes" element={<DisputeManagement />} />
               <Route path="pricing" element={<PricingManagement />} />
               <Route path="surge" element={<SurgeMonitoring />} />
