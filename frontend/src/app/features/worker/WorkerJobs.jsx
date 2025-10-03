@@ -424,6 +424,18 @@ const WorkerJobs = () => {
                           </p>
                         </div>
                       )}
+
+                      {/* Scheduled Date and Time */}
+                      {request.scheduled_time && (
+                        <div className="mb-3 flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="w-4 h-4 text-blue-600" />
+                            <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                              <strong>Scheduled:</strong> {formatDateTime(request.scheduled_time)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

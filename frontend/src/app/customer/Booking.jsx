@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, Clock, MapPin, Plus, Edit2, Trash2,
@@ -15,6 +15,18 @@ import AuthService from '../services/auth.service';
 import PaymentService from '../services/payment.service';
 import CustomerVerificationsService from '../services/customerVerifications.service';
 import ProfileService from '../services/profile.service';
+// Simple debounce utility function
+const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 const Booking = () => {
   const navigate = useNavigate();
@@ -43,6 +55,7 @@ const Booking = () => {
 
   // Address management
   const [addresses, setAddresses] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -369,29 +382,37 @@ const Booking = () => {
     }));
   };
 
-  // Handle pincode validation on blur
-  const handlePincodeValidation = async (pincode) => {
-    if (!pincode || pincode.length !== 6) return;
+  // Debounced pincode validation to reduce API calls
+  const debouncedPincodeValidation = useCallback(
+    debounce(async (pincode) => {
+      if (!pincode || pincode.length !== 6) return;
 
-    setValidatingAddress(true);
-    try {
-      const validation = await BookingService.utils.validatePincode(pincode);
-      if (validation.isValid && validation.data) {
-        // Auto-fill city and state
-        setNewAddress(prev => ({
-          ...prev,
-          city: validation.data.city,
-          state: validation.data.state
-        }));
-        toast.success(`Pincode validated! Auto-filled: ${validation.data.city}, ${validation.data.state}`);
-      } else if (validation.error) {
-        toast.error(validation.error);
+      setValidatingAddress(true);
+      try {
+        const validation = await BookingService.utils.validatePincode(pincode);
+        if (validation.isValid && validation.data) {
+          // Auto-fill city and state
+          setNewAddress(prev => ({
+            ...prev,
+            city: validation.data.city,
+            state: validation.data.state
+          }));
+          toast.success(`Pincode validated! Auto-filled: ${validation.data.city}, ${validation.data.state}`);
+        } else if (validation.error) {
+          toast.error(validation.error);
+        }
+      } catch (error) {
+        console.warn('Pincode validation error:', error);
+      } finally {
+        setValidatingAddress(false);
       }
-    } catch (error) {
-      console.warn('Pincode validation error:', error);
-    } finally {
-      setValidatingAddress(false);
-    }
+    }, 500),
+    []
+  );
+
+  // Handle pincode validation on blur
+  const handlePincodeValidation = (pincode) => {
+    debouncedPincodeValidation(pincode);
   };
 
   // Get current location using browser geolocation API
@@ -513,41 +534,42 @@ const Booking = () => {
   };
 
   // Geocode address using Google Maps API to get precise latitude and longitude
-  const geocodeAddress = async (addressData) => {
+  const geocodeAddress = async (addressData, currentCoords = null) => {
     try {
       const { address, city, state, country, pin_code } = addressData;
 
       // If we already have current location coordinates, use them
-      if (currentLocationCoords) {
-        console.log('Using current location coordinates:', currentLocationCoords);
+      if (currentCoords) {
+        console.log('Using current location coordinates:', currentCoords);
         return {
-          location_lat: currentLocationCoords.latitude,
-          location_lng: currentLocationCoords.longitude
+          location_lat: currentCoords.latitude,
+          location_lng: currentCoords.longitude,
+          status: 'CURRENT_LOCATION'
         };
       }
 
-      // Try different address combinations in order of specificity for maximum precision
+      // Progressive fallback - try most specific first, stop after 2-3 attempts to reduce API calls
       const addressCombinations = [
         pin_code ? `${address}, ${city}, ${state}, ${pin_code}, ${country}` : null,
         `${address}, ${city}, ${state}, ${country}`,
-        pin_code ? `${city}, ${state}, ${pin_code}, ${country}` : null,
-        `${city}, ${state}, ${country}`,
-        `${state}, ${country}`
-      ].filter(Boolean);
+        pin_code ? `${city}, ${state}, ${pin_code}, ${country}` : null
+      ].filter(Boolean).slice(0, 3); // Limit to 3 attempts maximum
 
       let latitude = null;
       let longitude = null;
-      let bestAccuracy = null;
+      let bestAccuracy = 0; // Initialize with 0 instead of null
+      let geocodingStatus = 'FAILED';
 
       // Get Google Maps API key from environment
       const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_REACT_APP_GOOGLE_MAPS_API_KEY;
 
       if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
-        console.warn('Google Maps API key not configured, using default coordinates');
-        toast.warning('Geocoding unavailable. Using approximate location.');
+        console.warn('Google Maps API key not configured');
         return {
-          location_lat: 20.5937,
-          location_lng: 78.9629
+          location_lat: null,
+          location_lng: null,
+          status: 'NO_API_KEY',
+          error: 'Google Maps API key not configured'
         };
       }
 
@@ -578,10 +600,11 @@ const Booking = () => {
             }[locationType] || 0;
 
             // Use the most accurate result
-            if (!bestAccuracy || accuracyScore > bestAccuracy) {
+            if (accuracyScore > bestAccuracy) {
               latitude = location.lat;
               longitude = location.lng;
               bestAccuracy = accuracyScore;
+              geocodingStatus = locationType;
 
               console.log('✓ Geocoding result:', {
                 address: addr,
@@ -598,6 +621,10 @@ const Booking = () => {
             }
           } else if (data.status !== 'OK') {
             console.warn('Geocoding failed for address:', addr, 'Status:', data.status);
+            if (data.status === 'OVER_QUERY_LIMIT') {
+              geocodingStatus = 'QUOTA_EXCEEDED';
+              break; // Stop trying if quota exceeded
+            }
           }
         } catch (fetchError) {
           console.warn('Error fetching geocoding data for address:', addr, fetchError);
@@ -606,11 +633,12 @@ const Booking = () => {
       }
 
       if (!latitude || !longitude) {
-        console.warn('Could not determine precise location from address, using default coordinates');
-        toast.warning('Could not determine precise location. Please verify the address or use current location.');
+        console.warn('Could not determine precise location from address');
         return {
-          location_lat: 20.5937,
-          location_lng: 78.9629
+          location_lat: null,
+          location_lng: null,
+          status: geocodingStatus,
+          error: 'Could not determine precise location from address'
         };
       }
 
@@ -624,14 +652,17 @@ const Booking = () => {
 
       return {
         location_lat: latitude,
-        location_lng: longitude
+        location_lng: longitude,
+        status: geocodingStatus,
+        accuracy: bestAccuracy
       };
     } catch (error) {
       console.error('Error in Google Maps geocoding:', error);
-      // Return default coordinates (center of India) in case of error
       return {
-        location_lat: 20.5937,
-        location_lng: 78.9629
+        location_lat: null,
+        location_lng: null,
+        status: 'ERROR',
+        error: error.message
       };
     }
   };
@@ -651,13 +682,39 @@ const Booking = () => {
       }
 
       // Get coordinates before saving
-      const coordinates = await geocodeAddress(newAddress);
+      const geocodingResult = await geocodeAddress(newAddress, currentLocationCoords);
+      
+      // Handle geocoding results
+      if (geocodingResult.status === 'NO_API_KEY') {
+        toast.warning('Geocoding unavailable. Address updated with approximate location.');
+      } else if (geocodingResult.status === 'QUOTA_EXCEEDED') {
+        toast.error('Geocoding quota exceeded. Please try again later.');
+        return;
+      } else if (geocodingResult.status === 'ERROR' || (!geocodingResult.location_lat && !geocodingResult.location_lng)) {
+        toast.warning('Could not determine precise location. Please verify the address or use current location.');
+        // Use a fallback - let user decide
+        if (!window.confirm(`Could not determine precise location for this address. Do you want to update it anyway? If you choose to update, the address will be saved with approximate location.`)) {
+          return;
+        }
+      } else if (geocodingResult.status === 'CURRENT_LOCATION') {
+        toast.success('Using your current location for this address.');
+      } else if (geocodingResult.accuracy >= 3) {
+        toast.success('Address location determined with high precision.');
+      } else if (geocodingResult.accuracy >= 2) {
+        toast.info('Address location determined with medium precision.');
+      } else {
+        toast.warning('Address location determined with low precision. Consider using current location for better accuracy.');
+      }
 
-      // Create address object with coordinates
-      const addressWithCoords = {
-        ...newAddress,
-        ...coordinates
-      };
+      // Create address object with coordinates (only include if valid)
+      const addressWithCoords = { ...newAddress };
+      
+      // Only include coordinates if they're valid (not null)
+      if (geocodingResult.location_lat && geocodingResult.location_lng) {
+        addressWithCoords.location_lat = geocodingResult.location_lat;
+        addressWithCoords.location_lng = geocodingResult.location_lng;
+      }
+      // If coordinates are null, don't include them - backend will handle appropriately
 
       const result = await BookingService.addresses.create(addressWithCoords);
       toast.success('Address added successfully');
@@ -677,6 +734,7 @@ const Booking = () => {
         is_default: false
       });
       setShowAddressForm(false);
+      setCurrentLocationCoords(null); // Reset current location after use
 
       // Select the new address
       if (result.address) {
@@ -720,17 +778,36 @@ const Booking = () => {
       }
 
       // Get coordinates before saving
-      const coordinates = await geocodeAddress(newAddress);
+      const geocodingResult = await geocodeAddress(newAddress, currentLocationCoords);
+      
+      // Handle geocoding results
+      if (geocodingResult.status === 'NO_API_KEY') {
+        toast.warning('Geocoding unavailable. Address updated with approximate location.');
+      } else if (geocodingResult.status === 'QUOTA_EXCEEDED') {
+        toast.error('Geocoding quota exceeded. Please try again later.');
+        return;
+      } else if (geocodingResult.status === 'ERROR' || (!geocodingResult.location_lat && !geocodingResult.location_lng)) {
+        toast.warning('Could not determine precise location. Please verify the address or use current location.');
+        // Use a fallback - let user decide
+        if (!window.confirm('Could not determine precise location for this address. Do you want to update it anyway?')) {
+          return;
+        }
+      } else if (geocodingResult.status === 'CURRENT_LOCATION') {
+        toast.success('Using your current location for this address.');
+      }
 
-      // Create address object with coordinates
-      const addressWithCoords = {
-        ...newAddress,
-        ...coordinates
-      };
+      // Create address object with coordinates (only include if valid)
+      const addressWithCoords = { ...newAddress };
+      
+      // Only include coordinates if they're valid (not null)
+      if (geocodingResult.location_lat && geocodingResult.location_lng) {
+        addressWithCoords.location_lat = geocodingResult.location_lat;
+        addressWithCoords.location_lng = geocodingResult.location_lng;
+      }
+      // If coordinates are null, don't include them - backend will keep existing coordinates
 
       const result = await BookingService.addresses.update(editingAddress.address_id, addressWithCoords);
       toast.success('Address updated successfully');
-
       // Refresh addresses
       await loadAddresses();
 
@@ -762,6 +839,7 @@ const Booking = () => {
     setShowAddressForm(false);
     setEditingAddress(null);
     setAddressValidationResult(null);
+    setCurrentLocationCoords(null); // Reset current location after use
   };
 
   // Delete address

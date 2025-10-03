@@ -96,12 +96,14 @@ const AdminLayout = () => {
             <h1 className="text-2xl font-semibold text-gray-800">Admin Panel</h1>
             <div className="flex items-center space-x-4">
               {/* Notifications */}
+              {/* 
               <div className="relative">
                 <button className="btn-icon" aria-label="Notifications">
                   <i className="fas fa-bell text-gray-600"></i>
                 </button>
                 <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
               </div>
+              */}
 
               {/* User Menu */}
               <div className="relative" ref={userMenuRef}>
