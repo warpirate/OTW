@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { LandingPageService } from '../services/landing_page.service';
-import { ArrowLeft, Star, ChevronRight, Wrench, Hammer, Wind, Droplets, Bug, Sparkles, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Star, ChevronRight, Wrench, Hammer, Wind, Droplets, Bug, Sparkles, ShoppingCart, Eye } from 'lucide-react';
 import { getCategoryImageSrc, getServiceImageSrc } from '../utils/infographicMap';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
 import { useCart } from '../contexts/CartContext';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import InfographicIcon from '../../components/InfographicIcon';
+import S3Image from '../components/S3Image';
+import ServiceDetailsModal from '../components/ServiceDetailsModal';
 
 const CategoryServices = () => {
   const { categoryId, categoryName } = useParams();
@@ -18,6 +20,8 @@ const CategoryServices = () => {
   const [error, setError] = useState(null);
   const [darkMode, setDarkMode] = useState(isDarkMode());
   const [addingToCart, setAddingToCart] = useState({});
+  const [selectedService, setSelectedService] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Get the appropriate icon based on category name
   const getCategoryIcon = (categoryName) => {
@@ -93,6 +97,22 @@ const CategoryServices = () => {
     }
   };
 
+  const handleViewDetails = (service) => {
+    setSelectedService(service);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedService(null);
+  };
+
+  const handleModalAddToCart = async (service) => {
+    await handleAddToCart(service);
+    // Optionally close modal after adding to cart
+    // handleCloseModal();
+  };
+
   const IconComponent = getCategoryIcon(categoryName);
 
   return (
@@ -100,7 +120,7 @@ const CategoryServices = () => {
       {/* Use the Header component */}
       <Header />
 
-      <div className="container-custom section-padding">
+      <div className="container-custom pt-4 pb-8 sm:pt-8 sm:pb-16 md:pt-12 md:pb-24">
         {/* Back Button */}
         <button 
           onClick={handleBackClick}
@@ -130,46 +150,97 @@ const CategoryServices = () => {
             </button>
           </div>
         ) : subcategories.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
             {subcategories.map((service) => (
               <div 
                 key={service.id}
-                className={`card ${darkMode ? 'border-gray-700 hover:border-gray-600' : 'border-gray-200 hover:border-gray-300'} transition transform hover:shadow-lg hover:-translate-y-0.5`}
+                onClick={() => handleViewDetails(service)}
+                className={`group relative overflow-hidden rounded-2xl ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-1 w-full`}
               >
-                <div className="p-4 sm:p-6">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    {/* Text block */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-bold text-base sm:text-lg leading-snug ${darkMode ? 'text-white' : 'text-gray-900'} break-words`}>
-                        {service.name}
-                      </h3>
-                      <div className="mt-1 flex items-center text-gray-600 dark:text-gray-300">
-                        <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                        <span className={`ml-1 text-xs sm:text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>{(4 + Math.random()).toFixed(1)}</span>
-                      </div>
-                      <p className={`mt-2 text-xs sm:text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'} break-words`}> 
-                        {service.description || `Professional ${service.name} services`}
-                      </p>
-                    </div>
+                {/* Image Section - Top */}
+                <div className={`relative h-40 sm:h-48 ${darkMode ? 'bg-black' : 'bg-white'} flex items-center justify-center overflow-hidden`}>
+                  {/* Gradient overlay for better image visibility */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-blue-500/10"></div>
+                  
+                  <S3Image
+                    type="subcategory"
+                    id={service.id}
+                    fallbackSrc={getServiceImageSrc(service, undefined, categoryName)}
+                    alt={`${service.name} icon`}
+                    size="4xl"
+                    tone="brand"
+                    className="relative z-10 w-32 h-32 sm:w-44 sm:h-44 md:w-48 md:h-48 object-contain transition-transform duration-300 group-hover:scale-110"
+                  />
+                  
+                  {/* Rating badge - Top right */}
+                  {/* <div className={`absolute top-3 right-3 flex items-center px-2 py-1 rounded-full ${darkMode ? 'bg-gray-800/80' : 'bg-white/80'} backdrop-blur-sm`}>
+                    <Star className="h-3 w-3 text-yellow-500 fill-current mr-1" />
+                    <span className={`text-xs font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                      {(4 + Math.random()).toFixed(1)}
+                    </span>
+                  </div> */}
+                </div>
 
-                    {/* Icon on the right */}
-                    <div className="shrink-0 ml-2">
-                      <InfographicIcon src={getServiceImageSrc(service, undefined, categoryName)} alt={`${service.name} icon`} size="xl" tone="brand" />
+                {/* Content Section - Bottom */}
+                <div className="p-4 sm:p-6">
+                  {/* Service Name */}
+                  <h3 className={`font-bold text-base sm:text-lg mb-2 ${darkMode ? 'text-white' : 'text-gray-900'} group-hover:text-purple-600 transition-colors line-clamp-2`}>
+                    {service.name}
+                  </h3>
+                  
+                  {/* Description */}
+                  <p className={`text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {service.description || `Professional ${service.name} services`}
+                  </p>
+
+                  {/* Price */}
+                  <div className="mb-4">
+                    <div className={`font-bold text-lg sm:text-xl ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                      ₹{service.base_price || Math.floor(Math.random() * 5000) + 1000}
                     </div>
                   </div>
 
-                  <div className="mt-3 sm:mt-4 flex items-center justify-between">
-                    <span className={`font-semibold text-sm sm:text-base ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>{`₹${service.base_price || Math.floor(Math.random() * 5000) + 1000}`}</span>
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
                     <button 
-                      onClick={() => handleAddToCart(service)}
-                      disabled={addingToCart[service.id]}
-                      className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${darkMode ? 'bg-purple-900/30 text-purple-300 hover:bg-purple-900/50 border border-purple-700' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewDetails(service);
+                      }}
+                      className={`flex items-center justify-center space-x-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex-1 ${
+                        darkMode 
+                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white border border-gray-600' 
+                          : 'bg-white hover:bg-gray-50 text-gray-700 hover:text-gray-900 border border-gray-300 shadow-sm'
+                      } transform hover:scale-105 active:scale-95`}
                     >
-                      <ShoppingCart className="h-4 w-4" />
-                      <span className="text-sm sm:text-base">{addingToCart[service.id] ? 'Adding...' : 'Add Request'}</span>
+                      <Eye className="h-3 w-3" />
+                      <span>View Details</span>
+                    </button>
+                    
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddToCart(service);
+                      }}
+                      disabled={addingToCart[service.id]}
+                      className={`flex items-center justify-center space-x-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex-1 ${
+                        addingToCart[service.id] 
+                          ? 'bg-gray-400 text-white cursor-not-allowed' 
+                          : darkMode 
+                            ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-purple-500/25' 
+                            : 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-purple-500/25'
+                      } transform hover:scale-105 active:scale-95`}
+                    >
+                      <ShoppingCart className="h-3 w-3" />
+                      <span>
+                        {addingToCart[service.id] ? 'Adding...' : 'Add Request'}
+                      </span>
                     </button>
                   </div>
                 </div>
+
+                {/* Hover effect overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-purple-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
               </div>
             ))}
           </div>
@@ -184,6 +255,17 @@ const CategoryServices = () => {
 
       {/* Add Footer component */}
       <Footer />
+
+      {/* Service Details Modal */}
+      <ServiceDetailsModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        service={selectedService}
+        categoryName={categoryName}
+        onAddToCart={handleModalAddToCart}
+        isAddingToCart={selectedService ? addingToCart[selectedService.id] : false}
+        darkMode={darkMode}
+      />
     </div>
   );
 };

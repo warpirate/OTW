@@ -22,6 +22,11 @@ const CategoryManagement = () => {
   const [subcategoryImageFile, setSubcategoryImageFile] = useState(null);
   const [subcategoryImagePreview, setSubcategoryImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  
+  // Presigned URL states for viewing S3 images
+  const [categoryPresignedUrl, setCategoryPresignedUrl] = useState(null);
+  const [subcategoryPresignedUrl, setSubcategoryPresignedUrl] = useState(null);
+  const [loadingPresignedUrls, setLoadingPresignedUrls] = useState(false);
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -139,6 +144,23 @@ const CategoryManagement = () => {
         ...category,
         subcategories: subCategoryDetails
       });
+      
+      // Fetch presigned URL if category has an image
+      if (category.image_url) {
+        setLoadingPresignedUrls(true);
+        try {
+          const presignedUrl = await CategoryService.getCategoryImageUrl(category.id);
+          setCategoryPresignedUrl(presignedUrl);
+        } catch (err) {
+          console.error('Failed to fetch category image presigned URL:', err);
+          setCategoryPresignedUrl(null);
+        } finally {
+          setLoadingPresignedUrls(false);
+        }
+      } else {
+        setCategoryPresignedUrl(null);
+      }
+      
       setModalMode('edit');
       setShowModal(true);
       setError(null);
@@ -159,6 +181,7 @@ const CategoryManagement = () => {
     });
     setCategoryImageFile(null);
     setCategoryImagePreview(null);
+    setCategoryPresignedUrl(null);
     setModalMode('add');
     setShowModal(true);
   };
@@ -296,7 +319,7 @@ const CategoryManagement = () => {
   };
 
   // Handle edit subcategory
-  const handleEditSubcategory = (subcategory) => {
+  const handleEditSubcategory = async (subcategory) => {
     const subcategoryToEdit = {
       ...subcategory,
       category_id: selectedCategory.id
@@ -304,7 +327,24 @@ const CategoryManagement = () => {
 
     setSelectedSubcategory(subcategoryToEdit);
     setSubcategoryImageFile(null);
-    setSubcategoryImagePreview(subcategory.image_url || null);
+    setSubcategoryImagePreview(null);
+    
+    // Fetch presigned URL if subcategory has an image
+    if (subcategory.image_url) {
+      setLoadingPresignedUrls(true);
+      try {
+        const presignedUrl = await CategoryService.getSubcategoryImageUrl(subcategory.id);
+        setSubcategoryPresignedUrl(presignedUrl);
+      } catch (err) {
+        console.error('Failed to fetch subcategory image presigned URL:', err);
+        setSubcategoryPresignedUrl(null);
+      } finally {
+        setLoadingPresignedUrls(false);
+      }
+    } else {
+      setSubcategoryPresignedUrl(null);
+    }
+    
     setSubcategoryMode('edit');
     setShowSubcategoryModal(true);
   };
@@ -323,6 +363,7 @@ const CategoryManagement = () => {
     })
     setSubcategoryImageFile(null);
     setSubcategoryImagePreview(null);
+    setSubcategoryPresignedUrl(null);
     setSubcategoryMode('add');
     setShowSubcategoryModal(true);
   };
@@ -641,19 +682,22 @@ const CategoryManagement = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <button
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                      onClick={() => handleViewCategory(category)}
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => handleEditCategory(category)}
-                      className="text-green-600 hover:text-green-900 mr-3"
-                    >
-                      Edit
-                    </button>
-                   
+                    <div className="flex space-x-2">
+                      <button
+                        className="inline-flex items-center px-3 py-1 border border-blue-300 rounded-md text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        onClick={() => handleViewCategory(category)}
+                      >
+                        <i className="fas fa-eye mr-1"></i>
+                        View Sub Categories
+                      </button>
+                      <button
+                        onClick={() => handleEditCategory(category)}
+                        className="inline-flex items-center px-3 py-1 border border-green-300 rounded-md text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                      >
+                        <i className="fas fa-edit mr-1"></i>
+                        Edit Category
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -898,13 +942,22 @@ const CategoryManagement = () => {
                           onChange={handleCategoryImageChange}
                           className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
-                        {(categoryImagePreview || selectedCategory.image_url) && (
+                        {(categoryImagePreview || categoryPresignedUrl) && (
                           <div className="mt-2">
                             <img 
-                              src={categoryImagePreview || selectedCategory.image_url} 
+                              src={categoryImagePreview || categoryPresignedUrl} 
                               alt="Category preview" 
                               className="h-32 w-32 object-cover rounded-md border border-gray-300"
+                              onError={(e) => {
+                                console.error('Failed to load category image');
+                                e.target.style.display = 'none';
+                              }}
                             />
+                            {loadingPresignedUrls && (
+                              <div className="absolute inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center rounded-md">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                              </div>
+                            )}
                           </div>
                         )}
                         <p className="mt-1 text-xs text-gray-500">Upload an image (JPG, PNG, GIF, or WebP - max 5MB)</p>
@@ -1032,13 +1085,22 @@ const CategoryManagement = () => {
                         onChange={handleSubcategoryImageChange}
                         className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                       />
-                      {(subcategoryImagePreview || selectedSubcategory.image_url) && (
+                      {(subcategoryImagePreview || subcategoryPresignedUrl) && (
                         <div className="mt-2">
                           <img 
-                            src={subcategoryImagePreview || selectedSubcategory.image_url} 
+                            src={subcategoryImagePreview || subcategoryPresignedUrl} 
                             alt="Subcategory preview" 
                             className="h-32 w-32 object-cover rounded-md border border-gray-300"
+                            onError={(e) => {
+                              console.error('Failed to load subcategory image');
+                              e.target.style.display = 'none';
+                            }}
                           />
+                          {loadingPresignedUrls && (
+                            <div className="absolute inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center rounded-md">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                            </div>
+                          )}
                         </div>
                       )}
                       <p className="mt-1 text-xs text-gray-500">Upload an image (JPG, PNG, GIF, or WebP - max 5MB)</p>

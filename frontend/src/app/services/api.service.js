@@ -289,6 +289,36 @@ export const CategoryService = {
       console.error('Error getting subcategory image URL:', error);
       throw error;
     }
+  },
+
+  /**
+   * Get public presigned URL to view category image (for customer landing page)
+   * @param {number} categoryId - Category ID
+   * @returns {Promise<string>} - Presigned URL to view image
+   */
+  getPublicCategoryImageUrl: async (categoryId) => {
+    try {
+      const response = await apiClient.get(`/public/categories/${categoryId}/image`);
+      return response.data.url;
+    } catch (error) {
+      console.error('Error getting public category image URL:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get public presigned URL to view subcategory image (for customer landing page)
+   * @param {number} subcategoryId - Subcategory ID
+   * @returns {Promise<string>} - Presigned URL to view image
+   */
+  getPublicSubcategoryImageUrl: async (subcategoryId) => {
+    try {
+      const response = await apiClient.get(`/public/subcategories/${subcategoryId}/image`);
+      return response.data.url;
+    } catch (error) {
+      console.error('Error getting public subcategory image URL:', error);
+      throw error;
+    }
   }
 };
 

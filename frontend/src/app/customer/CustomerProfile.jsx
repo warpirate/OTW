@@ -245,14 +245,14 @@ const CustomerProfile = () => {
     <div className={`min-h-screen transition-colors ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
       <Header />
       
-      <div className="container-custom py-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="container-custom py-4 sm:py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-0">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+          <div className="mb-6 sm:mb-8">
+            <h1 className={`text-2xl sm:text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               My Profile
             </h1>
-            <p className={`mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            <p className={`mb-4 text-sm sm:text-base ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               Manage your personal information and preferences
             </p>
             
@@ -294,27 +294,27 @@ const CustomerProfile = () => {
 
 
           {/* Quick Access Menu */}
-          <div className={`card p-6 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          <div className={`card p-4 sm:p-6 mb-6 sm:mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
             <h2 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
               Quick Access
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
 
               <button
                 onClick={() => navigate('/payment-methods')}
-                className={`p-4 rounded-lg border text-left transition-colors ${
+                className={`p-3 sm:p-4 rounded-lg border text-left transition-colors ${
                   darkMode 
                     ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <CreditCard className="h-6 w-6 text-purple-600" />
-                  <div>
-                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className={`font-medium text-sm sm:text-base ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                       Payment Methods
                     </h3>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <p className={`text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       Manage UPI payments
                     </p>
                   </div>
@@ -323,19 +323,19 @@ const CustomerProfile = () => {
 
               <button
                 onClick={() => navigate('/payment-history')}
-                className={`p-4 rounded-lg border text-left transition-colors ${
+                className={`p-3 sm:p-4 rounded-lg border text-left transition-colors ${
                   darkMode 
                     ? 'border-gray-600 hover:border-gray-500 hover:bg-gray-700' 
                     : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <Shield className="h-6 w-6 text-purple-600" />
-                  <div>
-                    <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className={`font-medium text-sm sm:text-base ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                       Payment History
                     </h3>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <p className={`text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       Transaction records
                     </p>
                   </div>
@@ -345,17 +345,17 @@ const CustomerProfile = () => {
           </div>
 
           {/* Profile Card */}
-          <div className={`card p-8 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center space-x-4">
-                <div className="bg-purple-100 rounded-full p-4">
-                  <User className="h-8 w-8 text-purple-600" />
+          <div className={`card p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-6 space-y-4 sm:space-y-0">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="bg-purple-100 rounded-full p-3 sm:p-4 flex-shrink-0">
+                  <User className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
                 </div>
-                <div>
-                  <h2 className={`text-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                <div className="min-w-0">
+                  <h2 className={`text-xl sm:text-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'} truncate`}>
                     {profile.name || 'Customer'}
                   </h2>
-                  <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <p className={`text-sm sm:text-base ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     Customer Account
                   </p>
                 </div>
@@ -364,24 +364,24 @@ const CustomerProfile = () => {
               {!isEditing ? (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="btn-outline flex items-center space-x-2"
+                  className="btn-outline flex items-center space-x-2 text-sm sm:text-base px-3 sm:px-4 py-2 w-full sm:w-auto justify-center"
                 >
                   <Edit2 className="h-4 w-4" />
                   <span>Edit Profile</span>
                 </button>
               ) : (
-                <div className="flex space-x-2">
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="btn-brand flex items-center space-x-2 disabled:opacity-50"
+                    className="btn-brand flex items-center justify-center space-x-2 disabled:opacity-50 text-sm sm:text-base px-3 sm:px-4 py-2"
                   >
                     <Save className="h-4 w-4" />
                     <span>{saving ? 'Saving...' : 'Save'}</span>
                   </button>
                   <button
                     onClick={handleCancel}
-                    className="btn-outline flex items-center space-x-2"
+                    className="btn-outline flex items-center justify-center space-x-2 text-sm sm:text-base px-3 sm:px-4 py-2"
                   >
                     <X className="h-4 w-4" />
                     <span>Cancel</span>
@@ -393,12 +393,12 @@ const CustomerProfile = () => {
             {/* Profile Form */}
             <div className="max-w-2xl mx-auto">
               {/* Personal Information */}
-              <div className="space-y-6">
-                <h3 className={`text-xl font-bold text-center mb-8 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+              <div className="space-y-4 sm:space-y-6">
+                <h3 className={`text-lg sm:text-xl font-bold text-center mb-6 sm:mb-8 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Personal Information
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                   <div className="space-y-2">
                     <label className={`flex items-center text-sm font-semibold mb-3 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       <User className="h-4 w-4 mr-2 text-purple-600" />
@@ -517,52 +517,66 @@ const CustomerProfile = () => {
           </div>
 
           {/* Verification Documents */}
-          <div className={`card p-8 mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className={`text-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Verification</h2>
-                <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Upload a document to get verified and unlock discounts.</p>
+          <div className={`card p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className="mb-6">
+              <div className="mb-4">
+                <h2 className={`text-xl sm:text-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Verification</h2>
+                <p className={`text-sm sm:text-base ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Upload a document to get verified and unlock discounts.</p>
               </div>
-              <div className="flex items-center space-x-3">
-                <select
-                  value={customerType}
-                  onChange={(e) => setCustomerType(e.target.value)}
-                  disabled={hasExistingVerification}
-                  className={`px-3 py-2 rounded-lg border ${
-                    hasExistingVerification 
-                      ? darkMode ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                      : darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  <option value="student">Student</option>
-                  <option value="senior_citizen">Senior Citizen</option>
-                </select>
+              
+              {/* Mobile-optimized controls */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
+                  <select
+                    value={customerType}
+                    onChange={(e) => setCustomerType(e.target.value)}
+                    disabled={hasExistingVerification}
+                    className={`px-3 py-2 rounded-lg border text-sm sm:text-base ${
+                      hasExistingVerification 
+                        ? darkMode ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                        : darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                  >
+                    <option value="student">Student</option>
+                    <option value="senior_citizen">Senior Citizen</option>
+                  </select>
+                  
+                  <div className="flex space-x-2 flex-1">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,application/pdf"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                      id="docUploadInput"
+                      disabled={hasExistingVerification}
+                    />
+                    <label
+                      htmlFor="docUploadInput"
+                      className={`btn-outline cursor-pointer flex-1 text-center text-sm sm:text-base ${hasExistingVerification ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      Choose File
+                    </label>
+                    <button
+                      onClick={uploadVerification}
+                      disabled={!selectedFile || uploading || hasExistingVerification}
+                      className="btn-brand disabled:opacity-50 text-sm sm:text-base px-4 py-2"
+                    >
+                      {uploading ? 'Uploading...' : 'Upload'}
+                    </button>
+                  </div>
+                </div>
+                
                 {hasExistingVerification && (
-                  <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <div className={`text-xs sm:text-sm p-3 rounded-lg ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
                     You already have a {existingVerificationType === 'student' ? 'Student' : 'Senior Citizen'} verification
-                  </span>
+                  </div>
                 )}
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,application/pdf"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                  id="docUploadInput"
-                  disabled={hasExistingVerification}
-                />
-                <label
-                  htmlFor="docUploadInput"
-                  className={`btn-outline cursor-pointer ${hasExistingVerification ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  Choose File
-                </label>
-                <button
-                  onClick={uploadVerification}
-                  disabled={!selectedFile || uploading || hasExistingVerification}
-                  className="btn-brand disabled:opacity-50"
-                >
-                  {uploading ? 'Uploading...' : 'Upload'}
-                </button>
+                
+                {selectedFile && (
+                  <div className={`text-xs sm:text-sm p-3 rounded-lg ${darkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-50 text-blue-700'}`}>
+                    Selected: {selectedFile.name}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -573,57 +587,101 @@ const CustomerProfile = () => {
                   <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-purple-500 border-t-transparent"></div>
                 </div>
               ) : documents.length === 0 ? (
-                <div className="text-center py-10">
-                  <p>No verification documents uploaded yet.</p>
+                <div className="text-center py-8 sm:py-10">
+                  <p className="text-sm sm:text-base">No verification documents uploaded yet.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Type</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Uploaded</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`${darkMode ? 'bg-gray-800' : 'bg-white'} divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                      {documents.map((doc) => (
-                        <tr key={doc.id}>
-                          <td className="px-4 py-3 capitalize">
-                            {doc.document_type === 'student' ? 'Student' : 
-                             doc.document_type === 'senior_citizen' ? 'Senior Citizen' : 
-                             (doc.document_type || '').replace('_',' ')}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              doc.verification_status === 'verified' ? 'bg-green-100 text-green-800' :
-                              doc.verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {doc.verification_status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">{new Date(doc.uploaded_at).toLocaleString()}</td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const resp = await CustomerVerificationsService.presignView(doc.id);
-                                  if (resp?.url) window.open(resp.url, '_blank', 'noopener,noreferrer');
-                                } catch (e) {
-                                  toast.error('Unable to open document');
-                                }
-                              }}
-                              className="btn-outline"
-                            >
-                              View
-                            </button>
-                          </td>
+                /* Mobile-responsive documents display */
+                <div className="space-y-4 sm:space-y-0">
+                  {/* Desktop table view */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className={`${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Type</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Uploaded</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className={`${darkMode ? 'bg-gray-800' : 'bg-white'} divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                        {documents.map((doc) => (
+                          <tr key={doc.id}>
+                            <td className="px-4 py-3 capitalize">
+                              {doc.document_type === 'student' ? 'Student' : 
+                               doc.document_type === 'senior_citizen' ? 'Senior Citizen' : 
+                               (doc.document_type || '').replace('_',' ')}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                                doc.verification_status === 'verified' ? 'bg-green-100 text-green-800' :
+                                doc.verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {doc.verification_status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm">{new Date(doc.uploaded_at).toLocaleString()}</td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const resp = await CustomerVerificationsService.presignView(doc.id);
+                                    if (resp?.url) window.open(resp.url, '_blank', 'noopener,noreferrer');
+                                  } catch (e) {
+                                    toast.error('Unable to open document');
+                                  }
+                                }}
+                                className="btn-outline text-sm"
+                              >
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Mobile card view */}
+                  <div className="sm:hidden space-y-3">
+                    {documents.map((doc) => (
+                      <div key={doc.id} className={`p-4 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'}`}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h4 className={`font-medium text-sm ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {doc.document_type === 'student' ? 'Student' : 
+                               doc.document_type === 'senior_citizen' ? 'Senior Citizen' : 
+                               (doc.document_type || '').replace('_',' ')}
+                            </h4>
+                            <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                              {new Date(doc.uploaded_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            doc.verification_status === 'verified' ? 'bg-green-100 text-green-800' :
+                            doc.verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {doc.verification_status}
+                          </span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const resp = await CustomerVerificationsService.presignView(doc.id);
+                              if (resp?.url) window.open(resp.url, '_blank', 'noopener,noreferrer');
+                            } catch (e) {
+                              toast.error('Unable to open document');
+                            }
+                          }}
+                          className="btn-outline w-full text-sm"
+                        >
+                          View Document
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -636,4 +694,4 @@ const CustomerProfile = () => {
   );
 };
 
-export default CustomerProfile; 
+export default CustomerProfile;
