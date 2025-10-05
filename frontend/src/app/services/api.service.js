@@ -16,8 +16,18 @@ const apiClient = axios.create({
 // Add a request interceptor to include JWT token in the headers
 apiClient.interceptors.request.use(
   (config) => {
-    // Get token from AuthService based on current role
-    const token = AuthService.getToken();
+    // Check if we're in admin context by looking at the URL path
+    const isAdminContext = window.location.pathname.includes('/admin');
+    
+    let token = null;
+    if (isAdminContext) {
+      // For admin context, prioritize admin tokens
+      token = AuthService.getToken('admin') || AuthService.getToken('superadmin');
+    } else {
+      // For non-admin context, use current role token
+      token = AuthService.getToken();
+    }
+    
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
@@ -33,11 +43,19 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      // Use AuthService for proper token cleanup
-      AuthService.logout();
-      // Redirect to login if not already there
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+      // Check if we're in admin context
+      const isAdminContext = window.location.pathname.includes('/admin');
+      
+      if (isAdminContext) {
+        // For admin context, logout admin and redirect to admin login
+        AuthService.logout(null, 'admin');
+        window.location.href = '/admin/login';
+      } else {
+        // For non-admin context, use general logout
+        AuthService.logout();
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);
