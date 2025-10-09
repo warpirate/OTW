@@ -60,6 +60,10 @@ const BookingTracking = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [hasRated, setHasRated] = useState(false);
+  
+  // OTP state
+  const [generatedOTP, setGeneratedOTP] = useState(null);
+  const [otpGenerated, setOtpGenerated] = useState(false);
 
   // Status flow configuration
   const statusFlow = {
@@ -103,7 +107,7 @@ const BookingTracking = () => {
       icon: MapPin, 
       color: 'text-green-600', 
       bgColor: 'bg-green-100',
-      description: 'Your provider has arrived at your location.'
+      description: 'Your provider has arrived at your location. Generate OTP to verify and start service.'
     },
     in_progress: { 
       label: 'Service Started', 
@@ -187,6 +191,14 @@ const BookingTracking = () => {
             setShowPaymentModal(true);
           }, 1000);
         }
+      }
+
+      // Handle service start (OTP verified by worker)
+      if (data.status === 'in_progress') {
+        // Clear OTP display when service starts
+        setGeneratedOTP(null);
+        setOtpGenerated(false);
+        toast.success('Service started! Provider has verified the code.');
       }
 
       // Handle service completion
@@ -337,6 +349,33 @@ const BookingTracking = () => {
       toast.error('Failed to submit rating');
     } finally {
       setSubmittingRating(false);
+    }
+  };
+
+  // Generate OTP for service verification
+  const generateOTP = async () => {
+    try {
+      const token = AuthService.getToken('customer');
+      const response = await fetch(`${API_BASE_URL}/api/customer/bookings/${bookingId}/generate-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setGeneratedOTP(data.otp);
+        setOtpGenerated(true);
+        toast.success('OTP generated successfully! Share this code with your service provider.');
+      } else {
+        toast.error(data.message || 'Failed to generate OTP.');
+      }
+    } catch (error) {
+      console.error('OTP generation error:', error);
+      toast.error('Failed to generate OTP. Please try again.');
     }
   };
 
@@ -522,6 +561,43 @@ const BookingTracking = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* OTP Section - Show when provider has arrived */}
+          {currentStatus === 'arrived' && (
+            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6 mb-6`}>
+              <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Service Verification
+              </h3>
+              
+              {!otpGenerated ? (
+                <div className="text-center">
+                  <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Your provider has arrived! Generate an OTP to verify their presence and start the service.
+                  </p>
+                  <button
+                    onClick={generateOTP}
+                    className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors"
+                  >
+                    Generate OTP
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Share this code with your service provider:
+                  </p>
+                  <div className={`inline-block px-8 py-4 rounded-lg border-2 border-purple-600 ${darkMode ? 'bg-gray-700' : 'bg-purple-50'} mb-4`}>
+                    <span className="text-4xl font-bold text-purple-600 tracking-widest">
+                      {generatedOTP}
+                    </span>
+                  </div>
+                  <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                    The provider will enter this code to start the service
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

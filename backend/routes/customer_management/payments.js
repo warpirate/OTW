@@ -237,7 +237,243 @@ router.delete('/upi-methods/:id', verifyToken, async (req, res) => {
   }
 });
 
-// POST /razorpay/create-order - Create Razorpay order for checkout
+// GET /payment-status/:booking_id - Check payment status for booking
+router.get('/payment-status/:booking_id', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const bookingId = req.params.booking_id;
+
+    // Check booking exists and belongs to user
+    const [bookings] = await pool.query(
+      `SELECT b.id, b.payment_status, b.payment_method, b.payment_completed_at, b.total_amount
+       FROM bookings b 
+       WHERE b.id = ? AND b.customer_id = ?`,
+      [bookingId, userId]
+    );
+
+    if (bookings.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    const booking = bookings[0];
+
+    // Get latest payment record for this booking
+    const [payments] = await pool.query(
+      `SELECT p.*, p.status as payment_status, p.razorpay_payment_id, p.captured_at
+       FROM payments p 
+       WHERE p.booking_id = ? AND p.user_id = ?
+       ORDER BY p.created_at DESC LIMIT 1`,
+      [bookingId, userId]
+    );
+
+    const latestPayment = payments.length > 0 ? payments[0] : null;
+
+    // Determine overall payment status
+    const isPaymentCompleted = booking.payment_status === 'paid' || 
+                              booking.payment_status === 'completed' ||
+                              (latestPayment && latestPayment.payment_status === 'captured');
+
+    res.json({
+      success: true,
+      booking_id: bookingId,
+      payment_completed: isPaymentCompleted,
+      booking_payment_status: booking.payment_status,
+      payment_method: booking.payment_method,
+      payment_completed_at: booking.payment_completed_at,
+      total_amount: booking.total_amount,
+      latest_payment: latestPayment ? {
+        id: latestPayment.id,
+        status: latestPayment.payment_status,
+        razorpay_payment_id: latestPayment.razorpay_payment_id,
+        razorpay_order_id: latestPayment.razorpay_order_id,
+        amount: latestPayment.amount_paid,
+        captured_at: latestPayment.captured_at,
+        created_at: latestPayment.created_at
+      } : null
+    });
+
+  } catch (error) {
+    console.error('Error checking payment status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check payment status'
+    });
+  }
+});
+
+// GET /checkout-session/:booking_id - Get or create checkout session for booking
+router.get('/checkout-session/:booking_id', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const bookingId = req.params.booking_id;
+
+    // First check if booking exists and belongs to user
+    const [bookings] = await pool.query(
+      `SELECT b.*, b.payment_status, b.payment_method, b.payment_completed_at, b.total_amount
+       FROM bookings b 
+       WHERE b.id = ? AND b.customer_id = ?`,
+      [bookingId, userId]
+    );
+
+    if (bookings.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found'
+      });
+    }
+
+    const booking = bookings[0];
+
+    // Check if payment is already completed
+    if (booking.payment_status === 'paid' || booking.payment_status === 'completed') {
+      return res.json({
+        success: true,
+        payment_completed: true,
+        message: 'Payment already completed',
+        booking_id: bookingId,
+        payment_method: booking.payment_method,
+        payment_completed_at: booking.payment_completed_at
+      });
+    }
+
+    // Check for existing pending payment
+    const [existingPayments] = await pool.query(
+      `SELECT p.*, p.razorpay_order_id 
+       FROM payments p 
+       WHERE p.booking_id = ? AND p.user_id = ? AND p.status IN ('created', 'authorized')
+       ORDER BY p.created_at DESC LIMIT 1`,
+      [bookingId, userId]
+    );
+
+    // If there's an existing pending payment, return it
+    if (existingPayments.length > 0) {
+      const existingPayment = existingPayments[0];
+      
+      // Get user details for prefill
+      const [userRows] = await pool.query(
+        `SELECT u.name, u.email, u.phone_number FROM users u WHERE u.id = ?`,
+        [userId]
+      );
+      const user = userRows[0] || {};
+
+      return res.json({
+        success: true,
+        payment_completed: false,
+        existing_session: true,
+        order: {
+          id: existingPayment.razorpay_order_id,
+          amount: existingPayment.amount_paid * 100, // Convert to paise
+          currency: 'INR',
+          key: process.env.RAZORPAY_KEY_ID,
+          name: "OMW - On My Way",
+          description: `Payment for ${booking.booking_type || 'Service'}`,
+          prefill: {
+            name: user.name || '',
+            email: user.email || '',
+            contact: user.phone_number || ''
+          },
+          theme: { color: "#8B5CF6" },
+          method: {
+            upi: true,
+            card: true,
+            netbanking: true,
+            emi: false,
+            paylater: true
+          }
+        },
+        payment_id: existingPayment.id,
+        booking_id: bookingId
+      });
+    }
+
+    // Create new checkout session
+    const amount = booking.total_amount || 0;
+    if (amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid booking amount'
+      });
+    }
+
+    // Generate transaction ID
+    const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+    // Create Razorpay order first (best practice)
+    const orderResult = await createUPIOrder(amount, 'INR', transactionId);
+    
+    if (!orderResult.success) {
+      console.error('Razorpay order creation failed:', orderResult.error);
+      return res.status(500).json({
+        success: false,
+        message: `Failed to create payment order: ${orderResult.error || 'Unknown error'}`,
+        error_details: orderResult.error
+      });
+    }
+
+    // Create payment record with order ID
+    const [paymentResult] = await pool.query(
+      `INSERT INTO payments (user_id, booking_id, amount_paid, status, method, payment_type, razorpay_order_id, created_at)
+       VALUES (?, ?, ?, 'created', 'razorpay', 'razorpay', ?, NOW())`,
+      [userId, bookingId, amount, orderResult.order.id]
+    );
+
+    // Get user details for prefill
+    const [userRows] = await pool.query(
+      `SELECT u.name, u.email, u.phone_number FROM users u WHERE u.id = ?`,
+      [userId]
+    );
+    const user = userRows[0] || {};
+
+    // Return checkout session
+    res.json({
+      success: true,
+      payment_completed: false,
+      existing_session: false,
+      order: {
+        id: orderResult.order.id,
+        amount: orderResult.order.amount,
+        currency: orderResult.order.currency,
+        key: process.env.RAZORPAY_KEY_ID,
+        name: "OMW - On My Way",
+        description: `Payment for ${booking.booking_type || 'Service'}`,
+        prefill: {
+          name: user.name || '',
+          email: user.email || '',
+          contact: user.phone_number || ''
+        },
+        theme: { color: "#8B5CF6" },
+        method: {
+          upi: true,
+          card: true,
+          netbanking: true,
+          emi: false,
+          paylater: true
+        },
+        config: {
+          display: {
+            sequence: ['upi', 'card', 'netbanking'],
+            preferences: { show_default_blocks: true }
+          }
+        }
+      },
+      payment_id: paymentResult.insertId,
+      booking_id: bookingId,
+      transaction_id: transactionId
+    });
+
+  } catch (error) {
+    console.error('Error creating checkout session:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create checkout session'
+    });
+  }
+});
+
+// POST /razorpay/create-order - Create Razorpay order for checkout (Legacy - kept for compatibility)
 router.post('/razorpay/create-order', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -258,33 +494,19 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
       });
     }
 
+    // If booking_id is provided, redirect to checkout session
+    if (booking_id) {
+      return res.redirect(307, `/api/payments/checkout-session/${booking_id}`);
+    }
+
     // Generate transaction ID
     const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-    // Create payment record (amount is already in paise from mobile app)
-    const [paymentResult] = await pool.query(
-      `INSERT INTO payments (user_id, booking_id, amount_paid, status, method, payment_type, created_at)
-       VALUES (?, ?, ?, 'created', 'razorpay', 'razorpay', NOW())`,
-      [userId, booking_id || null, amount] // amount is in paise
-    );
-
-    // Create Razorpay order
-    console.log('Creating Razorpay order for amount (paise):', amount, 'transactionId:', transactionId);
-    console.log('Amount in rupees:', amount / 100);
-    console.log('Razorpay Key ID:', process.env.RAZORPAY_KEY_ID ? 'Present' : 'Missing');
-    
-    // Mobile app already sends amount in paise, so pass directly without conversion
-    const orderResult = await createUPIOrderDirectPaise(amount, 'INR', transactionId);
+    // Create Razorpay order first
+    const orderResult = await createUPIOrder(amount, 'INR', transactionId);
     
     if (!orderResult.success) {
       console.error('Razorpay order creation failed:', orderResult.error);
-      
-      // Update payment as failed
-      await pool.query(
-        `UPDATE payments SET status = 'failed' WHERE id = ?`,
-        [paymentResult.insertId]
-      );
-
       return res.status(500).json({
         success: false,
         message: `Failed to create payment order: ${orderResult.error || 'Unknown error'}`,
@@ -292,22 +514,18 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
       });
     }
 
-    // Update payment record with Razorpay order details
-    await pool.query(
-      `UPDATE payments 
-       SET razorpay_order_id = ?
-       WHERE id = ?`,
-      [orderResult.order.id, paymentResult.insertId]
+    // Create payment record with order ID
+    const [paymentResult] = await pool.query(
+      `INSERT INTO payments (user_id, booking_id, amount_paid, status, method, payment_type, razorpay_order_id, created_at)
+       VALUES (?, ?, ?, 'created', 'razorpay', 'razorpay', ?, NOW())`,
+      [userId, booking_id || null, amount, orderResult.order.id]
     );
 
     // Get user details for prefill
     const [userRows] = await pool.query(
-      `SELECT u.name, u.email, u.phone_number
-       FROM users u 
-       WHERE u.id = ?`,
+      `SELECT u.name, u.email, u.phone_number FROM users u WHERE u.id = ?`,
       [userId]
     );
-
     const user = userRows[0] || {};
     const userPhone = user.phone_number || user_details?.contact || '';
 
@@ -326,9 +544,7 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
           email: user.email || user_details?.email || '',
           contact: userPhone
         },
-        theme: {
-          color: "#8B5CF6"  // Purple theme to match OMW branding
-        },
+        theme: { color: "#8B5CF6" },
         method: {
           upi: true,
           card: true,
@@ -339,9 +555,7 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
         config: {
           display: {
             sequence: ['upi', 'card', 'netbanking'],
-            preferences: {
-              show_default_blocks: true
-            }
+            preferences: { show_default_blocks: true }
           }
         }
       },
@@ -890,22 +1104,37 @@ router.post('/upi/refund/:paymentId', verifyToken, async (req, res) => {
 
 // POST /razorpay/payment-success - Handle Razorpay payment success
 router.post('/razorpay/payment-success', verifyToken, async (req, res) => {
+  const connection = await pool.getConnection();
+  
   try {
+    await connection.beginTransaction();
+    
     const userId = req.user.id;
     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
 
     console.log('Processing Razorpay payment success:', {
       payment_id: razorpay_payment_id,
-      order_id: razorpay_order_id
+      order_id: razorpay_order_id,
+      user_id: userId
     });
 
-    // Find the payment record by order ID
-    const [payments] = await pool.query(
-      'SELECT * FROM payments WHERE razorpay_order_id = ? AND user_id = ?',
+    // Validate required fields
+    if (!razorpay_payment_id || !razorpay_order_id) {
+      await connection.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Payment ID and Order ID are required'
+      });
+    }
+
+    // Find the payment record by order ID with row lock to prevent race conditions
+    const [payments] = await connection.query(
+      'SELECT * FROM payments WHERE razorpay_order_id = ? AND user_id = ? FOR UPDATE',
       [razorpay_order_id, userId]
     );
 
     if (payments.length === 0) {
+      await connection.rollback();
       return res.status(404).json({
         success: false,
         message: 'Payment record not found'
@@ -914,42 +1143,277 @@ router.post('/razorpay/payment-success', verifyToken, async (req, res) => {
 
     const payment = payments[0];
 
+    // Check if payment is already processed to prevent duplicate processing
+    if (payment.status === 'captured' || payment.status === 'completed') {
+      await connection.rollback();
+      console.log('Payment already processed:', payment.id);
+      return res.json({
+        success: true,
+        message: 'Payment already processed',
+        payment_id: payment.id,
+        booking_id: payment.booking_id,
+        already_processed: true
+      });
+    }
+
+    // Verify payment signature (security best practice)
+    try {
+      const { validateWebhookSignature } = require('../../config/razorpay');
+      const isValidSignature = validateWebhookSignature(
+        razorpay_order_id + '|' + razorpay_payment_id,
+        razorpay_signature
+      );
+      
+      if (!isValidSignature) {
+        await connection.rollback();
+        console.error('Invalid payment signature:', razorpay_signature);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid payment signature'
+        });
+      }
+    } catch (signatureError) {
+      console.warn('Signature validation failed, proceeding without verification:', signatureError.message);
+    }
+
     // Update payment record with success details
-    await pool.query(
+    await connection.query(
       `UPDATE payments 
        SET razorpay_payment_id = ?, 
            status = 'captured', 
-           captured_at = NOW()
+           captured_at = NOW(),
+           updated_at = NOW()
        WHERE id = ?`,
       [razorpay_payment_id, payment.id]
     );
 
     // Update booking payment status if booking_id exists
     if (payment.booking_id) {
-      await pool.query(
-        `UPDATE bookings 
-         SET payment_status = 'paid', 
-             payment_method = 'Razorpay', 
-             payment_completed_at = NOW()
-         WHERE id = ?`,
+      // Check current booking payment status to avoid overwriting
+      const [bookings] = await connection.query(
+        'SELECT payment_status FROM bookings WHERE id = ?',
         [payment.booking_id]
       );
+      
+      if (bookings.length > 0 && bookings[0].payment_status !== 'paid') {
+        await connection.query(
+          `UPDATE bookings 
+           SET payment_status = 'paid', 
+               payment_method = 'Razorpay', 
+               payment_completed_at = NOW(),
+               updated_at = NOW()
+           WHERE id = ?`,
+          [payment.booking_id]
+        );
+        
+        console.log('Booking payment status updated:', payment.booking_id);
+      } else {
+        console.log('Booking payment already marked as paid:', payment.booking_id);
+      }
     }
+
+    await connection.commit();
+    
+    console.log('Payment processing completed successfully:', payment.id);
 
     res.json({
       success: true,
       message: 'Payment processed successfully',
       payment_id: payment.id,
-      booking_id: payment.booking_id
+      booking_id: payment.booking_id,
+      payment_status: 'captured'
     });
 
   } catch (error) {
+    await connection.rollback();
     console.error('Error processing Razorpay payment success:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to process payment success'
     });
+  } finally {
+    connection.release();
   }
 });
+
+// POST /razorpay/webhook - Handle Razorpay webhooks
+router.post('/razorpay/webhook', async (req, res) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    const webhookSignature = req.headers['x-razorpay-signature'];
+    const webhookBody = JSON.stringify(req.body);
+    
+    // Verify webhook signature
+    const { validateWebhookSignature } = require('../../config/razorpay');
+    const isValidSignature = validateWebhookSignature(webhookBody, webhookSignature);
+    
+    if (!isValidSignature) {
+      console.error('Invalid webhook signature');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+
+    const { event, payload } = req.body;
+    console.log('Received Razorpay webhook:', event, payload?.payment?.entity?.id);
+
+    await connection.beginTransaction();
+
+    switch (event) {
+      case 'payment.captured':
+        await handlePaymentCaptured(connection, payload.payment.entity);
+        break;
+      case 'payment.failed':
+        await handlePaymentFailed(connection, payload.payment.entity);
+        break;
+      case 'order.paid':
+        await handleOrderPaid(connection, payload.order.entity);
+        break;
+      default:
+        console.log('Unhandled webhook event:', event);
+    }
+
+    await connection.commit();
+    res.status(200).json({ status: 'ok' });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  } finally {
+    connection.release();
+  }
+});
+
+// Helper function to handle payment captured webhook
+async function handlePaymentCaptured(connection, paymentEntity) {
+  const { id: paymentId, order_id: orderId, amount, status } = paymentEntity;
+  
+  console.log('Processing payment.captured webhook:', { paymentId, orderId, amount, status });
+  
+  // Find payment record by order ID
+  const [payments] = await connection.query(
+    'SELECT * FROM payments WHERE razorpay_order_id = ? FOR UPDATE',
+    [orderId]
+  );
+  
+  if (payments.length === 0) {
+    console.warn('Payment record not found for order:', orderId);
+    return;
+  }
+  
+  const payment = payments[0];
+  
+  // Skip if already processed
+  if (payment.status === 'captured') {
+    console.log('Payment already captured:', payment.id);
+    return;
+  }
+  
+  // Update payment status
+  await connection.query(
+    `UPDATE payments 
+     SET razorpay_payment_id = ?, 
+         status = 'captured', 
+         captured_at = NOW(),
+         updated_at = NOW()
+     WHERE id = ?`,
+    [paymentId, payment.id]
+  );
+  
+  // Update booking if exists
+  if (payment.booking_id) {
+    await connection.query(
+      `UPDATE bookings 
+       SET payment_status = 'paid', 
+           payment_method = 'Razorpay', 
+           payment_completed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = ? AND payment_status != 'paid'`,
+      [payment.booking_id]
+    );
+  }
+  
+  console.log('Payment captured via webhook:', payment.id);
+}
+
+// Helper function to handle payment failed webhook
+async function handlePaymentFailed(connection, paymentEntity) {
+  const { id: paymentId, order_id: orderId, error_description } = paymentEntity;
+  
+  console.log('Processing payment.failed webhook:', { paymentId, orderId, error_description });
+  
+  // Find payment record by order ID
+  const [payments] = await connection.query(
+    'SELECT * FROM payments WHERE razorpay_order_id = ? FOR UPDATE',
+    [orderId]
+  );
+  
+  if (payments.length === 0) {
+    console.warn('Payment record not found for order:', orderId);
+    return;
+  }
+  
+  const payment = payments[0];
+  
+  // Update payment status
+  await connection.query(
+    `UPDATE payments 
+     SET razorpay_payment_id = ?, 
+         status = 'failed', 
+         failure_reason = ?,
+         updated_at = NOW()
+     WHERE id = ?`,
+    [paymentId, error_description, payment.id]
+  );
+  
+  console.log('Payment failed via webhook:', payment.id);
+}
+
+// Helper function to handle order paid webhook
+async function handleOrderPaid(connection, orderEntity) {
+  const { id: orderId, amount_paid, status } = orderEntity;
+  
+  console.log('Processing order.paid webhook:', { orderId, amount_paid, status });
+  
+  // Find payment record by order ID
+  const [payments] = await connection.query(
+    'SELECT * FROM payments WHERE razorpay_order_id = ? FOR UPDATE',
+    [orderId]
+  );
+  
+  if (payments.length === 0) {
+    console.warn('Payment record not found for order:', orderId);
+    return;
+  }
+  
+  const payment = payments[0];
+  
+  // Update payment status if not already captured
+  if (payment.status !== 'captured') {
+    await connection.query(
+      `UPDATE payments 
+       SET status = 'captured', 
+           captured_at = NOW(),
+           updated_at = NOW()
+       WHERE id = ?`,
+      [payment.id]
+    );
+    
+    // Update booking if exists
+    if (payment.booking_id) {
+      await connection.query(
+        `UPDATE bookings 
+         SET payment_status = 'paid', 
+             payment_method = 'Razorpay', 
+             payment_completed_at = NOW(),
+             updated_at = NOW()
+         WHERE id = ? AND payment_status != 'paid'`,
+        [payment.booking_id]
+      );
+    }
+  }
+  
+  console.log('Order paid via webhook:', payment.id);
+}
 
 module.exports = router;

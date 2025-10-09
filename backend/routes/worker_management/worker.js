@@ -228,12 +228,13 @@ class WorkerService {
       await connection.query(
         `UPDATE providers p JOIN users u ON p.user_id = u.id SET 
           p.experience_years = ?, p.bio = ?, p.service_radius_km = ?,
-          u.phone_number = ?, p.updated_at = NOW()
+          p.active = ?, u.phone_number = ?, p.updated_at = NOW()
          WHERE p.user_id = ?`,
         [
           updateData.experience_years,
           updateData.bio,
           updateData.service_radius_km,
+          updateData.active,
           updateData.phone_number,
           userId
         ]
