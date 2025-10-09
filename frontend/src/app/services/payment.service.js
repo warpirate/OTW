@@ -179,15 +179,68 @@ const PaymentService = {
     }
   },
 
+  // Payment Status Check
+  checkPaymentStatus: async (bookingId) => {
+    try {
+      const response = await apiClient.get(`/payment-status/${bookingId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      throw error;
+    }
+  },
+
+  // Clean Checkout Session
+  getCheckoutSession: async (bookingId) => {
+    try {
+      const response = await apiClient.get(`/checkout-session/${bookingId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting checkout session:', error);
+      throw error;
+    }
+  },
+
   // Razorpay Checkout
   razorpay: {
-    // Create order for Razorpay checkout
+    // Create order for Razorpay checkout (Legacy - for non-booking payments)
     createOrder: async (paymentData) => {
       try {
+        // If booking_id is provided, use clean checkout session
+        if (paymentData.booking_id) {
+          console.log('Using clean checkout session for booking payment');
+          return await PaymentService.getCheckoutSession(paymentData.booking_id);
+        }
+        
+        // Fallback to legacy order creation
         const response = await apiClient.post('/razorpay/create-order', paymentData);
         return response.data;
       } catch (error) {
         console.error('Error creating Razorpay order:', error);
+        throw error;
+      }
+    },
+
+    // Create clean checkout session for booking payments
+    createCheckoutSession: async (bookingId) => {
+      try {
+        console.log('Creating clean checkout session for booking:', bookingId);
+        const response = await apiClient.get(`/checkout-session/${bookingId}`);
+        return response.data;
+      } catch (error) {
+        console.error('Error creating checkout session:', error);
+        throw error;
+      }
+    },
+
+    // Check payment status before showing payment UI
+    checkBookingPaymentStatus: async (bookingId) => {
+      try {
+        console.log('Checking payment status for booking:', bookingId);
+        const response = await apiClient.get(`/payment-status/${bookingId}`);
+        return response.data;
+      } catch (error) {
+        console.error('Error checking booking payment status:', error);
         throw error;
       }
     },
