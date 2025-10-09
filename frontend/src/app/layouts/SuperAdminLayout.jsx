@@ -14,11 +14,13 @@ const SuperAdminLayout = () => {
       <div className="w-64 bg-gray-900 text-white">
         <div className="p-4">
           <h1 className="text-xl font-bold mb-6">OMW Super Admin</h1>
-          <nav className="flex flex-col space-y-2">
+          <nav className="flex flex-col">
             <NavLink
               to="/superadmin/dashboard"
               className={({ isActive }) =>
-                isActive ? 'nav-tab-active' : 'nav-tab-inactive'
+                isActive 
+                  ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                  : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
               }
             >
               <i className="fas fa-tachometer-alt mr-2"></i> Dashboard
@@ -26,7 +28,9 @@ const SuperAdminLayout = () => {
             <NavLink
               to="/superadmin/admins"
               className={({ isActive }) =>
-                isActive ? 'nav-tab-active' : 'nav-tab-inactive'
+                isActive 
+                  ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                  : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
               }
             >
               <i className="fas fa-user-shield mr-2"></i> Admin Management
@@ -34,7 +38,9 @@ const SuperAdminLayout = () => {
             <NavLink
               to="/superadmin/settings"
               className={({ isActive }) =>
-                isActive ? 'nav-tab-active' : 'nav-tab-inactive'
+                isActive 
+                  ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                  : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
               }
             >
               <i className="fas fa-cogs mr-2"></i> System Settings
@@ -42,19 +48,48 @@ const SuperAdminLayout = () => {
             <NavLink
               to="/superadmin/audit-logs"
               className={({ isActive }) =>
-                isActive ? 'nav-tab-active' : 'nav-tab-inactive'
+                isActive 
+                  ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                  : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
               }
             >
               <i className="fas fa-clipboard-list mr-2"></i> Audit Logs
             </NavLink>
-            <NavLink
-              to="/superadmin/reports"
-              className={({ isActive }) =>
-                isActive ? 'nav-tab-active' : 'nav-tab-inactive'
-              }
-            >
-              <i className="fas fa-file-alt mr-2"></i> Reports
-            </NavLink>
+            
+            {/* Site Management Section */}
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <p className="text-xs uppercase text-gray-400 mb-2 px-2">Site Management</p>
+              <NavLink
+                to="/superadmin/site-settings"
+                className={({ isActive }) =>
+                  isActive 
+                    ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                    : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
+                }
+              >
+                <i className="fas fa-globe mr-2"></i> Site Settings
+              </NavLink>
+              <NavLink
+                to="/superadmin/content-pages"
+                className={({ isActive }) =>
+                  isActive 
+                    ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                    : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
+                }
+              >
+                <i className="fas fa-file-alt mr-2"></i> Content Pages
+              </NavLink>
+              <NavLink
+                to="/superadmin/social-links"
+                className={({ isActive }) =>
+                  isActive 
+                    ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                    : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
+                }
+              >
+                <i className="fas fa-share-alt mr-2"></i> Social Links
+              </NavLink>
+            </div>
           </nav>
         </div>
       </div>
@@ -66,21 +101,8 @@ const SuperAdminLayout = () => {
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-semibold text-gray-800">Super Admin Panel</h1>
             <div className="flex items-center space-x-4">
-              <div className="relative">
-                <button className="btn-icon">
-                  <i className="fas fa-bell text-gray-600"></i>
-                </button>
-                <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-              </div>
-              <div className="flex items-center">
-                <img
-                  src="https://via.placeholder.com/40"
-                  alt="Super Admin"
-                  className="w-8 h-8 rounded-full mr-2"
-                />
-                <div className="text-sm">
-                  <p className="font-medium text-gray-700">Super Admin</p>
-                </div>
+              <div className="text-sm">
+                <p className="font-medium text-gray-700">Super Admin</p>
               </div>
               <button 
                 className="btn-icon" 

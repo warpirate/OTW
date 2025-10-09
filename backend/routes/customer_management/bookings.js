@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
-const verifyToken = require('../middlewares/verify_token');
+const verifyToken = require('../../middlewares/verify_token');
 
 // Haversine distance calculation function
 function haversineDistance(lat1, lon1, lat2, lon2) {

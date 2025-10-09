@@ -1,151 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import AuditLogsService from '../../services/auditlogs.service';
 
-// Mock audit log data
-const initialAuditLogs = [
-  {
-    id: 1,
-    user: {
-      name: 'Sneha Kumar',
-      email: 'sneha@omwhub.com',
-      role: 'Admin'
-    },
-    action: 'USER_APPROVE',
-    description: 'Approved user registration for Ankit Sharma',
-    ipAddress: '103.86.175.42',
-    timestamp: '2023-07-14 10:23:15',
-    resource: 'User #4528'
+// Map backend item to UI-friendly shape
+const mapLogItem = (item) => ({
+  id: item.id,
+  user: {
+    name: item.user_name || item.user?.name || 'System',
+    email: item.user_email || item.user?.email || '',
+    role: item.user_role || item.user?.role || item.role || ''
   },
-  {
-    id: 2,
-    user: {
-      name: 'Rahul Verma',
-      email: 'rahul@omwhub.com',
-      role: 'Admin'
-    },
-    action: 'CATEGORY_UPDATE',
-    description: 'Updated pricing for Home Cleaning services',
-    ipAddress: '103.86.175.36',
-    timestamp: '2023-07-14 09:45:22',
-    resource: 'Category #3'
-  },
-  {
-    id: 3,
-    user: {
-      name: 'Priya Singh',
-      email: 'priya@omwhub.com',
-      role: 'Admin'
-    },
-    action: 'DISPUTE_RESOLVE',
-    description: 'Resolved customer dispute for booking #BOOK1234',
-    ipAddress: '103.86.175.39',
-    timestamp: '2023-07-13 16:30:10',
-    resource: 'Dispute #45'
-  },
-  {
-    id: 4,
-    user: {
-      name: 'Vikram Malhotra',
-      email: 'vikram@omwhub.com',
-      role: 'Admin'
-    },
-    action: 'CATEGORY_CREATE',
-    description: 'Added new service subcategory: AC Repair',
-    ipAddress: '103.86.175.41',
-    timestamp: '2023-07-13 14:15:33',
-    resource: 'Category #8'
-  },
-  {
-    id: 5,
-    user: {
-      name: 'Neha Patel',
-      email: 'neha@omwhub.com',
-      role: 'Admin'
-    },
-    action: 'USER_REJECT',
-    description: 'Rejected worker application for Sanjay Gupta',
-    ipAddress: '103.86.175.40',
-    timestamp: '2023-07-13 11:20:45',
-    resource: 'User #4532'
-  },
-  {
-    id: 6,
-    user: {
-      name: 'Sameer Khan',
-      email: 'sameer@omwhub.com',
-      role: 'SuperAdmin'
-    },
-    action: 'ADMIN_CREATE',
-    description: 'Created new admin account for Neha Patel',
-    ipAddress: '103.86.175.38',
-    timestamp: '2023-07-12 16:05:12',
-    resource: 'Admin #5'
-  },
-  {
-    id: 7,
-    user: {
-      name: 'Sameer Khan',
-      email: 'sameer@omwhub.com',
-      role: 'SuperAdmin'
-    },
-    action: 'SETTINGS_UPDATE',
-    description: 'Updated system security settings',
-    ipAddress: '103.86.175.38',
-    timestamp: '2023-07-12 15:50:28',
-    resource: 'System Settings'
-  },
-  {
-    id: 8,
-    user: {
-      name: 'System',
-      email: 'system@omwhub.com',
-      role: 'System'
-    },
-    action: 'BACKUP_CREATED',
-    description: 'Automated database backup created',
-    ipAddress: 'localhost',
-    timestamp: '2023-07-12 03:00:01',
-    resource: 'Database'
-  },
-  {
-    id: 9,
-    user: {
-      name: 'Sneha Kumar',
-      email: 'sneha@omwhub.com',
-      role: 'Admin'
-    },
-    action: 'LOGIN',
-    description: 'User logged in successfully',
-    ipAddress: '103.86.175.42',
-    timestamp: '2023-07-14 09:05:22',
-    resource: 'Auth System'
-  },
-  {
-    id: 10,
-    user: {
-      name: 'Vikram Malhotra',
-      email: 'vikram@omwhub.com',
-      role: 'Admin'
-    },
-    action: 'PASSWORD_RESET',
-    description: 'Reset password for own account',
-    ipAddress: '103.86.175.41',
-    timestamp: '2023-07-11 10:12:45',
-    resource: 'Admin #4'
-  },
-  {
-    id: 11,
-    user: {
-      name: 'System',
-      email: 'system@omwhub.com',
-      role: 'System'
-    },
-    action: 'PAYMENT_PROCESSED',
-    description: 'Bulk payment processing for service providers completed',
-    ipAddress: 'localhost',
-    timestamp: '2023-07-11 01:15:00',
-    resource: 'Payment System'
-  }
-];
+  action: item.action || item.action_type || '',
+  description: item.description || item.details || '',
+  ipAddress: item.ip_address || item.ipAddress || '',
+  timestamp: item.created_at || item.timestamp || item.createdAt || '',
+  resource:
+    item.resource ||
+    item.resource_name ||
+    (item.resource_type && item.resource_id ? `${item.resource_type} #${item.resource_id}` : '')
+});
 
 // Action type color mapping
 const actionColorMap = {
@@ -164,65 +36,91 @@ const actionColorMap = {
 };
 
 const AuditLogs = () => {
-  const [logs, setLogs] = useState(initialAuditLogs);
+  const [logs, setLogs] = useState([]);
   const [selectedLog, setSelectedLog] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [actions, setActions] = useState([]);
   const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: '',
-    userRole: 'All',
-    actionType: 'All',
+    startDate: '',
+    endDate: '',
+    role: 'All',
+    action: 'All',
     search: ''
   });
 
   // Handle filter change
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters({
-      ...filters,
-      [name]: value
-    });
+    setFilters((prev) => ({ ...prev, [name]: value }));
+    setPage(1);
   };
 
-  // Apply filters
-  const filteredLogs = logs.filter(log => {
-    // Date From filter
-    if (filters.dateFrom && new Date(log.timestamp) < new Date(filters.dateFrom)) {
-      return false;
-    }
-    
-    // Date To filter
-    if (filters.dateTo && new Date(log.timestamp) > new Date(filters.dateTo)) {
-      return false;
-    }
-    
-    // User Role filter
-    if (filters.userRole !== 'All' && log.user.role !== filters.userRole) {
-      return false;
-    }
-    
-    // Action Type filter
-    if (filters.actionType !== 'All' && log.action !== filters.actionType) {
-      return false;
-    }
-    
-    // Search filter
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      return (
-        log.description.toLowerCase().includes(searchLower) ||
-        log.user.name.toLowerCase().includes(searchLower) ||
-        log.user.email.toLowerCase().includes(searchLower) ||
-        log.resource.toLowerCase().includes(searchLower) ||
-        log.ipAddress.includes(searchLower)
-      );
-    }
-    
-    return true;
-  });
+  // Fetch actions on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await AuditLogsService.getActions();
+        if (mounted) setActions(Array.isArray(list) ? list : []);
+      } catch (err) {
+        // ignore; actions dropdown will just be empty
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
-  // Get unique action types for filter dropdown
-  const uniqueActionTypes = [...new Set(logs.map(log => log.action))];
+  // Fetch logs when filters/page/limit change
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await AuditLogsService.getAuditLogs({ ...filters, page, limit });
+        if (!cancelled) {
+          const items = (res.items || []).map(mapLogItem);
+          setLogs(items);
+          setTotal(res.total || items.length);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err?.message || 'Failed to load audit logs');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [filters, page, limit]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
+
+  const refresh = async () => {
+    setPage(1);
+    // Trigger useEffect by updating filters shallowly
+    setFilters((prev) => ({ ...prev }));
+  };
+
+  const handleExport = async () => {
+    try {
+      const blob = await AuditLogsService.exportAuditLogs(filters);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // no-op; could show toast in future
+    }
+  };
+
+  // Server-side filtering; use logs as-is
   
   // Handle showing log details
   const handleViewDetails = (log) => {
@@ -251,11 +149,11 @@ const AuditLogs = () => {
           </div>
           
           <div>
-            <label htmlFor="userRole" className="block text-sm font-medium text-gray-700 mb-1">User Role</label>
+            <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">User Role</label>
             <select
-              id="userRole"
-              name="userRole"
-              value={filters.userRole}
+              id="role"
+              name="role"
+              value={filters.role}
               onChange={handleFilterChange}
               className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
             >
@@ -267,57 +165,69 @@ const AuditLogs = () => {
           </div>
           
           <div>
-            <label htmlFor="actionType" className="block text-sm font-medium text-gray-700 mb-1">Action Type</label>
+            <label htmlFor="action" className="block text-sm font-medium text-gray-700 mb-1">Action Type</label>
             <select
-              id="actionType"
-              name="actionType"
-              value={filters.actionType}
+              id="action"
+              name="action"
+              value={filters.action}
               onChange={handleFilterChange}
               className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm rounded-md"
             >
               <option value="All">All Actions</option>
-              {uniqueActionTypes.map(action => (
-                <option key={action} value={action}>{action.replace(/_/g, ' ')}</option>
+              {actions.map((action) => (
+                <option key={action} value={action}>{String(action).replace(/_/g, ' ')}</option>
               ))}
             </select>
           </div>
           
           <div>
-            <label htmlFor="dateFrom" className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">Date From</label>
             <input
               type="date"
-              name="dateFrom"
-              id="dateFrom"
-              value={filters.dateFrom}
+              name="startDate"
+              id="startDate"
+              value={filters.startDate}
               onChange={handleFilterChange}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
             />
           </div>
           
           <div>
-            <label htmlFor="dateTo" className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
             <input
               type="date"
-              name="dateTo"
-              id="dateTo"
-              value={filters.dateTo}
+              name="endDate"
+              id="endDate"
+              value={filters.endDate}
               onChange={handleFilterChange}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
             />
           </div>
           
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <button 
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
               onClick={() => setFilters({
-                dateFrom: '',
-                dateTo: '',
-                userRole: 'All',
-                actionType: 'All',
+                startDate: '',
+                endDate: '',
+                role: 'All',
+                action: 'All',
                 search: ''
               })}
             >
               Clear Filters
+            </button>
+            <button
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+              onClick={refresh}
+            >
+              Refresh
+            </button>
+            <button
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700"
+              onClick={handleExport}
+            >
+              Export CSV
             </button>
           </div>
         </div>
@@ -350,7 +260,7 @@ const AuditLogs = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredLogs.map((log) => (
+              {logs.map((log) => (
                 <tr key={log.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {log.timestamp}
@@ -389,11 +299,52 @@ const AuditLogs = () => {
           </table>
         </div>
         
-        {filteredLogs.length === 0 && (
+        {(!loading && logs.length === 0) && (
           <div className="py-8 text-center">
             <p className="text-gray-500">No audit logs found matching the selected filters.</p>
           </div>
         )}
+        {loading && (
+          <div className="py-8 text-center">
+            <p className="text-gray-500">Loading...</p>
+          </div>
+        )}
+        {error && (
+          <div className="py-4 text-center text-red-600 text-sm">{error}</div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-600">
+          Page {page} of {totalPages} · {total} records
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || loading}
+          >
+            Prev
+          </button>
+          <select
+            className="px-2 py-1 border rounded"
+            value={limit}
+            onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+            disabled={loading}
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>{n} / page</option>
+            ))}
+          </select>
+          <button
+            className="px-3 py-1 border rounded disabled:opacity-50"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages || loading}
+          >
+            Next
+          </button>
+        </div>
       </div>
       
       {/* Log Detail Modal */}

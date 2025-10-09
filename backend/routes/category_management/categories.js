@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
-const verifyToken = require('../middlewares/verify_token');
-const authorizeRole = require('../middlewares/authorizeRole');
+const verifyToken = require('../../middlewares/verify_token');
+const authorizeRole = require('../../middlewares/authorizeRole');
 const AWS = require('aws-sdk');
 
 // AWS S3 Configuration

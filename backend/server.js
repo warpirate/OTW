@@ -55,6 +55,7 @@ const categoryRoute = require('./routes/category_management/categories');
 const authRoute = require('./routes/authentication/auth');
 const customerRoute = require('./routes/customer_management/customer');
 const superAdminRoute = require('./routes/admin_management/superAdmin');
+const auditLogsRoute = require('./routes/admin_management/auditLogs');
 const providerAdminRoute = require('./routes/admin_management/providerAdmin');
 const workerRoute = require('./routes/worker_management/worker');
 const workerDocsRoute = require('./routes/worker_management/worker_doc_banking_details');
@@ -73,6 +74,10 @@ const chatRoute = require('./routes/chat/chat');
 const customerAdminRoute = require('./routes/admin_management/customerAdmin');
 const emailTestRoute = require('./routes/test/emailTest');
 const registrationTestRoute = require('./routes/test/registrationTest');
+// Site Management Routes
+const siteSettingsRoute = require('./routes/site_management/siteSettings');
+const contentPagesRoute = require('./routes/site_management/contentPages');
+const socialLinksRoute = require('./routes/site_management/socialLinks');
 const baseURL = process.env.BASE_URL1 || '/api';
 
 // Test routes (only in development)
@@ -94,6 +99,12 @@ app.use(`${baseURL}/customer/bookings`, bookingRoute);
 app.use(`${baseURL}/customer/verifications`, customerVerificationsRoute);
 app.use(`${baseURL}/payment`, paymentRoute);
 app.use(`${baseURL}/webhooks`, webhookRoute);
+// Specific superadmin sub-routes must come before the general /superadmin route
+// Site Management routes (must come before general superadmin route)
+app.use(`${baseURL}/superadmin/site-settings`, siteSettingsRoute);
+app.use(`${baseURL}/superadmin/content-pages`, contentPagesRoute);
+app.use(`${baseURL}/superadmin/social-links`, socialLinksRoute);
+app.use(`${baseURL}/superadmin/audit-logs`, auditLogsRoute);
 app.use(`${baseURL}/superadmin`, superAdminRoute);
 app.use(`${baseURL}/admin`, providerAdminRoute);
 app.use(`${baseURL}/admin`, customerAdminRoute);

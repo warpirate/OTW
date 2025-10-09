@@ -1,57 +1,40 @@
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
 import { API_BASE_URL } from '../config';
+import AuthService from './auth.service';
 
-// API base URL for audit logs endpoints
-const AUDIT_API_URL = `${API_BASE_URL}/api/audit-logs`;
+// SuperAdmin Audit Logs base URL
+const AUDIT_API_URL = `${API_BASE_URL}/api/superadmin/audit-logs`;
 
-// Create axios instance with default config
+// Axios instance
 const auditClient = axios.create({
   baseURL: AUDIT_API_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  headers: { 'Content-Type': 'application/json' }
 });
 
-// Request interceptor to add JWT token
+// Request interceptor: context-aware superadmin token
 auditClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('jwt_token');
-    
-    if (token) {
-      try {
-        const decoded = jwtDecode(token);
-        const now = Date.now() / 1000;
-        
-        if (decoded.exp < now) {
-          localStorage.removeItem('jwt_token');
-          localStorage.removeItem('user_info');
-          throw new Error('Token expired');
-        } else {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-      } catch (error) {
-        localStorage.removeItem('jwt_token');
-        localStorage.removeItem('user_info');
-        throw new Error('Invalid token');
-      }
+    const isSuperAdminContext = window.location.pathname.includes('/superadmin');
+    let token = null;
+    if (isSuperAdminContext) {
+      token = AuthService.getToken('superadmin') || AuthService.getToken('super admin') || AuthService.getToken('admin');
+    } else {
+      token = AuthService.getToken('superadmin') || AuthService.getToken('super admin') || AuthService.getToken();
     }
-    
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor for error handling
+// Response interceptor: superadmin-specific logout
 auditClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      localStorage.removeItem('jwt_token');
-      localStorage.removeItem('user_info');
-      
+      AuthService.logout(null, 'superadmin');
       if (!window.location.pathname.includes('/superadmin/login')) {
         window.location.href = '/superadmin/login';
       }
@@ -60,81 +43,57 @@ auditClient.interceptors.response.use(
   }
 );
 
-// Audit Logs Service
+// Normalize backend response into a common shape
+const normalizeListResponse = (data) => {
+  return {
+    items: data?.items || data?.logs || data?.data || [],
+    total: data?.total ?? data?.count ?? data?.total_count ?? (Array.isArray(data?.items || data?.logs || data?.data) ? (data?.items || data?.logs || data?.data).length : 0),
+    page: data?.page ?? 1,
+    limit: data?.limit ?? data?.per_page ?? 10,
+  };
+};
+
+// Service
 const AuditLogsService = {
-  // Get audit logs with filtering
+  // GET list with filters and pagination
   getAuditLogs: async (filters = {}) => {
-    try {
-      const params = new URLSearchParams();
-      
-      if (filters.action && filters.action !== 'All') {
-        params.append('action', filters.action);
-      }
-      if (filters.user) {
-        params.append('user', filters.user);
-      }
-      if (filters.dateFrom) {
-        params.append('dateFrom', filters.dateFrom);
-      }
-      if (filters.dateTo) {
-        params.append('dateTo', filters.dateTo);
-      }
-      if (filters.page) {
-        params.append('page', filters.page);
-      }
-      if (filters.limit) {
-        params.append('limit', filters.limit);
-      }
+    const params = new URLSearchParams();
+    if (filters.action && filters.action !== 'All') params.append('action', filters.action);
+    if (filters.role && filters.role !== 'All') params.append('role', filters.role);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    if (filters.page) params.append('page', String(filters.page));
+    if (filters.limit) params.append('limit', String(filters.limit));
 
-      const queryString = params.toString();
-      const url = queryString ? `/?${queryString}` : '/';
-      
-      const response = await auditClient.get(url);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const url = params.toString() ? `/?${params.toString()}` : '/';
+    const res = await auditClient.get(url);
+    return normalizeListResponse(res.data);
   },
 
-  // Create audit log entry
-  createAuditLog: async (logData) => {
-    try {
-      const response = await auditClient.post('/', logData);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+  // GET distinct action types
+  getActions: async () => {
+    const res = await auditClient.get('/actions');
+    return res.data?.actions || res.data || [];
   },
 
-  // Get audit log by ID
+  // GET by id
   getAuditLogById: async (id) => {
-    try {
-      const response = await auditClient.get(`/${id}`);
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const res = await auditClient.get(`/${id}`);
+    return res.data;
   },
 
-  // Export audit logs
-  exportAuditLogs: async (format = 'csv', filters = {}) => {
-    try {
-      const params = new URLSearchParams({ format });
-      
-      Object.keys(filters).forEach(key => {
-        if (filters[key] && filters[key] !== 'All') {
-          params.append(key, filters[key]);
-        }
-      });
+  // Export CSV with filters
+  exportAuditLogs: async (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.action && filters.action !== 'All') params.append('action', filters.action);
+    if (filters.role && filters.role !== 'All') params.append('role', filters.role);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
 
-      const response = await auditClient.get(`/export?${params.toString()}`, {
-        responseType: 'blob'
-      });
-      
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const res = await auditClient.get(`/export/csv?${params.toString()}`, { responseType: 'blob' });
+    return res.data;
   }
 };
 

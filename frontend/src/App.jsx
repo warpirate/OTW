@@ -29,6 +29,7 @@ const Blog = lazy(() => import('./app/customer/Blog'));
 const Contact = lazy(() => import('./app/customer/Contact'));
 const Terms = lazy(() => import('./app/customer/Terms'));
 const Privacy = lazy(() => import('./app/customer/Privacy'));
+const DynamicPage = lazy(() => import('./components/DynamicPage'));
 const DriverBooking = lazy(() => import('./app/customer/DriverBooking'));
 const BookingTracking = lazy(() => import('./app/customer/BookingTracking'));
 const ServiceTracking = lazy(() => import('./app/customer/ServiceTracking'));
@@ -59,7 +60,10 @@ const SuperAdminDashboard = lazy(() => import('./app/features/superadmin/Dashboa
 const AdminManagement = lazy(() => import('./app/features/superadmin/AdminManagement'));
 const SystemSettings = lazy(() => import('./app/features/superadmin/SystemSettings'));
 const AuditLogs = lazy(() => import('./app/features/superadmin/AuditLogs'));
-const Reports = lazy(() => import('./app/features/superadmin/Reports'));
+// Site Management Components
+const SiteSettings = lazy(() => import('./app/components/SuperAdmin/SiteSettings'));
+const ContentPages = lazy(() => import('./app/components/SuperAdmin/ContentPages'));
+const SocialLinks = lazy(() => import('./app/components/SuperAdmin/SocialLinks'));
 
 // Worker
 const WorkerLayout = lazy(() => import('./app/layouts/WorkerLayout'));
@@ -371,6 +375,9 @@ function App() {
             <Route path="/contact" element={<Contact />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />
+            
+            {/* Dynamic Content Pages */}
+            <Route path="/:pageKey" element={<DynamicPage />} />
             {/* Customer Routes */}
             <Route path="/" element={<CustomerLayout />}>
               <Route index element={<LandingPage />} />
@@ -473,7 +480,9 @@ function App() {
               <Route path="admins" element={<AdminManagement />} />
               <Route path="settings" element={<SystemSettings />} />
               <Route path="audit-logs" element={<AuditLogs />} />
-              <Route path="reports" element={<Reports />} />
+              <Route path="site-settings" element={<SiteSettings />} />
+              <Route path="content-pages" element={<ContentPages />} />
+              <Route path="social-links" element={<SocialLinks />} />
             </Route>
 
             {/* Worker Routes */}

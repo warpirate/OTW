@@ -1,6 +1,9 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const db = require('../../config/db');
+const { logAction } = require('../../services/auditLogger');
+const verifyToken = require('../../middlewares/verify_token');
+const authorizeRole = require('../../middlewares/authorizeRole');
 
 const router = express.Router();
 
@@ -86,7 +89,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/superadmin  -> create a new admin
-router.post('/', async (req, res) => {
+router.post('/', verifyToken, authorizeRole(['super admin']), async (req, res) => {
   const { name, email, phone, is_active = 1, role, gender } = req.body;
   console.log(req.body);
   if (!name || !email) {
@@ -108,6 +111,13 @@ router.post('/', async (req, res) => {
       const roleId = roleRows.length ? roleRows[0].id : 3; // fallback 3
       await conn.execute('INSERT INTO user_roles (user_id, role_id) VALUES (?,?)', [userId, roleId]);
       await conn.commit();
+      // Audit log: admin created
+      await logAction(req, {
+        action: 'ADMIN_CREATE',
+        resourceType: 'Admin',
+        resourceId: userId,
+        description: `Created admin ${name} (${email}) with role ${role}`
+      });
       res.status(201).json({ id: userId });
     } catch (e) {
       await conn.rollback();
@@ -122,7 +132,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/superadmin/:id  -> update admin
-router.put('/:id', async (req, res) => {
+router.put('/:id', verifyToken, authorizeRole(['super admin']), async (req, res) => {
   const { id } = req.params;
   const { name, email, phone, password, role, status, gender } = req.body;
   console.log("put body",req.body);
@@ -159,6 +169,21 @@ router.put('/:id', async (req, res) => {
       }
     }
 
+    // Audit log: admin updated
+    const changed = [];
+    if (name) changed.push('name');
+    if (email) changed.push('email');
+    if (phone) changed.push('phone');
+    if (password) changed.push('password');
+    if (status) changed.push('is_active');
+    if (gender) changed.push('gender');
+    if (role) changed.push(`role=>${role}`);
+    await logAction(req, {
+      action: 'ADMIN_UPDATE',
+      resourceType: 'Admin',
+      resourceId: id,
+      description: `Updated admin ${id} fields: ${changed.join(', ') || 'none'}`
+    });
     res.json({ message: 'Updated' });
   } catch (err) {
     console.error(err);
@@ -167,7 +192,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/superadmin/:id  -> delete admin
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyToken, authorizeRole(['super admin']), async (req, res) => {
   const { id } = req.params;
   try {
     const conn = await db.getConnection();
@@ -176,6 +201,13 @@ router.delete('/:id', async (req, res) => {
       await conn.execute('DELETE FROM user_roles WHERE user_id = ?', [id]);
       await conn.execute('DELETE FROM users WHERE id = ?', [id]);
       await conn.commit();
+      // Audit log: admin deleted
+      await logAction(req, {
+        action: 'ADMIN_DELETE',
+        resourceType: 'Admin',
+        resourceId: id,
+        description: `Deleted admin ${id}`
+      });
       res.json({ message: 'Deleted' });
     } catch (e) {
       await conn.rollback();
@@ -190,11 +222,18 @@ router.delete('/:id', async (req, res) => {
 });
 
 // PATCH /api/superadmin/:id/status  -> activate/deactivate
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', verifyToken, authorizeRole(['super admin']), async (req, res) => {
   const { id } = req.params;
   const { status } = req.body; // expected boolean or 0/1
   try {
     await db.execute('UPDATE users SET is_active = ? WHERE id = ?', [status ? 1 : 0, id]);
+    // Audit log: status change
+    await logAction(req, {
+      action: 'ADMIN_STATUS_CHANGE',
+      resourceType: 'Admin',
+      resourceId: id,
+      description: `Changed status to ${status ? 'Active' : 'Inactive'}`
+    });
     res.json({ message: 'Status updated' });
   } catch (err) {
     console.error(err);

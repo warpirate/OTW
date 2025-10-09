@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
-const verifyToken = require('../middlewares/verify_token');
+const verifyToken = require('../../middlewares/verify_token');
 const FareCalculator = require('../../utils/fareCalculator');
 const { retryTransaction, isNoDriversError, isTemporaryServiceError } = require('../../utils/databaseRetry');
 require('dotenv').config();

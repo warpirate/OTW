@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
-const verifyToken = require('../middlewares/verify_token');
+const verifyToken = require('../../middlewares/verify_token');
 
 // GET /api/customer/types - Get available customer types for document verification
 router.get('/types', async (req, res) => {
