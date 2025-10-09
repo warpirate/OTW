@@ -23,12 +23,30 @@ class SocketServer {
               .split(',')
               .map(o => o.trim())
               .filter(Boolean);
+            
+            // Add mobile app origins for React Native
+            const mobileOrigins = [
+              'capacitor://localhost',
+              'http://localhost',
+              'https://localhost',
+              'file://',
+              null, // Allow null origin for mobile apps
+              undefined // Allow undefined origin for mobile apps
+            ];
+            
+            allowedOrigins.push(...mobileOrigins);
 
             this.io = new Server(this.server, {
                 cors: {
                     origin: (origin, callback) => {
+                        // Always allow requests with no origin (mobile apps)
                         if (!origin) return callback(null, true);
+                        
+                        // Check if origin is in allowed list
                         if (allowedOrigins.includes(origin)) return callback(null, true);
+                        
+                        // Log blocked origins for debugging
+                        console.warn(`Socket.IO CORS blocked origin: ${origin}`);
                         return callback(new Error(`Socket.IO CORS blocked: ${origin}`));
                     },
                     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
