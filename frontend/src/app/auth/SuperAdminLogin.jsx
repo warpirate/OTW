@@ -58,8 +58,16 @@ const SuperAdminLogin = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-lg">
-        <div className="flex justify-center mb-8">
-          <h1 className="text-2xl font-bold text-purple-900">UrbanGo Super Admin</h1>
+        <div className="flex flex-col items-center mb-8">
+          {/* OMW Logo */}
+          <div className="mb-4">
+            <img 
+              src="/omw_logo.png" 
+              alt="OMW Logo" 
+              className="w-32 h-32 object-contain"
+            />
+          </div>
+          <h1 className="text-2xl font-bold text-purple-900">OMW Super Admin</h1>
         </div>
         <h2 className="text-center text-3xl font-extrabold text-gray-900 mb-6">
           Super Admin Access
