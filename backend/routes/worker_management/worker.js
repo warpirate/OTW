@@ -769,40 +769,51 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
       // Cursor-based pagination using br.id for keyset
       let query = `
         SELECT 
-          br.id as request_id,
+          br.id AS request_id,
           br.booking_id,
-          br.status as status,
+          br.status,
           br.requested_at,
           br.responded_at,
           b.user_id,
           b.booking_type,
           rb.with_vehicle,
           rb.pickup_address,
+          rb.pickup_lat,
+          rb.pickup_lon,
           rb.drop_address,
-          sb.address as service_address,
+          rb.drop_lat,
+          rb.drop_lon,
+          COALESCE(sb.address, ca.address, b.address) AS service_address,
+          COALESCE(NULLIF(ca.location_lat, 0), NULLIF(cust.location_lat, 0)) AS service_lat,
+          COALESCE(NULLIF(ca.location_lng, 0), NULLIF(cust.location_lng, 0)) AS service_lng,
+          COALESCE(ca.address, cust.address, sb.address, b.address) AS customer_address,
+          COALESCE(NULLIF(ca.location_lat, 0), NULLIF(cust.location_lat, 0)) AS customer_latitude,
+          COALESCE(NULLIF(ca.location_lng, 0), NULLIF(cust.location_lng, 0)) AS customer_longitude,
           b.actual_cost,
           b.price,
           b.estimated_cost,
           b.service_status,
           b.payment_status,
-          b.created_at as booking_created_at,
+          b.created_at AS booking_created_at,
           b.scheduled_time,
           b.duration,
           b.cost_type,
           b.subcategory_id,
-          r.rating as ride_rating,
-          r.review as ride_review,
-          r.created_at as ride_rating_submitted_at,
-          u.name as customer_name,
-          u.phone_number as customer_phone,
-          s.name as service_name,
-          s.description as service_description,
-          sc.name as category_name
+          r.rating AS ride_rating,
+          r.review AS ride_review,
+          r.created_at AS ride_rating_submitted_at,
+          u.name AS customer_name,
+          u.phone_number AS customer_phone,
+          s.name AS service_name,
+          s.description AS service_description,
+          sc.name AS category_name
         FROM booking_requests br
         INNER JOIN bookings b ON br.booking_id = b.id
         INNER JOIN users u ON b.user_id = u.id
         LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
         LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
+        LEFT JOIN customer_addresses ca ON ca.customer_id = b.user_id AND ca.is_active = 1 AND ca.is_default = 1
+        LEFT JOIN customers cust ON cust.id = b.user_id
         LEFT JOIN subcategories s ON b.subcategory_id = s.id
         LEFT JOIN service_categories sc ON s.category_id = sc.id
         LEFT JOIN ratings r ON b.id = r.booking_id
@@ -813,17 +824,30 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
       // Exclude cancelled bookings from general lists
       query += " AND b.service_status != 'cancelled'";
+      
       // Filter by specific status if provided
       if (status && status !== 'all') {
         if (status === 'completed') {
           // For completed, we need accepted booking_requests with completed service_status
           query += ' AND br.status = ? AND b.service_status = ?';
           params.push('accepted', 'completed');
+        } else if (status === 'accepted') {
+          // For accepted, exclude completed service_status to prevent duplicates
+          query += ' AND br.status = ? AND b.service_status != ?';
+          params.push('accepted', 'completed');
+        } else if (status === 'pending') {
+          // For pending requests, exclude expired bookings (scheduled time has passed)
+          query += ' AND br.status = ? AND b.scheduled_time > NOW()';
+          params.push('pending');
         } else {
           // For other statuses, filter by booking_request status
           query += ' AND br.status = ?';
           params.push(status);
         }
+      } else {
+        // When no specific status is provided, exclude expired pending requests
+        query += ' AND (br.status != ? OR (br.status = ? AND b.scheduled_time > NOW()))';
+        params.push('pending', 'pending');
       }
 
       if (cursor) {
@@ -852,7 +876,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
       // Legacy offset-based pagination
       let query = `
         SELECT 
-          br.id as request_id,
+          br.id AS request_id,
           br.booking_id,
           br.status,
           br.requested_at,
@@ -861,31 +885,42 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.booking_type,
           rb.with_vehicle,
           rb.pickup_address,
+          rb.pickup_lat,
+          rb.pickup_lon,
           rb.drop_address,
-          sb.address as service_address,
+          rb.drop_lat,
+          rb.drop_lon,
+          COALESCE(sb.address, ca.address, b.address) AS service_address,
+          COALESCE(ca.location_lat, cust.location_lat) AS service_lat,
+          COALESCE(ca.location_lng, cust.location_lng) AS service_lng,
+          COALESCE(ca.address, cust.address, sb.address, b.address) AS customer_address,
+          COALESCE(ca.location_lat, cust.location_lat) AS customer_latitude,
+          COALESCE(ca.location_lng, cust.location_lng) AS customer_longitude,
           b.actual_cost,
           b.price,
           b.estimated_cost,
           b.service_status,
           b.payment_status,
-          b.created_at as booking_created_at,
+          b.created_at AS booking_created_at,
           b.scheduled_time,
           b.duration,
           b.cost_type,
           b.subcategory_id,
-          r.rating as ride_rating,
-          r.review as ride_review,
-          r.created_at as ride_rating_submitted_at,
-          u.name as customer_name,
-          u.phone_number as customer_phone,
-          s.name as service_name,
-          s.description as service_description,
-          sc.name as category_name
+          r.rating AS ride_rating,
+          r.review AS ride_review,
+          r.created_at AS ride_rating_submitted_at,
+          u.name AS customer_name,
+          u.phone_number AS customer_phone,
+          s.name AS service_name,
+          s.description AS service_description,
+          sc.name AS category_name
         FROM booking_requests br
         INNER JOIN bookings b ON br.booking_id = b.id
         INNER JOIN users u ON b.user_id = u.id
         LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
         LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
+        LEFT JOIN customer_addresses ca ON ca.customer_id = b.user_id AND ca.is_default = 1
+        LEFT JOIN customers cust ON cust.id = b.user_id
         LEFT JOIN subcategories s ON b.subcategory_id = s.id
         LEFT JOIN service_categories sc ON s.category_id = sc.id
         LEFT JOIN ratings r ON b.id = r.booking_id
@@ -896,17 +931,30 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
       // Exclude cancelled bookings from general lists
       query += " AND b.service_status != 'cancelled'";
+      
       // Filter by specific status if provided
       if (status && status !== 'all') {
         if (status === 'completed') {
           // For completed, we need accepted booking_requests with completed service_status
           query += ' AND br.status = ? AND b.service_status = ?';
           queryParams.push('accepted', 'completed');
+        } else if (status === 'accepted') {
+          // For accepted, exclude completed service_status to prevent duplicates
+          query += ' AND br.status = ? AND b.service_status != ?';
+          queryParams.push('accepted', 'completed');
+        } else if (status === 'pending') {
+          // For pending requests, exclude expired bookings (scheduled time has passed)
+          query += ' AND br.status = ? AND b.scheduled_time > NOW()';
+          queryParams.push('pending');
         } else {
           // For other statuses, filter by booking_request status
           query += ' AND br.status = ?';
           queryParams.push(status);
         }
+      } else {
+        // When no specific status is provided, exclude expired pending requests
+        query += ' AND (br.status != ? OR (br.status = ? AND b.scheduled_time > NOW()))';
+        queryParams.push('pending', 'pending');
       }
 
       query += ' ORDER BY br.requested_at DESC LIMIT ? OFFSET ?';
@@ -926,17 +974,30 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
       // Exclude cancelled bookings from general lists
       countQuery += " AND b.service_status != 'cancelled'";
+      
       // Apply status filter if provided
       if (status && status !== 'all') {
         if (status === 'completed') {
           // For completed, we need accepted booking_requests with completed service_status
           countQuery += ' AND br.status = ? AND b.service_status = ?';
           countParams.push('accepted', 'completed');
+        } else if (status === 'accepted') {
+          // For accepted, exclude completed service_status to prevent duplicates
+          countQuery += ' AND br.status = ? AND b.service_status != ?';
+          countParams.push('accepted', 'completed');
+        } else if (status === 'pending') {
+          // For pending requests, exclude expired bookings (scheduled time has passed)
+          countQuery += ' AND br.status = ? AND b.scheduled_time > NOW()';
+          countParams.push('pending');
         } else {
           // For other statuses, filter by booking_request status
           countQuery += ' AND br.status = ?';
           countParams.push(status);
         }
+      } else {
+        // When no specific status is provided, exclude expired pending requests
+        countQuery += ' AND (br.status != ? OR (br.status = ? AND b.scheduled_time > NOW()))';
+        countParams.push('pending', 'pending');
       }
 
       const [countResult] = await pool.query(countQuery, countParams);
@@ -986,14 +1047,14 @@ router.get('/worker/booking-requests/counts', verifyToken, async (req, res) => {
       WHERE br.provider_id = ?
     `;
 
-    // All (non-cancelled bookings)
+    // All (non-cancelled bookings, excluding expired pending)
     const [allRows] = await pool.query(
-      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled'`,
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND (br.status != 'pending' OR (br.status = 'pending' AND b.scheduled_time > NOW()))`,
       [providerId]
     );
-    // Pending (non-cancelled bookings)
+    // Pending (non-cancelled, non-expired bookings)
     const [pendingRows] = await pool.query(
-      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'pending'`,
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'pending' AND b.scheduled_time > NOW()`,
       [providerId]
     );
     // Accepted (non-cancelled bookings that are not completed)
@@ -1183,20 +1244,22 @@ router.put('/worker/booking-requests/:requestId', verifyToken, async (req, res) 
           'SELECT provider_id FROM booking_requests WHERE booking_id = ? AND status = ? AND id != ?',
           [bookingId, 'pending', requestId]
         );
-        for (const row of pendingProviders) {
-          io.to(`provider:${row.provider_id}`).emit('booking_requests:new', {
+
+        pendingProviders.forEach(provider => {
+          io.to(`provider:${provider.provider_id}`).emit('booking_requests:available', {
             booking_id: bookingId,
-            status: 'pending'
+            message: 'Booking is available again'
           });
-        }
+        });
       }
     } catch (emitErr) {
-      console.error('Socket emit error (cancel booking request):', emitErr.message);
+      console.error('Socket emit error (booking rejection):', emitErr.message);
     }
 
-    return res.json({
-      message: 'Booking request cancelled successfully',
-      request_id: requestId,
+    res.json({
+      message: 'Booking request rejected successfully',
+      request_id: parseInt(requestId),
+      booking_id: bookingId,
       status: 'rejected'
     });
 
@@ -1228,22 +1291,25 @@ router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
 
     const [bookings] = await pool.query(
       `SELECT b.*, 
-              COALESCE(s.name, 'Ride Service') as service_name, 
-              COALESCE(s.description, 'Driver transportation service') as service_description,
-              (SELECT u.name FROM users u WHERE u.id = b.user_id) as customer_name,
-              (SELECT u.phone_number FROM users u WHERE u.id = b.user_id) as customer_phone,
-              CASE 
-                WHEN b.booking_type = 'ride' THEN 
-                  CONCAT(rb.pickup_address, ' → ', rb.drop_address)
-                ELSE sb.address 
-              END as display_address,
-              CASE 
-                WHEN b.booking_type = 'ride' THEN b.estimated_cost
-                ELSE b.price 
-              END as display_price
+              b.user_id AS customer_user_id,
+              COALESCE(s.name, 'Ride Service') AS service_name, 
+              COALESCE(s.description, 'Driver transportation service') AS service_description,
+              rb.pickup_address,
+              rb.pickup_lat,
+              rb.pickup_lon,
+              rb.drop_address,
+              rb.drop_lat,
+              rb.drop_lon,
+              COALESCE(sb.address, ca.address, b.address) AS service_address,
+              COALESCE(ca.location_lat, cust.location_lat) AS service_lat,
+              COALESCE(ca.location_lng, cust.location_lng) AS service_lng,
+              COALESCE(ca.address, cust.address, sb.address, b.address) AS customer_address,
+              COALESCE(ca.location_lat, cust.location_lat) AS customer_latitude,
+              COALESCE(ca.location_lng, cust.location_lng) AS customer_longitude
        FROM bookings b
-      
        LEFT JOIN service_bookings sb ON sb.booking_id = b.id
+       LEFT JOIN customer_addresses ca ON ca.customer_id = b.user_id AND ca.is_default = 1
+       LEFT JOIN customers cust ON cust.id = b.user_id
        LEFT JOIN subcategories s ON s.id = b.subcategory_id
        LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
        ${whereClause}
@@ -1300,6 +1366,7 @@ router.get('/worker/recent-bookings', verifyToken, async (req, res) => {
     const [bookings] = await pool.query(
       `SELECT 
           b.*, 
+          b.user_id AS customer_user_id,
           u.name AS customer_name,
           u.phone_number AS customer_phone,
           COALESCE(s.name, 'Ride Service') AS service_name,
@@ -1307,12 +1374,27 @@ router.get('/worker/recent-bookings', verifyToken, async (req, res) => {
           CASE WHEN b.booking_type = 'ride' THEN 
             CONCAT(rb.pickup_address, ' → ', rb.drop_address)
           ELSE sb.address END AS display_address,
-          CASE WHEN b.booking_type = 'ride' THEN b.estimated_cost ELSE b.price END AS display_price
+          CASE WHEN b.booking_type = 'ride' THEN b.estimated_cost ELSE b.price END AS display_price,
+          -- Include location coordinates
+          rb.pickup_address,
+          rb.pickup_lat,
+          rb.pickup_lon,
+          rb.drop_address,
+          rb.drop_lat,
+          rb.drop_lon,
+          sb.address AS service_address,
+          COALESCE(ca.location_lat, cust.location_lat) AS service_lat,
+          COALESCE(ca.location_lng, cust.location_lng) AS service_lng,
+          COALESCE(ca.address, cust.address, sb.address) AS customer_address,
+          COALESCE(ca.location_lat, cust.location_lat) AS customer_latitude,
+          COALESCE(ca.location_lng, cust.location_lng) AS customer_longitude
        FROM booking_requests br
        JOIN bookings b ON br.booking_id = b.id
        JOIN users u ON b.user_id = u.id
        LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
        LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
+       LEFT JOIN customer_addresses ca ON ca.customer_id = b.user_id AND ca.is_default = 1
+       LEFT JOIN customers cust ON cust.id = b.user_id
        LEFT JOIN subcategories s ON b.subcategory_id = s.id
        WHERE br.provider_id = ?
          AND br.status = 'pending'
@@ -2036,7 +2118,7 @@ router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) =
       });
     }
 
-    // Generate new OTP and set expiration (15 minutes)
+    // Generate new 6-digit OTP and set expiration (15 minutes)
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes from now
     
@@ -2060,8 +2142,7 @@ router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) =
     if (emailResult.success) {
       res.json({ 
         success: true, 
-        message: `OTP sent successfully to ${booking.customer_email}`,
-        customer_email: booking.customer_email,
+        message: 'OTP sent successfully to customer email',
         expires_at: expiresAt.toISOString()
       });
     } else {
@@ -2072,8 +2153,8 @@ router.post('/bookings/:bookingId/generate-otp', verifyToken, async (req, res) =
       );
       
       res.status(500).json({ 
-        success: false, 
-        message: 'Failed to send OTP email. Please try again.' 
+        success: false,
+        message: 'Failed to send OTP email. Please try again.'
       });
     }
 

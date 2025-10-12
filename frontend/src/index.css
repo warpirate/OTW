@@ -219,18 +219,10 @@
     @apply py-16 md:py-24;
   }
   
-  /* Animation Components */
-  .animate-fade-in {
-    @apply animate-fade-in;
-  }
+  /* Animation Components - These are already provided by Tailwind */
+  /* Removed circular dependencies - use animate-fade-in and animate-slide-up classes directly */
   
-  .animate-slide-up {
-    @apply animate-slide-up;
-  }
-  
-  .animate-scale-in {
-    @apply animate-scale-in;
-  }
+  /* animate-scale-in is already provided by Tailwind config */
   
   /* Status Components */
   .status-success {
