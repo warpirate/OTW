@@ -372,12 +372,12 @@ router.post('/create', verifyToken, async (req, res) => {
         const totalPrice = discountedPrice + gst;
         totalAmount += totalPrice;
 
-        // Create booking with explicit UTC created_at
+        // Create booking with explicit UTC created_at and total_amount for payment
         const [bookingResult] = await pool.query(
-          `INSERT INTO bookings 
-           (user_id, provider_id, booking_type, subcategory_id, scheduled_time, gst, 
-            estimated_cost, price, service_status, payment_status, created_at, duration, cost_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
+          `INSERT INTO bookings
+           (user_id, provider_id, booking_type, subcategory_id, scheduled_time, gst,
+            estimated_cost, price, total_amount, service_status, payment_status, created_at, duration, cost_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
           [
             customerId,
             provider_id,
@@ -387,6 +387,7 @@ router.post('/create', verifyToken, async (req, res) => {
             gst,
             totalPrice, // estimated_cost
             totalPrice, // price
+            totalPrice, // total_amount - required for payment processing
             createdAtUTC,
             1, // duration - default 1 hour/day
             'per_hour' // cost_type - default per hour
@@ -559,21 +560,19 @@ router.get('/history', verifyToken, async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT b.*, 
-              COALESCE(s.name, 'Ride Service') as service_name, 
+      `SELECT b.*,
+              COALESCE(s.name, 'Ride Service') as service_name,
               COALESCE(s.description, 'Driver transportation service') as service_description,
-              CASE WHEN b.provider_id IS NOT NULL THEN 
+              CASE WHEN b.provider_id IS NOT NULL THEN
                 (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
               ELSE 'Not Assigned' END as provider_name,
-              CASE 
-                WHEN b.booking_type = 'ride' THEN 
+              CASE
+                WHEN b.booking_type = 'ride' THEN
                   CONCAT(rb.pickup_address, ' → ', rb.drop_address)
-                ELSE sb.address 
+                ELSE sb.address
               END as display_address,
-              CASE 
-                WHEN b.booking_type = 'ride' THEN b.estimated_cost
-                ELSE b.price 
-              END as display_price
+              -- Use total_amount if available, fallback to price or estimated_cost
+              COALESCE(b.total_amount, b.price, b.estimated_cost) as display_price
        FROM bookings b
        LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
        LEFT JOIN subcategories s ON s.id = b.subcategory_id
@@ -631,45 +630,45 @@ try {
   const bookingId = req.params.id;
 
   const [bookings] = await pool.query(
-    `SELECT b.*, 
-            COALESCE(s.name, 'Ride Service') as service_name, 
+    `SELECT b.*,
+            COALESCE(s.name, 'Ride Service') as service_name,
             COALESCE(s.description, 'Driver transportation service') as service_description,
-            CASE WHEN b.provider_id IS NOT NULL THEN 
+            CASE WHEN b.provider_id IS NOT NULL THEN
               (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
             ELSE 'Not Assigned' END as provider_name,
-            CASE WHEN b.provider_id IS NOT NULL THEN 
+            CASE WHEN b.provider_id IS NOT NULL THEN
               (SELECT u.phone_number FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
             ELSE NULL END as provider_phone,
-            CASE 
-              WHEN b.booking_type = 'ride' THEN 
+            CASE
+              WHEN b.booking_type = 'ride' THEN
                 CONCAT(rb.pickup_address, ' → ', rb.drop_address)
-              ELSE sb.address 
+              ELSE sb.address
             END as display_address,
-            CASE 
-              WHEN b.booking_type = 'ride' THEN b.estimated_cost
-              ELSE b.price 
-            END as display_price,
+            -- Use total_amount if available, fallback to price or estimated_cost
+            COALESCE(b.total_amount, b.price, b.estimated_cost) as display_price,
             -- Get payment info from payments table
             p.id as payment_id,
             p.razorpay_payment_id,
             p.razorpay_order_id,
             p.amount_paid,
-            CASE 
+            CASE
               WHEN p.status = 'captured' THEN 'paid'
-              WHEN p.status = 'authorized' THEN 'authorized'  
+              WHEN p.status = 'authorized' THEN 'authorized'
               WHEN p.status = 'created' THEN 'pending'
               WHEN p.status = 'failed' THEN 'failed'
               WHEN b.cash_payment_id IS NOT NULL THEN 'paid'
-              ELSE 'pending'
+              WHEN b.payment_status = 'paid' THEN 'paid'
+              ELSE COALESCE(b.payment_status, 'pending')
             END as payment_status,
-            CASE 
+            CASE
               WHEN p.payment_type = 'razorpay' THEN 'Razorpay'
               WHEN p.payment_type = 'upi' THEN 'UPI Payment'
               WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
               WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
+              WHEN b.payment_method IS NOT NULL THEN b.payment_method
               ELSE 'pay_after_service'
             END as payment_method,
-            p.captured_at as payment_completed_at
+            COALESCE(p.captured_at, b.payment_completed_at) as payment_completed_at
      FROM bookings b
      LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
      LEFT JOIN service_bookings sb ON sb.booking_id = b.id
