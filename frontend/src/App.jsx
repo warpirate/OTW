@@ -60,6 +60,7 @@ const SuperAdminDashboard = lazy(() => import('./app/features/superadmin/Dashboa
 const AdminManagement = lazy(() => import('./app/features/superadmin/AdminManagement'));
 const SystemSettings = lazy(() => import('./app/features/superadmin/SystemSettings'));
 const AuditLogs = lazy(() => import('./app/features/superadmin/AuditLogs'));
+const PaymentSettings = lazy(() => import('./app/features/superadmin/PaymentSettings'));
 // Site Management Components
 const SiteSettings = lazy(() => import('./app/components/SuperAdmin/SiteSettings'));
 const ContentPages = lazy(() => import('./app/components/SuperAdmin/ContentPages'));
@@ -480,6 +481,7 @@ function App() {
               <Route path="admins" element={<AdminManagement />} />
               <Route path="settings" element={<SystemSettings />} />
               <Route path="audit-logs" element={<AuditLogs />} />
+              <Route path="payment-settings" element={<PaymentSettings />} />
               <Route path="site-settings" element={<SiteSettings />} />
               <Route path="content-pages" element={<ContentPages />} />
               <Route path="social-links" element={<SocialLinks />} />

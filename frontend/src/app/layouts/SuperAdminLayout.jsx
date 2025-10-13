@@ -55,6 +55,16 @@ const SuperAdminLayout = () => {
             >
               <i className="fas fa-clipboard-list mr-2"></i> Audit Logs
             </NavLink>
+            <NavLink
+              to="/superadmin/payment-settings"
+              className={({ isActive }) =>
+                isActive 
+                  ? 'flex items-center px-4 py-3 text-white bg-purple-600 rounded-lg mb-2 font-medium' 
+                  : 'flex items-center px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg mb-2 font-medium transition-colors duration-200'
+              }
+            >
+              <i className="fas fa-credit-card mr-2"></i> Payment Settings
+            </NavLink>
             
             {/* Site Management Section */}
             <div className="mt-4 pt-4 border-t border-gray-700">

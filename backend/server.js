@@ -78,6 +78,7 @@ const registrationTestRoute = require('./routes/test/registrationTest');
 const siteSettingsRoute = require('./routes/site_management/siteSettings');
 const contentPagesRoute = require('./routes/site_management/contentPages');
 const socialLinksRoute = require('./routes/site_management/socialLinks');
+const paymentSettingsRoute = require('./routes/admin_management/paymentSettings');
 const baseURL = process.env.BASE_URL1 || '/api';
 
 // Test routes (only in development)
@@ -104,6 +105,7 @@ app.use(`${baseURL}/webhooks`, webhookRoute);
 app.use(`${baseURL}/superadmin/site-settings`, siteSettingsRoute);
 app.use(`${baseURL}/superadmin/content-pages`, contentPagesRoute);
 app.use(`${baseURL}/superadmin/social-links`, socialLinksRoute);
+app.use(`${baseURL}/superadmin/payment-settings`, paymentSettingsRoute);
 app.use(`${baseURL}/superadmin/audit-logs`, auditLogsRoute);
 app.use(`${baseURL}/superadmin`, superAdminRoute);
 app.use(`${baseURL}/admin`, providerAdminRoute);
