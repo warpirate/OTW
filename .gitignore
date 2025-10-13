@@ -9,9 +9,9 @@ node_modules/
 .env.test.local
 .env.production.local
 
-# Database dumps with sensitive data
-backend/omw_db_4.6.1 (1).sql
-backend/omw_db_4.6.1_backup.sql
+# Database dumps with sensitive data (contain credentials)
+backend/omw_db_*.sql
+backend/*.sql
 
 # Logs
 logs
