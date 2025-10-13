@@ -40,31 +40,79 @@ apiClient.interceptors.response.use(
 export const DriverService = {
   // Location Search
   location: {
-    // Search for location suggestions
+    // Search for location suggestions using Google Maps Places API
     search: async (query) => {
       try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+          console.error('Google Maps API key not configured');
+          return [];
+        }
+
+        // Use Google Maps Places Autocomplete API
+        const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&components=country:in`;
+        const autocompleteResponse = await fetch(autocompleteUrl);
+        const autocompleteData = await autocompleteResponse.json();
+
+        if (autocompleteData.status !== 'OK' && autocompleteData.status !== 'ZERO_RESULTS') {
+          console.error('Google Places API error:', autocompleteData.status);
+          return [];
+        }
+
+        if (!autocompleteData.predictions || autocompleteData.predictions.length === 0) {
+          return [];
+        }
+
+        // Get place details for each prediction to obtain coordinates
+        const locations = await Promise.all(
+          autocompleteData.predictions.slice(0, 5).map(async (prediction) => {
+            try {
+              const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry,formatted_address&key=${apiKey}`;
+              const detailsResponse = await fetch(detailsUrl);
+              const detailsData = await detailsResponse.json();
+
+              if (detailsData.status === 'OK' && detailsData.result?.geometry?.location) {
+                return {
+                  display: prediction.description,
+                  lat: detailsData.result.geometry.location.lat,
+                  lng: detailsData.result.geometry.location.lng
+                };
+              }
+              return null;
+            } catch (e) {
+              console.error('Error fetching place details:', e);
+              return null;
+            }
+          })
         );
-        const data = await response.json();
-        return data.map(item => ({
-          display: item.display_name,
-          lat: parseFloat(item.lat),
-          lng: parseFloat(item.lon)
-        }));
+
+        return locations.filter(loc => loc !== null);
       } catch (error) {
         console.error('Error searching locations:', error);
         throw error;
       }
     },
     
-    // Reverse geocoding
+    // Reverse geocoding using Google Maps Geocoding API
     reverse: async (lat, lng) => {
       try {
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+          console.error('Google Maps API key not configured');
+          return null;
+        }
+
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
         );
-        return await response.json();
+        const data = await response.json();
+
+        if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+          console.error('Google Geocoding API error:', data.status);
+          return null;
+        }
+
+        return data.results[0];
       } catch (error) {
         console.error('Error in reverse geocoding:', error);
         throw error;
