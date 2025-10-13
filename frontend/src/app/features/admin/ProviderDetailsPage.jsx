@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeftIcon, CheckCircleIcon, XCircleIcon, EyeIcon, DocumentIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, CheckCircleIcon, XCircleIcon, EyeIcon, DocumentIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import AdminService from '../../services/admin.service';
 import config from '../../environments';
 
@@ -11,12 +11,42 @@ const ProviderDetailsPage = () => {
   const [providerDetails, setProviderDetails] = useState(null);
   const [loading, setLoading] = useState(true);
   const [verificationLoading, setVerificationLoading] = useState({});
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
+  const [loadingProfilePicture, setLoadingProfilePicture] = useState(false);
 
   useEffect(() => {
     if (providerId) {
       fetchProviderDetails();
     }
   }, [providerId]);
+
+  useEffect(() => {
+    if (providerDetails?.basicInfo?.profile_picture_url && providerDetails.basicInfo.profile_picture_url.trim() !== '') {
+      loadProfilePicture();
+    } else {
+      // Clear profile picture URL if no profile picture exists
+      setProfilePictureUrl(null);
+      setLoadingProfilePicture(false);
+    }
+  }, [providerDetails?.basicInfo?.profile_picture_url]);
+
+  const loadProfilePicture = async () => {
+    try {
+      setLoadingProfilePicture(true);
+      const actualProviderId = providerDetails?.basicInfo?.provider_id;
+      const response = await AdminService.getProviderProfilePictureUrl(actualProviderId);
+      if (response?.url) {
+        setProfilePictureUrl(response.url);
+      } else {
+        setProfilePictureUrl(null);
+      }
+    } catch (error) {
+      console.error('Error loading profile picture:', error);
+      setProfilePictureUrl(null);
+    } finally {
+      setLoadingProfilePicture(false);
+    }
+  };
 
   const fetchProviderDetails = async () => {
     try {
@@ -262,6 +292,47 @@ const ProviderDetailsPage = () => {
         {activeTab === 'basic' && (
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold mb-6">Basic Information</h2>
+            
+            {/* Profile Picture Section */}
+            <div className="flex items-start space-x-6 mb-8 pb-6 border-b border-gray-200">
+              <div className="flex-shrink-0">
+                <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border-4 border-gray-200">
+                  {loadingProfilePicture ? (
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+                  ) : profilePictureUrl ? (
+                    <img
+                      src={profilePictureUrl}
+                      alt={`${providerDetails.basicInfo.name}'s profile`}
+                      className="w-full h-full object-cover"
+                      onError={() => setProfilePictureUrl(null)}
+                    />
+                  ) : (
+                    <UserCircleIcon className="h-20 w-20 text-gray-400" />
+                  )}
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-gray-900">{providerDetails.basicInfo.name}</h3>
+                <p className="text-gray-600 mt-1">Provider ID: {providerDetails.basicInfo.provider_id}</p>
+                <div className="flex items-center space-x-3 mt-3">
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    providerDetails.basicInfo.verified 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {providerDetails.basicInfo.verified ? 'Verified' : 'Pending Verification'}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    providerDetails.basicInfo.active 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {providerDetails.basicInfo.active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="space-y-4">
                 <div>

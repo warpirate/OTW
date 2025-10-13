@@ -5,6 +5,20 @@ const verifyToken = require('../../middlewares/verify_token');
 const { generateOTP, sendOTPEmail } = require('../../services/emailService');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const AWS = require('aws-sdk');
+
+// AWS S3 setup for profile pictures
+const S3_REGION = process.env.AWS_REGION;
+const S3_BUCKET = process.env.S3_BUCKET || process.env.AWS_BUCKET_NAME;
+const s3 = new AWS.S3({ region: S3_REGION });
+
+// Helper to create a safe S3 key filename
+const sanitizeFileName = (name) => {
+  return (name || 'file')
+    .replace(/[^a-zA-Z0-9_.-]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 200);
+};
 
 /**
  * WorkerService class merged from backend/services/worker.service.js
@@ -2277,6 +2291,239 @@ router.post('/bookings/:bookingId/verify-otp', verifyToken, async (req, res) => 
     res.status(500).json({ message: 'Server error while verifying OTP' });
   } finally {
     connection.release();
+  }
+});
+
+/**
+ * POST /worker/profile-picture/presign - Generate presigned URL for profile picture upload
+ */
+router.post('/worker/profile-picture/presign', verifyToken, async (req, res) => {
+  try {
+    if (!S3_BUCKET || !S3_REGION) {
+      return res.status(500).json({ message: 'S3 is not configured on the server' });
+    }
+
+    const userId = req.user.id;
+    const { file_name, content_type } = req.body;
+
+    if (!file_name || !content_type) {
+      return res.status(400).json({ message: 'file_name and content_type are required' });
+    }
+
+    // Validate content type (only images)
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(content_type.toLowerCase())) {
+      return res.status(400).json({ message: 'Only JPEG, PNG, and WebP images are allowed' });
+    }
+
+    // Get provider ID
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+    const safeName = sanitizeFileName(file_name);
+    const key = `provider_profile_pictures/${providerId}/${Date.now()}_${safeName}`;
+
+    const params = {
+      Bucket: S3_BUCKET,
+      Key: key,
+      ContentType: content_type,
+      Expires: 300, // 5 minutes
+      ACL: 'private'
+    };
+
+    const uploadUrl = await s3.getSignedUrlPromise('putObject', params);
+
+    res.json({
+      upload_url: uploadUrl,
+      s3_key: key,
+      expires_in: 300
+    });
+
+  } catch (error) {
+    console.error('Error generating presigned URL for profile picture:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * PUT /worker/profile-picture - Update profile picture URL in database
+ */
+router.put('/worker/profile-picture', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { profile_picture_url } = req.body;
+
+    if (!profile_picture_url) {
+      return res.status(400).json({ message: 'profile_picture_url is required' });
+    }
+
+    // Get provider ID
+    const [provider] = await pool.query(
+      'SELECT id, profile_picture_url FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+    const oldProfilePicture = provider[0].profile_picture_url;
+
+    // Update profile picture URL
+    await pool.query(
+      'UPDATE providers SET profile_picture_url = ?, updated_at = NOW() WHERE id = ?',
+      [profile_picture_url, providerId]
+    );
+
+    // Optional: Delete old profile picture from S3 if it exists
+    if (oldProfilePicture && oldProfilePicture.includes(S3_BUCKET)) {
+      try {
+        const oldKey = oldProfilePicture.split('.com/')[1];
+        if (oldKey) {
+          await s3.deleteObject({
+            Bucket: S3_BUCKET,
+            Key: oldKey
+          }).promise();
+        }
+      } catch (deleteError) {
+        console.error('Error deleting old profile picture:', deleteError);
+        // Don't fail the request if deletion fails
+      }
+    }
+
+    res.json({ 
+      message: 'Profile picture updated successfully',
+      profile_picture_url
+    });
+
+  } catch (error) {
+    console.error('Error updating profile picture:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * GET /worker/profile-picture/presign - Get presigned URL to view profile picture
+ */
+router.get('/worker/profile-picture/presign', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get provider profile picture URL
+    const [provider] = await pool.query(
+      'SELECT profile_picture_url FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const profilePictureUrl = provider[0].profile_picture_url;
+
+    if (!profilePictureUrl) {
+      return res.status(404).json({ message: 'No profile picture found' });
+    }
+
+    // If it's an S3 URL, generate presigned URL
+    if (profilePictureUrl.includes(S3_BUCKET)) {
+      try {
+        const key = profilePictureUrl.split('.com/')[1];
+        if (!key) {
+          return res.status(400).json({ message: 'Invalid S3 URL format' });
+        }
+
+        const params = {
+          Bucket: S3_BUCKET,
+          Key: key,
+          Expires: 3600 // 1 hour for viewing
+        };
+
+        const viewUrl = await s3.getSignedUrlPromise('getObject', params);
+
+        res.json({
+          url: viewUrl,
+          storage: 's3',
+          expires_in: 3600
+        });
+      } catch (s3Error) {
+        console.error('S3 error:', s3Error);
+        return res.status(500).json({ message: 'Error generating presigned URL' });
+      }
+    } else {
+      // Legacy or external URL
+      res.json({
+        url: profilePictureUrl,
+        storage: 'legacy',
+        expires_in: null
+      });
+    }
+
+  } catch (error) {
+    console.error('Error getting profile picture presigned URL:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * DELETE /worker/profile-picture - Delete profile picture
+ */
+router.delete('/worker/profile-picture', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get provider profile picture URL
+    const [provider] = await pool.query(
+      'SELECT id, profile_picture_url FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+    const profilePictureUrl = provider[0].profile_picture_url;
+
+    if (!profilePictureUrl) {
+      return res.status(404).json({ message: 'No profile picture to delete' });
+    }
+
+    // Delete from S3 if it's an S3 URL
+    if (profilePictureUrl.includes(S3_BUCKET)) {
+      try {
+        const key = profilePictureUrl.split('.com/')[1];
+        if (key) {
+          await s3.deleteObject({
+            Bucket: S3_BUCKET,
+            Key: key
+          }).promise();
+        }
+      } catch (s3Error) {
+        console.error('Error deleting from S3:', s3Error);
+        // Continue to update database even if S3 deletion fails
+      }
+    }
+
+    // Remove profile picture URL from database
+    await pool.query(
+      'UPDATE providers SET profile_picture_url = NULL, updated_at = NOW() WHERE id = ?',
+      [providerId]
+    );
+
+    res.json({ message: 'Profile picture deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting profile picture:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

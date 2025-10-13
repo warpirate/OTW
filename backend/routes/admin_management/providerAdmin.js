@@ -194,6 +194,7 @@ router.get('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
         p.service_radius_km,
         p.location_lat,
         p.location_lng,
+        p.profile_picture_url,
         p.alternate_email,
         p.alternate_phone_number,
         p.emergency_contact_name,
@@ -240,6 +241,7 @@ router.get('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
       name: providers[0].name,
       email: providers[0].email,
       phone: providers[0].phone_number,
+      phone_number: providers[0].phone_number,
       experience_years: providers[0].experience_years,
       rating: parseFloat(providers[0].rating) || 0,
       bio: providers[0].bio,
@@ -247,6 +249,7 @@ router.get('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
       active: Boolean(providers[0].active),
       last_active_at: providers[0].last_active_at,
       service_radius_km: providers[0].service_radius_km,
+      profile_picture_url: providers[0].profile_picture_url,
       location: {
         lat: parseFloat(providers[0].location_lat),
         lng: parseFloat(providers[0].location_lng)
@@ -259,6 +262,9 @@ router.get('/providers/:id', verifyToken, authorizeRole(['admin', 'superadmin'])
       },
       alternate_email: providers[0].alternate_email,
       alternate_phone_number: providers[0].alternate_phone_number,
+      emergency_contact_name: providers[0].emergency_contact_name,
+      emergency_contact_relationship: providers[0].emergency_contact_relationship,
+      emergency_contact_phone: providers[0].emergency_contact_phone,
       emergency_contact: {
         name: providers[0].emergency_contact_name,
         relationship: providers[0].emergency_contact_relationship,
@@ -1300,6 +1306,70 @@ router.get('/providers/documents/:documentId/presign', verifyToken, authorizeRol
   } catch (error) {
     console.error('Error generating presigned GET URL:', error);
     return res.status(500).json({ success: false, message: 'Failed to generate presigned URL', error: process.env.NODE_ENV === 'development' ? error.message : undefined });
+  }
+});
+
+/**
+ * Get provider profile picture presigned URL (Admin)
+ * GET /api/admin/providers/:id/profile-picture/presign
+ */
+router.get('/providers/:id/profile-picture/presign', verifyToken, authorizeRole(['admin', 'superadmin']), async (req, res) => {
+  try {
+    const providerId = req.params.id;
+
+    // Get provider profile picture URL
+    const [provider] = await pool.query(
+      'SELECT profile_picture_url FROM providers WHERE id = ?',
+      [providerId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const profilePictureUrl = provider[0].profile_picture_url;
+
+    if (!profilePictureUrl) {
+      return res.status(404).json({ message: 'No profile picture found' });
+    }
+
+    // If it's an S3 URL, generate presigned URL
+    if (profilePictureUrl.includes(S3_BUCKET)) {
+      try {
+        const key = profilePictureUrl.split('.com/')[1];
+        if (!key) {
+          return res.status(400).json({ message: 'Invalid S3 URL format' });
+        }
+
+        const params = {
+          Bucket: S3_BUCKET,
+          Key: key,
+          Expires: 3600 // 1 hour for viewing
+        };
+
+        const viewUrl = await s3.getSignedUrlPromise('getObject', params);
+
+        res.json({
+          url: viewUrl,
+          storage: 's3',
+          expires_in: 3600
+        });
+      } catch (s3Error) {
+        console.error('S3 error:', s3Error);
+        return res.status(500).json({ message: 'Error generating presigned URL' });
+      }
+    } else {
+      // Legacy or external URL
+      res.json({
+        url: profilePictureUrl,
+        storage: 'legacy',
+        expires_in: null
+      });
+    }
+
+  } catch (error) {
+    console.error('Error getting provider profile picture presigned URL:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

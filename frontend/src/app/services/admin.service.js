@@ -333,6 +333,21 @@ class AdminService {
       throw error;
     }
   }
+
+  /**
+   * Get provider profile picture presigned URL
+   */
+  static async getProviderProfilePictureUrl(providerId) {
+    try {
+      const response = await apiClient.get(`/providers/${providerId}/profile-picture/presign`);
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null; // No profile picture found
+      }
+      throw error;
+    }
+  }
 }
 
 export default AdminService;

@@ -418,6 +418,118 @@ class WorkerService {
   //     throw error;
   //   }
   // }
+
+  /**
+   * Profile Picture Management
+   */
+
+  /**
+   * Generate presigned URL for profile picture upload
+   */
+  static async getProfilePictureUploadUrl(fileName, contentType) {
+    try {
+      const response = await WorkerService._client.post('/worker/profile-picture/presign', {
+        file_name: fileName,
+        content_type: contentType
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting profile picture upload URL:', error);
+      throw new Error(error.response?.data?.message || 'Failed to get upload URL');
+    }
+  }
+
+  /**
+   * Upload profile picture to S3 using presigned URL
+   */
+  static async uploadProfilePictureToS3(presignedUrl, file) {
+    try {
+      await fetch(presignedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type
+        }
+      });
+      return true;
+    } catch (error) {
+      console.error('Error uploading profile picture to S3:', error);
+      throw new Error('Failed to upload profile picture');
+    }
+  }
+
+  /**
+   * Update profile picture URL in database
+   */
+  static async updateProfilePictureUrl(profilePictureUrl) {
+    try {
+      const response = await WorkerService._client.put('/worker/profile-picture', {
+        profile_picture_url: profilePictureUrl
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating profile picture URL:', error);
+      throw new Error(error.response?.data?.message || 'Failed to update profile picture');
+    }
+  }
+
+  /**
+   * Get presigned URL to view profile picture
+   */
+  static async getProfilePictureViewUrl() {
+    try {
+      const response = await WorkerService._client.get('/worker/profile-picture/presign');
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null; // No profile picture found
+      }
+      console.error('Error getting profile picture view URL:', error);
+      throw new Error(error.response?.data?.message || 'Failed to get profile picture');
+    }
+  }
+
+  /**
+   * Delete profile picture
+   */
+  static async deleteProfilePicture() {
+    try {
+      const response = await WorkerService._client.delete('/worker/profile-picture');
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting profile picture:', error);
+      throw new Error(error.response?.data?.message || 'Failed to delete profile picture');
+    }
+  }
+
+  /**
+   * Complete profile picture upload flow
+   * @param {File} file - The image file to upload
+   * @returns {Promise<string>} - The S3 URL of the uploaded image
+   */
+  static async uploadProfilePicture(file) {
+    try {
+      // Step 1: Get presigned URL
+      const { upload_url, s3_key } = await this.getProfilePictureUploadUrl(
+        file.name,
+        file.type
+      );
+
+      // Step 2: Upload to S3
+      await this.uploadProfilePictureToS3(upload_url, file);
+
+      // Step 3: Construct S3 URL
+      const s3Url = upload_url.split('?')[0]; // Remove query parameters
+
+      // Step 4: Update database
+      await this.updateProfilePictureUrl(s3Url);
+
+      return s3Url;
+    } catch (error) {
+      console.error('Error in complete profile picture upload:', error);
+      throw error;
+    }
+  }
   
 }
 

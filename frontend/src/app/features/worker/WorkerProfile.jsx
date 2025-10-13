@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft,
@@ -19,7 +19,9 @@ import {
   Settings,
   AlertTriangle,
   FileText,
-  Upload
+  Upload,
+  Camera,
+  Trash2
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
@@ -70,6 +72,12 @@ const WorkerProfile = () => {
     missingFields: []
   });
 
+  // Profile picture states
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [loadingPicture, setLoadingPicture] = useState(false);
+  const fileInputRef = useRef(null);
+
   // Listen for theme changes
   useEffect(() => {
     setDarkMode(isDarkMode());
@@ -108,6 +116,91 @@ const WorkerProfile = () => {
 
     loadProfile();
   }, [navigate]);
+
+  // Load profile picture
+  useEffect(() => {
+    const loadProfilePicture = async () => {
+      try {
+        setLoadingPicture(true);
+        const pictureData = await WorkerService.getProfilePictureViewUrl();
+        if (pictureData && pictureData.url) {
+          setProfilePictureUrl(pictureData.url);
+        }
+      } catch (error) {
+        console.error('Error loading profile picture:', error);
+        // Don't show error toast, just use default avatar
+      } finally {
+        setLoadingPicture(false);
+      }
+    };
+
+    if (!loading) {
+      loadProfilePicture();
+    }
+  }, [loading]);
+
+  // Profile picture handlers
+  const handleProfilePictureClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleProfilePictureChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPEG, PNG, or WebP)');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+
+    setUploadingPicture(true);
+    try {
+      const s3Url = await WorkerService.uploadProfilePicture(file);
+      
+      // Get presigned URL for viewing
+      const pictureData = await WorkerService.getProfilePictureViewUrl();
+      if (pictureData && pictureData.url) {
+        setProfilePictureUrl(pictureData.url);
+      }
+      
+      toast.success('Profile picture updated successfully!');
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      toast.error(error.message || 'Failed to upload profile picture');
+    } finally {
+      setUploadingPicture(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteProfilePicture = async () => {
+    if (!window.confirm('Are you sure you want to delete your profile picture?')) {
+      return;
+    }
+
+    setUploadingPicture(true);
+    try {
+      await WorkerService.deleteProfilePicture();
+      setProfilePictureUrl(null);
+      toast.success('Profile picture deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting profile picture:', error);
+      toast.error(error.message || 'Failed to delete profile picture');
+    } finally {
+      setUploadingPicture(false);
+    }
+  };
 
   // Format profile data for display
   const formatProfileData = (profileData) => {
@@ -570,11 +663,64 @@ const WorkerProfile = () => {
 
           {/* Profile Card */}
           <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-8 mb-8 shadow-sm`}>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              onChange={handleProfilePictureChange}
+              className="hidden"
+            />
+
             <div className="flex justify-between items-start mb-6">
               <div className="flex items-center space-x-4">
-                <div className="bg-blue-100 rounded-full p-4">
-                  <User className="h-8 w-8 text-blue-600" />
+                {/* Profile Picture */}
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-full overflow-hidden bg-blue-100 flex items-center justify-center">
+                    {loadingPicture ? (
+                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+                    ) : profilePictureUrl ? (
+                      <img
+                        src={profilePictureUrl}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                        onError={() => setProfilePictureUrl(null)}
+                      />
+                    ) : (
+                      <User className="h-12 w-12 text-blue-600" />
+                    )}
+                  </div>
+                  
+                  {/* Upload/Delete overlay */}
+                  {!uploadingPicture && (
+                    <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
+                      <button
+                        onClick={handleProfilePictureClick}
+                        className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                        title="Upload picture"
+                      >
+                        <Camera className="h-4 w-4 text-gray-700" />
+                      </button>
+                      {profilePictureUrl && (
+                        <button
+                          onClick={handleDeleteProfilePicture}
+                          className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
+                          title="Delete picture"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Uploading indicator */}
+                  {uploadingPicture && (
+                    <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <h3 className={`text-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                     {profile.displayName}
