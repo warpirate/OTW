@@ -12,7 +12,9 @@ const UserManagement = () => {
     page: 1,
     limit: 10,
     total: 0,
-    totalPages: 0
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false
   });
   const [filters, setFilters] = useState({
     verified: '',
@@ -46,7 +48,9 @@ const UserManagement = () => {
         setPagination(prev => ({
           ...prev,
           total: response.data.pagination.total,
-          totalPages: response.data.pagination.totalPages
+          totalPages: response.data.pagination.totalPages,
+          hasNext: response.data.pagination.hasNext,
+          hasPrev: response.data.pagination.hasPrev
         }));
       }
     } catch (err) {
