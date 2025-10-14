@@ -7,6 +7,35 @@ const path = require('path');
 const fs = require('fs');
 const AWS = require('aws-sdk');
 
+// Document type enums matching frontend
+const DOCUMENT_TYPES = {
+  IDENTITY_PROOF: 'identity_proof',
+  ADDRESS_PROOF: 'address_proof',
+  DRIVERS_LICENSE: 'drivers_license',
+  VEHICLE_REGISTRATION: 'vehicle_registration',
+  TRADE_CERTIFICATE: 'trade_certificate',
+  BACKGROUND_CHECK: 'background_check',
+  PROFILE_PHOTO: 'profile_photo',
+  OTHER: 'other'
+};
+
+// Required documents for all workers
+const REQUIRED_DOCUMENTS = [
+  DOCUMENT_TYPES.IDENTITY_PROOF,
+  DOCUMENT_TYPES.ADDRESS_PROOF
+];
+
+// Additional required documents for drivers
+const DRIVER_REQUIRED_DOCUMENTS = [
+  DOCUMENT_TYPES.DRIVERS_LICENSE,
+  DOCUMENT_TYPES.VEHICLE_REGISTRATION
+];
+
+// Validation helper
+const isValidDocumentType = (type) => {
+  return Object.values(DOCUMENT_TYPES).includes(type);
+};
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -282,6 +311,23 @@ router.post('/documents/presign', verifyToken, async (req, res) => {
       return res.status(400).json({ message: 'file_name, content_type and document_type are required' });
     }
 
+    // Validate document type
+    if (!isValidDocumentType(document_type)) {
+      return res.status(400).json({
+        message: 'Invalid document type',
+        validTypes: Object.values(DOCUMENT_TYPES)
+      });
+    }
+
+    // Validate content type (images and PDFs only)
+    const allowedContentTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    if (!allowedContentTypes.includes(content_type)) {
+      return res.status(400).json({
+        message: 'Invalid file type. Only JPEG, PNG, and PDF files are allowed',
+        allowedTypes: allowedContentTypes
+      });
+    }
+
     // Get provider ID
     const [provider] = await pool.query(
       'SELECT id FROM providers WHERE user_id = ?',
@@ -293,6 +339,25 @@ router.post('/documents/presign', verifyToken, async (req, res) => {
     }
 
     const providerId = provider[0].id;
+
+    // Check if driver-specific documents require driver service
+    if (DRIVER_REQUIRED_DOCUMENTS.includes(document_type)) {
+      const [driverServices] = await pool.query(
+        `SELECT ps.id FROM provider_services ps
+         JOIN subcategories s ON ps.subcategory_id = s.id
+         JOIN service_categories sc ON s.category_id = sc.id
+         WHERE ps.provider_id = ? AND LOWER(sc.category_type) = 'driver'
+         LIMIT 1`,
+        [providerId]
+      );
+
+      if (driverServices.length === 0) {
+        return res.status(400).json({
+          message: 'Driver-specific documents can only be uploaded by providers offering driver services'
+        });
+      }
+    }
+
     const safeName = sanitizeFileName(file_name);
     const key = `provider_documents/${providerId}/${Date.now()}_${safeName}`;
 
@@ -328,6 +393,14 @@ router.post('/documents/confirm', verifyToken, async (req, res) => {
       return res.status(400).json({ message: 'document_type and object_key are required' });
     }
 
+    // Validate document type
+    if (!isValidDocumentType(document_type)) {
+      return res.status(400).json({
+        message: 'Invalid document type',
+        validTypes: Object.values(DOCUMENT_TYPES)
+      });
+    }
+
     // Get provider ID
     const [provider] = await pool.query(
       'SELECT id FROM providers WHERE user_id = ?',
@@ -340,10 +413,32 @@ router.post('/documents/confirm', verifyToken, async (req, res) => {
 
     const providerId = provider[0].id;
 
+    // Check if document of this type already exists
+    const [existingDoc] = await pool.query(
+      'SELECT id FROM provider_documents WHERE provider_id = ? AND document_type = ?',
+      [providerId, document_type]
+    );
+
+    if (existingDoc.length > 0) {
+      // Update existing document
+      await pool.query(
+        `UPDATE provider_documents
+         SET document_url = ?, status = 'pending_review', uploaded_at = NOW()
+         WHERE id = ?`,
+        [object_key, existingDoc[0].id]
+      );
+
+      return res.json({
+        message: 'Document updated successfully',
+        id: existingDoc[0].id,
+        document_url: object_key
+      });
+    }
+
     // Save document info to database; store the S3 object key in document_url column
     const [result] = await pool.query(
-      `INSERT INTO provider_documents 
-       (provider_id, document_type, document_url, status) 
+      `INSERT INTO provider_documents
+       (provider_id, document_type, document_url, status)
        VALUES (?, ?, ?, 'pending_review')`,
       [providerId, document_type, object_key]
     );
@@ -1062,19 +1157,19 @@ router.post('/driver-details', verifyToken, async (req, res) => {
 router.get('/check-driver-status', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
     // Get provider ID
     const [provider] = await pool.query(
       'SELECT id FROM providers WHERE user_id = ?',
       [userId]
     );
-    
+
     if (provider.length === 0) {
       return res.status(404).json({ message: 'Provider not found' });
     }
-    
+
     const providerId = provider[0].id;
-    
+
     // Check if provider offers driver services
     const [driverServices] = await pool.query(
       `SELECT ps.*, s.name as service_name, sc.name as category_name, sc.category_type
@@ -1084,13 +1179,164 @@ router.get('/check-driver-status', verifyToken, async (req, res) => {
        WHERE ps.provider_id = ? AND LOWER(sc.category_type) = 'driver'`,
       [providerId]
     );
-    
-    res.json({ 
+
+    res.json({
       isDriver: driverServices.length > 0,
-      services: driverServices 
+      services: driverServices
     });
   } catch (err) {
     console.error('Error checking driver status:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// ============= ONBOARDING STATUS APIs =============
+
+// GET /onboarding-status - Get worker onboarding completion status
+router.get('/onboarding-status', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get provider ID
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+
+    // Check banking details
+    const [bankingDetails] = await pool.query(
+      'SELECT COUNT(*) as count FROM provider_banking_details WHERE provider_id = ?',
+      [providerId]
+    );
+    const hasBankingDetails = bankingDetails[0].count > 0;
+
+    // Check documents
+    const [documents] = await pool.query(
+      'SELECT document_type FROM provider_documents WHERE provider_id = ?',
+      [providerId]
+    );
+    const uploadedDocTypes = documents.map(d => d.document_type);
+
+    // Check required documents
+    const hasIdentityProof = uploadedDocTypes.includes(DOCUMENT_TYPES.IDENTITY_PROOF);
+    const hasAddressProof = uploadedDocTypes.includes(DOCUMENT_TYPES.ADDRESS_PROOF);
+
+    // Check if provider is a driver
+    const [driverServices] = await pool.query(
+      `SELECT ps.id FROM provider_services ps
+       JOIN subcategories s ON ps.subcategory_id = s.id
+       JOIN service_categories sc ON s.category_id = sc.id
+       WHERE ps.provider_id = ? AND LOWER(sc.category_type) = 'driver'
+       LIMIT 1`,
+      [providerId]
+    );
+    const isDriver = driverServices.length > 0;
+
+    let hasDriverDetails = false;
+    let hasDriverLicense = false;
+    let hasVehicleRegistration = false;
+
+    if (isDriver) {
+      // Check driver details
+      const [driverDetailsResult] = await pool.query(
+        'SELECT COUNT(*) as count FROM drivers WHERE provider_id = ?',
+        [providerId]
+      );
+      hasDriverDetails = driverDetailsResult[0].count > 0;
+
+      // Check driver documents
+      hasDriverLicense = uploadedDocTypes.includes(DOCUMENT_TYPES.DRIVERS_LICENSE);
+      hasVehicleRegistration = uploadedDocTypes.includes(DOCUMENT_TYPES.VEHICLE_REGISTRATION);
+    }
+
+    // Calculate completion
+    const requiredSteps = {
+      banking_details: hasBankingDetails,
+      identity_proof: hasIdentityProof,
+      address_proof: hasAddressProof
+    };
+
+    if (isDriver) {
+      requiredSteps.driver_details = hasDriverDetails;
+      requiredSteps.drivers_license = hasDriverLicense;
+      requiredSteps.vehicle_registration = hasVehicleRegistration;
+    }
+
+    const totalSteps = Object.keys(requiredSteps).length;
+    const completedSteps = Object.values(requiredSteps).filter(v => v === true).length;
+    const completionPercentage = Math.round((completedSteps / totalSteps) * 100);
+    const isComplete = completedSteps === totalSteps;
+
+    res.json({
+      isComplete,
+      completionPercentage,
+      totalSteps,
+      completedSteps,
+      isDriver,
+      steps: requiredSteps,
+      missingSteps: Object.keys(requiredSteps).filter(key => !requiredSteps[key]),
+      uploadedDocuments: uploadedDocTypes
+    });
+  } catch (err) {
+    console.error('Error fetching onboarding status:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /required-documents - Get list of required documents for worker
+router.get('/required-documents', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get provider ID
+    const [provider] = await pool.query(
+      'SELECT id FROM providers WHERE user_id = ?',
+      [userId]
+    );
+
+    if (provider.length === 0) {
+      return res.status(404).json({ message: 'Provider not found' });
+    }
+
+    const providerId = provider[0].id;
+
+    // Check if provider is a driver
+    const [driverServices] = await pool.query(
+      `SELECT ps.id FROM provider_services ps
+       JOIN subcategories s ON ps.subcategory_id = s.id
+       JOIN service_categories sc ON s.category_id = sc.id
+       WHERE ps.provider_id = ? AND LOWER(sc.category_type) = 'driver'
+       LIMIT 1`,
+      [providerId]
+    );
+    const isDriver = driverServices.length > 0;
+
+    const requiredDocs = [...REQUIRED_DOCUMENTS];
+    const optionalDocs = [
+      DOCUMENT_TYPES.TRADE_CERTIFICATE,
+      DOCUMENT_TYPES.BACKGROUND_CHECK,
+      DOCUMENT_TYPES.PROFILE_PHOTO,
+      DOCUMENT_TYPES.OTHER
+    ];
+
+    if (isDriver) {
+      requiredDocs.push(...DRIVER_REQUIRED_DOCUMENTS);
+    }
+
+    res.json({
+      isDriver,
+      requiredDocuments: requiredDocs,
+      optionalDocuments: optionalDocs,
+      allDocumentTypes: DOCUMENT_TYPES
+    });
+  } catch (err) {
+    console.error('Error fetching required documents:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
