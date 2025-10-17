@@ -109,7 +109,10 @@ const CustomerLogin = () => {
   };
 
   const handleSocialLogin = (provider) => {
-    // Handle social login
+    if (provider === 'google') {
+      // Redirect to Google OAuth
+      AuthService.loginWithGoogle();
+    }
   };
 
   return (

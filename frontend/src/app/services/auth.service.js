@@ -485,6 +485,38 @@ const AuthService = {
     } catch (error) {
       throw error;
     }
+  },
+
+  // Google OAuth - Initiate login
+  loginWithGoogle: () => {
+    // Redirect to backend OAuth endpoint
+    const googleAuthUrl = `${API_BASE_URL}/api/auth/google`;
+    window.location.href = googleAuthUrl;
+  },
+
+  // Handle OAuth callback and store token
+  handleOAuthCallback: (token) => {
+    try {
+      // Decode token to get user info
+      const decoded = jwtDecode(token);
+      
+      // Create user object from decoded token
+      const user = {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role || 'customer',
+        role_id: decoded.role_id,
+        name: decoded.name || ''
+      };
+      
+      // Store tokens using existing method
+      AuthService._storeTokens(token, user);
+      
+      return { success: true, user };
+    } catch (error) {
+      console.error('Error handling OAuth callback:', error);
+      return { success: false, error: error.message };
+    }
   }
 };
 

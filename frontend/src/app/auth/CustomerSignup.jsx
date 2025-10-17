@@ -212,20 +212,10 @@ const CustomerSignup = () => {
     }
   };
 
-  const handleSocialSignup = async (provider) => {
-    setIsLoading(true);
-    try {
-      // This would typically involve OAuth flow with the provider
-      // For now, we'll just simulate the process
-      await AuthService.socialAuth(provider, 'mock-token-for-demo');
-      toast.success(`${provider} signup successful!`);
-      navigate('/'); // Redirect after successful social signup
-    } catch (err) {
-      const errorMessage = `${provider} signup failed. Please try again.`;
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setIsLoading(false);
+  const handleSocialSignup = (provider) => {
+    if (provider === 'google') {
+      // Redirect to Google OAuth (same as login - backend handles new user creation)
+      AuthService.loginWithGoogle();
     }
   };
 

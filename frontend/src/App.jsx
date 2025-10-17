@@ -12,6 +12,7 @@ const CustomerLayout = lazy(() => import('./app/layouts/CustomerLayout'));
 const LandingPage = lazy(() => import('./app/customer/LandingPage'));
 const CustomerLogin = lazy(() => import('./app/auth/CustomerLogin'));
 const CustomerSignup = lazy(() => import('./app/auth/CustomerSignup'));
+const GoogleCallback = lazy(() => import('./app/auth/GoogleCallback'));
 const ForgotPassword = lazy(() => import('./app/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('./app/auth/ResetPassword'));
 const VerifyEmail = lazy(() => import('./app/auth/VerifyEmail'));
@@ -384,6 +385,7 @@ function App() {
               <Route index element={<LandingPage />} />
               <Route path="login" element={<CustomerLogin />} />
               <Route path="signup" element={<CustomerSignup />} />
+              <Route path="auth/google/success" element={<GoogleCallback />} />
               <Route path="verify-email" element={<VerifyEmail />} />
                 <Route path="forgot-password" element={<ForgotPassword />} />
                 <Route path="reset-password/:token" element={<ResetPassword />} />

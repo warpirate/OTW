@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const session = require('express-session');
+const passport = require('./config/passport');
 require('dotenv').config();
 const jwt = require('jsonwebtoken');
 
@@ -17,6 +19,8 @@ const corsOptions = {
       // Production domains
       'https://omwhub.com',
       'https://www.omwhub.com',
+      'https://test.omwhub.com',
+      'https://d1v40s48mdt8sd.cloudfront.net',
       // Development domains (only if NODE_ENV is not production)
       ...(process.env.NODE_ENV !== 'production' ? [
         'http://localhost:5173',
@@ -47,12 +51,28 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Session configuration for OAuth
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
 // Load route
 const pool = require('./config/db');
 const { verifyTransporter } = require('./services/emailService');
 
 const categoryRoute = require('./routes/category_management/categories');
 const authRoute = require('./routes/authentication/auth');
+const oauthRoute = require('./routes/authentication/oauth');
 const customerRoute = require('./routes/customer_management/customer');
 const superAdminRoute = require('./routes/admin_management/superAdmin');
 const auditLogsRoute = require('./routes/admin_management/auditLogs');
@@ -89,6 +109,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.use(`${baseURL}/categories`, categoryRoute); 
 app.use(`${baseURL}/auth`, authRoute);
+app.use(`${baseURL}/auth`, oauthRoute);
 app.use(`${baseURL}/customer`, customerRoute);
 // Wallet customer routes disabled
 // app.use(`${baseURL}/customer`, require('./routes/customer_management/wallet'));
