@@ -19,10 +19,13 @@ class SocketServer {
             this.server = http.createServer(this.app);
 
             // Initialize Socket.IO
-            const allowedOrigins = (process.env.CORS_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:5173,https://omwhub.com,https://www.omwhub.com,https://api.omwhub.com')
+            const corsOrigins = process.env.CORS_ORIGINS || 'http://localhost:5173,https://omwhub.com,https://www.omwhub.com,https://d1v40s48mdt8sd.cloudfront.net,https://test.omwhub.com';
+            const allowedOrigins = corsOrigins
               .split(',')
               .map(o => o.trim())
               .filter(Boolean);
+            
+            console.log('Socket.IO CORS allowed origins:', allowedOrigins);
             
             // Add mobile app origins for React Native
             const mobileOrigins = [
@@ -40,19 +43,30 @@ class SocketServer {
                 cors: {
                     origin: (origin, callback) => {
                         // Always allow requests with no origin (mobile apps)
-                        if (!origin) return callback(null, true);
+                        if (!origin) {
+                            console.log('Socket.IO: Allowing request with no origin (mobile app)');
+                            return callback(null, true);
+                        }
                         
                         // Check if origin is in allowed list
-                        if (allowedOrigins.includes(origin)) return callback(null, true);
+                        if (allowedOrigins.includes(origin)) {
+                            console.log(`Socket.IO: Allowing origin: ${origin}`);
+                            return callback(null, true);
+                        }
                         
                         // Log blocked origins for debugging
                         console.warn(`Socket.IO CORS blocked origin: ${origin}`);
+                        console.warn('Allowed origins:', allowedOrigins);
                         return callback(new Error(`Socket.IO CORS blocked: ${origin}`));
                     },
                     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
                     credentials: true
                 },
-                transports: ['websocket', 'polling']
+                transports: ['websocket', 'polling'],
+                allowEIO3: true,
+                pingTimeout: 60000,
+                pingInterval: 25000,
+                connectTimeout: 45000
             });
 
             // Authentication middleware
