@@ -19,7 +19,8 @@ import {
   ArrowLeft,
   Key,
   ThumbsUp,
-  MessageCircle
+  MessageCircle,
+  Camera
 } from 'lucide-react';
 import { isDarkMode, addThemeListener } from '../../utils/themeUtils';
 import AuthService from '../../services/auth.service';
@@ -29,6 +30,8 @@ import { toast } from 'react-toastify';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../../config';
 import WorkerHeader from '../../../components/WorkerHeader';
+import SelfieCapture from '../../../components/SelfieCapture/SelfieCapture';
+import SelfieVerificationService from '../../services/selfieVerification.service';
 const WorkerJobTracking = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();
@@ -43,6 +46,12 @@ const WorkerJobTracking = () => {
   const [serviceProgress, setServiceProgress] = useState(0);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  
+  // Selfie verification states
+  const [showSelfieCapture, setShowSelfieCapture] = useState(false);
+  const [selfieVerificationRequired, setSelfieVerificationRequired] = useState(false);
+  const [selfieVerificationStatus, setSelfieVerificationStatus] = useState('not_required');
+  const [uploadingSelfie, setUploadingSelfie] = useState(false);
 
   // Status flow configuration for workers
   const statusFlow = {
@@ -174,6 +183,9 @@ const WorkerJobTracking = () => {
           setBooking(data.booking);
           setCustomer(data.customer);
           setCurrentStatus(data.booking.service_status || 'assigned');
+          
+          // Load selfie verification status
+          loadSelfieVerificationStatus();
         } else {
           const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
           console.error('API Error:', response.status, errorData);
@@ -194,11 +206,115 @@ const WorkerJobTracking = () => {
     }
   }, [bookingId, navigate]);
 
+  // Load selfie verification status
+  const loadSelfieVerificationStatus = async () => {
+    try {
+      const status = await SelfieVerificationService.getVerificationStatus(bookingId);
+      setSelfieVerificationRequired(status.verification.required);
+      setSelfieVerificationStatus(status.verification.status);
+    } catch (error) {
+      console.error('Error loading selfie verification status:', error);
+      // Don't show error toast, just use defaults
+    }
+  };
+
+  // Handle selfie capture
+  const handleSelfieCapture = async (captureData) => {
+    if (!captureData.file) {
+      toast.error('No image file received');
+      return;
+    }
+
+    // Validate file type and size
+    if (!captureData.file.type.startsWith('image/')) {
+      toast.error('Invalid file type. Please provide an image file');
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (captureData.file.size > maxSize) {
+      toast.error('Image file is too large. Maximum size is 5MB');
+      return;
+    }
+
+    setUploadingSelfie(true);
+    try {
+      // Create FormData with proper fields
+      const formData = new FormData();
+      formData.append('selfie', captureData.file);
+      formData.append('bookingId', bookingId);
+      formData.append('latitude', captureData.location.latitude.toString());
+      formData.append('longitude', captureData.location.longitude.toString());
+      formData.append('timestamp', captureData.timestamp || new Date().toISOString());
+
+      const result = await SelfieVerificationService.completeSelfieVerification(
+        bookingId,
+        formData,
+        captureData.location,
+        captureData.timestamp
+      );
+
+      if (result.success) {
+        setSelfieVerificationStatus('verified');
+        setShowSelfieCapture(false);
+        
+        // Now update the booking status to completed
+        const token = AuthService.getToken('worker');
+        const response = await fetch(`${API_BASE_URL}/api/worker-management/bookings/${bookingId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: 'completed' })
+        });
+
+        const statusData = await response.json();
+        
+        if (statusData.success) {
+          setCurrentStatus('completed');
+          toast.success('Job completed and selfie verified successfully!');
+          setTimeout(() => {
+            navigate('/worker/jobs');
+          }, 2000);
+        } else {
+          toast.error('Failed to update job status after selfie verification');
+        }
+      } else {
+        // Check if error is due to missing profile picture
+        if (result.requiresProfilePicture) {
+          setShowSelfieCapture(false);
+          toast.error(
+            <div>
+              <p className="font-semibold mb-2">Profile Picture Required</p>
+              <p className="text-sm mb-3">{result.message}</p>
+              <button
+                onClick={() => navigate('/worker/profile')}
+                className="px-3 py-1 bg-white text-blue-600 rounded hover:bg-gray-100 text-sm font-medium"
+              >
+                Go to Profile
+              </button>
+            </div>,
+            { duration: 6000, position: 'top-center' }
+          );
+        } else {
+          toast.error(result.message || 'Failed to upload selfie');
+        }
+      }
+    } catch (error) {
+      console.error('Selfie upload error:', error);
+      toast.error(error.message || 'Failed to upload selfie');
+    } finally {
+      setUploadingSelfie(false);
+    }
+  };
+
   const handleStatusUpdate = async (newStatus) => {
     if (updatingStatus) return;
     
     setUpdatingStatus(true);
     try {
+      // First update status to completed
       const token = AuthService.getToken('worker');
       const response = await fetch(`${API_BASE_URL}/api/worker-management/bookings/${bookingId}/status`, {
         method: 'PUT',
@@ -206,36 +322,34 @@ const WorkerJobTracking = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: 'in_progress' }) // Keep it in progress until selfie verification
       });
 
       const data = await response.json();
       
       if (data.success) {
-        setCurrentStatus(newStatus);
-        
-        // Show OTP input modal when arrived
-        if (newStatus === 'arrived') {
-          setShowOTPModal(true);
-          setOtpCode(''); // Clear any previous OTP
-        }
-
-        // Navigate back when completed
+        // If trying to complete, check for selfie requirement
         if (newStatus === 'completed') {
-          setTimeout(() => {
-            navigate('/worker/jobs');
-          }, 2000);
+          try {
+            const verificationStatus = await SelfieVerificationService.getVerificationStatus(bookingId);
+            if (verificationStatus.verification?.required) {
+              setSelfieVerificationRequired(true);
+              setSelfieVerificationStatus('not_uploaded');
+              setShowSelfieCapture(true);
+              toast.info('Please take a selfie to complete the job');
+              setUpdatingStatus(false);
+              return;
+            }
+          } catch (error) {
+            console.error('Error checking selfie requirements:', error);
+          }
         }
 
+        // If no selfie required or not completing, update status normally
+        setCurrentStatus(newStatus);
         toast.success(`Status updated to: ${statusFlow[newStatus]?.label || newStatus}`);
       } else {
-        // Handle payment required error
-        if (data.requires_payment) {
-          toast.error(data.message || 'Payment is required before completing the service');
-          // Optionally show a modal or redirect to payment page
-        } else {
-          toast.error(data.message || 'Failed to update status');
-        }
+        toast.error(data.message || 'Failed to update status');
       }
     } catch (error) {
       console.error('Status update error:', error);
@@ -599,6 +713,89 @@ const WorkerJobTracking = () => {
             </div>
           )}
 
+          {/* Selfie Verification Section - Only show when completing the job */}
+          {currentStatus === 'in_progress' && selfieVerificationRequired && (
+            <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6 mb-6`}>
+              <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                Job Completion Verification
+              </h3>
+              
+              <div className={`p-4 rounded-lg mb-4 ${
+                selfieVerificationStatus === 'verified' 
+                  ? darkMode ? 'bg-green-900 border-green-700' : 'bg-green-50 border-green-200'
+                  : selfieVerificationStatus === 'failed'
+                  ? darkMode ? 'bg-red-900 border-red-700' : 'bg-red-50 border-red-200'
+                  : darkMode ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-200'
+              } border`}>
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    {selfieVerificationStatus === 'verified' ? (
+                      <CheckCircle className="h-6 w-6 text-green-600" />
+                    ) : selfieVerificationStatus === 'failed' ? (
+                      <AlertCircle className="h-6 w-6 text-red-600" />
+                    ) : (
+                      <Camera className="h-6 w-6 text-blue-600" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`font-semibold mb-2 ${
+                      selfieVerificationStatus === 'verified' 
+                        ? darkMode ? 'text-green-200' : 'text-green-800'
+                        : selfieVerificationStatus === 'failed'
+                        ? darkMode ? 'text-red-200' : 'text-red-800'
+                        : darkMode ? 'text-blue-200' : 'text-blue-800'
+                    }`}>
+                      {selfieVerificationStatus === 'verified' 
+                        ? 'Selfie Verified ✓'
+                        : selfieVerificationStatus === 'failed'
+                        ? 'Selfie Verification Failed'
+                        : selfieVerificationStatus === 'pending'
+                        ? 'Selfie Under Review'
+                        : 'Selfie Required for Job Completion'
+                      }
+                    </h4>
+                    <p className={`mb-3 ${
+                      selfieVerificationStatus === 'verified' 
+                        ? darkMode ? 'text-green-300' : 'text-green-700'
+                        : selfieVerificationStatus === 'failed'
+                        ? darkMode ? 'text-red-300' : 'text-red-700'
+                        : darkMode ? 'text-blue-300' : 'text-blue-700'
+                    }`}>
+                      {selfieVerificationStatus === 'verified' 
+                        ? 'Your identity has been verified at the customer location. You can now complete the job.'
+                        : selfieVerificationStatus === 'failed'
+                        ? 'Selfie verification failed. Please try again with a clearer photo at the customer location.'
+                        : selfieVerificationStatus === 'pending'
+                        ? 'Your selfie has been uploaded and is being reviewed. Please wait for verification.'
+                        : 'Take a selfie at the customer location to verify your presence before completing the job.'
+                      }
+                    </p>
+                    
+                    {(selfieVerificationStatus === 'not_uploaded' || selfieVerificationStatus === 'failed') && (
+                      <button
+                        onClick={() => setShowSelfieCapture(true)}
+                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Camera className="w-4 h-4 mr-2" />
+                        Take Verification Selfie
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                <p className="mb-2"><strong>Requirements:</strong></p>
+                <ul className="space-y-1 ml-4">
+                  <li>• Be within 400m of the customer location</li>
+                  <li>• Take a clear selfie showing your face</li>
+                  <li>• Face will be compared with your profile picture</li>
+                  <li>• Location and timestamp will be recorded</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
           {/* Customer Rating & Review */}
           {currentStatus === 'completed' && (
             <div className={`rounded-lg border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-6 mb-6`}>
@@ -730,6 +927,22 @@ const WorkerJobTracking = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* Selfie Capture Modal */}
+      {showSelfieCapture && booking && (
+        <SelfieCapture
+          isOpen={showSelfieCapture}
+          onClose={() => setShowSelfieCapture(false)}
+          onCapture={handleSelfieCapture}
+          customerLocation={{
+            latitude: booking.location_lat,
+            longitude: booking.location_lng,
+            address: booking.address
+          }}
+          maxDistance={400}
+          loading={uploadingSelfie}
+        />
       )}
     </div>
   );

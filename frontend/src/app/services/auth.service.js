@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
-import { API_BASE_URL } from '../config';
+import { API_URL } from '../config';
 
 // API base URLs - adjust these to match your backend API
-const AUTH_API_URL = `${API_BASE_URL}/api/auth`;
+const AUTH_API_URL = `${API_URL}/auth`;
  
 // Create axios instance with default config for auth endpoints
 const authClient = axios.create({
@@ -490,7 +490,7 @@ const AuthService = {
   // Google OAuth - Initiate login
   loginWithGoogle: () => {
     // Redirect to backend OAuth endpoint
-    const googleAuthUrl = `${API_BASE_URL}/api/auth/google`;
+    const googleAuthUrl = `${API_URL}/auth/google`;
     window.location.href = googleAuthUrl;
   },
 
@@ -519,76 +519,4 @@ const AuthService = {
     }
   }
 };
-
-// Admin Service functions integrated into AuthService
-// const AdminService = {
-//   // Get all admins
-//   getAdmins: async () => {
-//     try {
-//       const response = await adminClient.get('/');
-//       return response.data;
-//     } catch (error) {
-//       console.error('Error fetching admins:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Create new admin
-//   createAdmin: async (adminData) => {
-//     try {
-//       const response = await adminClient.post('/', adminData);
-//       return response.data;
-//     } catch (error) {
-//       console.error('Error creating admin:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Update admin
-//   updateAdmin: async (id, adminData) => {
-//     try {
-//       const response = await adminClient.put(`/${id}`, adminData);
-//       return response.data;
-//     } catch (error) {
-//       console.error('Error updating admin:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Delete admin
-//   deleteAdmin: async (id) => {
-//     try {
-//       const response = await adminClient.delete(`/${id}`);
-//       return response.data;
-//     } catch (error) {
-//       console.error('Error deleting admin:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Get admin by ID
-//   getAdminById: async (id) => {
-//     try {
-//       const response = await adminClient.get(`/${id}`);
-//       return response.data;
-//     } catch (error) {
-//       console.error('Error fetching admin:', error);
-//       throw error;
-//     }
-//   },
-
-//   // Update admin status
-//   updateAdminStatus: async (id, status) => {
-//     try {
-//       const response = await adminClient.patch(`/${id}/status`, { status });
-//       return response.data;
-//     } catch (error) {
-//       console.error('Error updating admin status:', error);
-//       throw error;
-//     }
-//   }
-// };
-
-// Export both services
-// export { AdminService };
 export default AuthService;

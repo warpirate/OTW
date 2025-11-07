@@ -135,6 +135,7 @@ app.use(`${baseURL}/admin/pricing`, pricingAdminRoute);
 app.use(`${baseURL}/admin/payouts`, payoutAdminRoute);
 app.use(`${baseURL}/worker-management`, workerRoute);
 app.use(`${baseURL}/worker-management`, require('./routes/worker_management/cash_payments'));
+app.use(`${baseURL}/worker-management/selfie-verification`, require('./routes/worker_management/selfieVerification'));
 // Wallet worker routes disabled
 // app.use(`${baseURL}/worker-management`, require('./routes/worker_management/wallet'));
 app.use(`${baseURL}/worker`, workerDocsRoute);

@@ -651,17 +651,14 @@ const ChatWindow = ({
         scrollToBottom();
     }, [messages, scrollToBottom]);
 
-    // Cleanup on unmount
+    // Cleanup on unmount - DO NOT clear chat data, only clean up local resources
     useEffect(() => {
         return () => {
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
             }
-            if (sessionId) {
-                chatService.leaveChat(sessionId);
-            }
-            chatService.disconnect();
-            // Reset role override when leaving chat
+            // DO NOT call leaveChat or disconnect here - chat should persist until booking completion
+            // Only reset role override when leaving chat UI
             chatService.activeRole = null;
         };
     }, [sessionId]);

@@ -850,8 +850,8 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           query += ' AND br.status = ? AND b.service_status != ?';
           params.push('accepted', 'completed');
         } else if (status === 'pending') {
-          // For pending requests, exclude expired bookings (scheduled time has passed)
-          query += ' AND br.status = ? AND b.scheduled_time > NOW()';
+          // For pending requests, show all pending regardless of scheduled time
+          query += ' AND br.status = ?';
           params.push('pending');
         } else {
           // For other statuses, filter by booking_request status
@@ -859,9 +859,8 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           params.push(status);
         }
       } else {
-        // When no specific status is provided, exclude expired pending requests
-        query += ' AND (br.status != ? OR (br.status = ? AND b.scheduled_time > NOW()))';
-        params.push('pending', 'pending');
+        // When no specific status is provided, show all requests (no time-based filtering)
+        // This ensures "All Requests" shows everything including pending requests
       }
 
       if (cursor) {
@@ -957,8 +956,8 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           query += ' AND br.status = ? AND b.service_status != ?';
           queryParams.push('accepted', 'completed');
         } else if (status === 'pending') {
-          // For pending requests, exclude expired bookings (scheduled time has passed)
-          query += ' AND br.status = ? AND b.scheduled_time > NOW()';
+          // For pending requests, show all pending regardless of scheduled time
+          query += ' AND br.status = ?';
           queryParams.push('pending');
         } else {
           // For other statuses, filter by booking_request status
@@ -966,9 +965,8 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           queryParams.push(status);
         }
       } else {
-        // When no specific status is provided, exclude expired pending requests
-        query += ' AND (br.status != ? OR (br.status = ? AND b.scheduled_time > NOW()))';
-        queryParams.push('pending', 'pending');
+        // When no specific status is provided, show all requests (no time-based filtering)
+        // This ensures "All Requests" shows everything including pending requests
       }
 
       query += ' ORDER BY br.requested_at DESC LIMIT ? OFFSET ?';
@@ -1000,8 +998,8 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           countQuery += ' AND br.status = ? AND b.service_status != ?';
           countParams.push('accepted', 'completed');
         } else if (status === 'pending') {
-          // For pending requests, exclude expired bookings (scheduled time has passed)
-          countQuery += ' AND br.status = ? AND b.scheduled_time > NOW()';
+          // For pending requests, show all pending regardless of scheduled time
+          countQuery += ' AND br.status = ?';
           countParams.push('pending');
         } else {
           // For other statuses, filter by booking_request status
@@ -1009,9 +1007,8 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           countParams.push(status);
         }
       } else {
-        // When no specific status is provided, exclude expired pending requests
-        countQuery += ' AND (br.status != ? OR (br.status = ? AND b.scheduled_time > NOW()))';
-        countParams.push('pending', 'pending');
+        // When no specific status is provided, show all requests (no time-based filtering)
+        // This ensures "All Requests" shows everything including pending requests
       }
 
       const [countResult] = await pool.query(countQuery, countParams);
@@ -1061,14 +1058,14 @@ router.get('/worker/booking-requests/counts', verifyToken, async (req, res) => {
       WHERE br.provider_id = ?
     `;
 
-    // All (non-cancelled bookings, excluding expired pending)
+    // All (non-cancelled bookings)
     const [allRows] = await pool.query(
-      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND (br.status != 'pending' OR (br.status = 'pending' AND b.scheduled_time > NOW()))`,
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled'`,
       [providerId]
     );
-    // Pending (non-cancelled, non-expired bookings)
+    // Pending (non-cancelled bookings)
     const [pendingRows] = await pool.query(
-      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'pending' AND b.scheduled_time > NOW()`,
+      `SELECT COUNT(*) as total ${baseJoin} AND b.service_status != 'cancelled' AND br.status = 'pending'`,
       [providerId]
     );
     // Accepted (non-cancelled bookings that are not completed)
@@ -1645,9 +1642,9 @@ router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
         COALESCE(sb.address, CONCAT(rb.pickup_address, ' → ', rb.drop_address)) as address,
         COALESCE(s.name, 'Driver Booking') as service_name,
         COALESCE(s.description, 'Driver transportation service') as service_description,
-        r.rating,
-        r.review,
-        r.created_at as rating_submitted_at,
+        b.rating,
+        b.review,
+        b.rating_submitted_at,
         CASE 
           WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
           WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
@@ -1658,7 +1655,6 @@ router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
       LEFT JOIN ride_bookings rb ON b.id = rb.booking_id AND b.booking_type = 'ride'
       LEFT JOIN service_bookings sb ON b.id = sb.booking_id AND b.booking_type = 'service'
       LEFT JOIN subcategories s ON b.subcategory_id = s.id
-      LEFT JOIN ratings r ON r.booking_id = b.id AND r.ratee_type = 'provider' AND r.ratee_id = b.provider_id
       WHERE b.id = ? AND b.provider_id = ?
     `, [bookingId, provider_id]);
 
@@ -1765,6 +1761,32 @@ router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
     if (booking.provider_id !== provider_id) {
       await connection.rollback();
       return res.status(403).json({ message: 'You are not assigned to this booking' });
+    }
+
+    // Check selfie verification requirement before allowing completion
+    if (status === 'completed') {
+      // Check if selfie verification is required and completed
+      const [selfieCheck] = await connection.query(`
+        SELECT b.selfie_verification_required, b.selfie_verification_status,
+               jcs.verification_status as selfie_status
+        FROM bookings b
+        LEFT JOIN job_completion_selfies jcs ON b.id = jcs.booking_id
+        WHERE b.id = ?
+      `, [bookingId]);
+
+      if (selfieCheck.length > 0) {
+        const { selfie_verification_required, selfie_verification_status, selfie_status } = selfieCheck[0];
+        
+        if (selfie_verification_required && selfie_verification_status !== 'verified') {
+          await connection.rollback();
+          return res.status(400).json({ 
+            success: false,
+            message: 'Selfie verification required before job completion',
+            requires_selfie: true,
+            selfie_status: selfie_verification_status || 'not_uploaded'
+          });
+        }
+      }
     }
 
     // Update booking status

@@ -226,7 +226,7 @@ router.get('/bookings/:bookingId/otp-status', verifyToken, async (req, res) => {
     `, [bookingId]);
 
     if (!bookingCheck.length) {
-      return res.status(404).json({ message: 'Service booking not found' });
+      return res.status(404).json({ message: 'Booking not found' });
     }
 
     const booking = bookingCheck[0];
@@ -276,14 +276,14 @@ router.post('/bookings/:bookingId/process-payment', verifyToken, async (req, res
 
     // Verify the customer owns this booking
     const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.user_id AS customer_id, b.service_status, b.price as total_amount, b.payment_status
+      SELECT b.id, b.user_id AS customer_id, b.service_status, b.price as total_amount, b.payment_status, b.booking_type
       FROM bookings b
-      WHERE b.id = ? AND b.booking_type != 'ride'
+      WHERE b.id = ?
     `, [bookingId]);
 
     if (!bookingCheck.length) {
       await connection.rollback();
-      return res.status(404).json({ message: 'Service booking not found' });
+      return res.status(404).json({ message: 'Booking not found' });
     }
 
     const booking = bookingCheck[0];
@@ -455,14 +455,14 @@ router.post('/bookings/:bookingId/rate', verifyToken, async (req, res) => {
 
     // Verify the customer owns this booking
     const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.user_id, b.customer_id, b.service_status, b.provider_id, b.rating
+      SELECT b.id, b.user_id, b.customer_id, b.service_status, b.provider_id, b.rating, b.booking_type
       FROM bookings b
-      WHERE b.id = ? AND b.booking_type != 'ride'
+      WHERE b.id = ?
     `, [bookingId]);
 
     if (!bookingCheck.length) {
       await connection.rollback();
-      return res.status(404).json({ message: 'Service booking not found' });
+      return res.status(404).json({ message: 'Booking not found' });
     }
 
     const booking = bookingCheck[0];
@@ -546,13 +546,13 @@ router.get('/bookings/:bookingId/driver-location', verifyToken, async (req, res)
   try {
     // Verify the customer owns this booking
     const [bookingCheck] = await connection.query(`
-      SELECT b.id, b.user_id, b.customer_id, b.provider_id, b.service_status
+      SELECT b.id, b.user_id, b.customer_id, b.provider_id, b.service_status, b.booking_type
       FROM bookings b
-      WHERE b.id = ? AND b.booking_type != 'ride'
+      WHERE b.id = ?
     `, [bookingId]);
 
     if (!bookingCheck.length) {
-      return res.status(404).json({ message: 'Service booking not found' });
+      return res.status(404).json({ message: 'Booking not found' });
     }
 
     const booking = bookingCheck[0];
