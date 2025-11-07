@@ -1303,7 +1303,9 @@ router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
     const [bookings] = await pool.query(
       `SELECT b.*, 
               b.user_id AS customer_user_id,
+              u.name AS customer_name,
               COALESCE(s.name, 'Ride Service') AS service_name, 
+              COALESCE(c.name, 'Transportation') AS category_name,
               COALESCE(s.description, 'Driver transportation service') AS service_description,
               rb.pickup_address,
               rb.pickup_lat,
@@ -1321,7 +1323,9 @@ router.get('/worker/assigned-bookings', verifyToken, async (req, res) => {
        LEFT JOIN service_bookings sb ON sb.booking_id = b.id
        LEFT JOIN customer_addresses ca ON ca.customer_id = b.user_id AND ca.is_default = 1
        LEFT JOIN customers cust ON cust.id = b.user_id
+       LEFT JOIN users u ON u.id = b.user_id
        LEFT JOIN subcategories s ON s.id = b.subcategory_id
+       LEFT JOIN categories c ON c.id = s.category_id
        LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
        ${whereClause}
        ORDER BY b.created_at DESC
@@ -2399,16 +2403,33 @@ router.put('/worker/profile-picture', verifyToken, async (req, res) => {
     const providerId = provider[0].id;
     const oldProfilePicture = provider[0].profile_picture_url;
 
+    // Construct full S3 URL if only key is provided
+    let fullUrl = profile_picture_url;
+    if (!profile_picture_url.startsWith('http')) {
+      // If it's just an S3 key, construct the full URL
+      fullUrl = `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${profile_picture_url}`;
+    }
+
     // Update profile picture URL
     await pool.query(
       'UPDATE providers SET profile_picture_url = ?, updated_at = NOW() WHERE id = ?',
-      [profile_picture_url, providerId]
+      [fullUrl, providerId]
     );
 
     // Optional: Delete old profile picture from S3 if it exists
     if (oldProfilePicture && oldProfilePicture.includes(S3_BUCKET)) {
       try {
-        const oldKey = oldProfilePicture.split('.com/')[1];
+        // Extract S3 key from URL - handle different URL formats
+        let oldKey;
+        if (oldProfilePicture.includes('.com/')) {
+          oldKey = oldProfilePicture.split('.com/')[1];
+        } else if (oldProfilePicture.includes('.amazonaws.com/')) {
+          oldKey = oldProfilePicture.split('.amazonaws.com/')[1];
+        } else {
+          // If it's already just a key, use it directly
+          oldKey = oldProfilePicture.replace(`https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/`, '');
+        }
+        
         if (oldKey) {
           await s3.deleteObject({
             Bucket: S3_BUCKET,
@@ -2458,7 +2479,17 @@ router.get('/worker/profile-picture/presign', verifyToken, async (req, res) => {
     // If it's an S3 URL, generate presigned URL
     if (profilePictureUrl.includes(S3_BUCKET)) {
       try {
-        const key = profilePictureUrl.split('.com/')[1];
+        // Extract S3 key from URL - handle different URL formats
+        let key;
+        if (profilePictureUrl.includes('.com/')) {
+          key = profilePictureUrl.split('.com/')[1];
+        } else if (profilePictureUrl.includes('.amazonaws.com/')) {
+          key = profilePictureUrl.split('.amazonaws.com/')[1];
+        } else {
+          // If it's already just a key, use it directly
+          key = profilePictureUrl.replace(`https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/`, '');
+        }
+        
         if (!key) {
           return res.status(400).json({ message: 'Invalid S3 URL format' });
         }
@@ -2522,7 +2553,17 @@ router.delete('/worker/profile-picture', verifyToken, async (req, res) => {
     // Delete from S3 if it's an S3 URL
     if (profilePictureUrl.includes(S3_BUCKET)) {
       try {
-        const key = profilePictureUrl.split('.com/')[1];
+        // Extract S3 key from URL - handle different URL formats
+        let key;
+        if (profilePictureUrl.includes('.com/')) {
+          key = profilePictureUrl.split('.com/')[1];
+        } else if (profilePictureUrl.includes('.amazonaws.com/')) {
+          key = profilePictureUrl.split('.amazonaws.com/')[1];
+        } else {
+          // If it's already just a key, use it directly
+          key = profilePictureUrl.replace(`https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/`, '');
+        }
+        
         if (key) {
           await s3.deleteObject({
             Bucket: S3_BUCKET,

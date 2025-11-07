@@ -251,7 +251,7 @@ const Footer = () => {
                   </li>
                   <li>
                     <a 
-                      onClick={() => navigate('/terms')} 
+                      onClick={() => navigate('/terms-conditions')} 
                       className={`${linkText} transition-colors cursor-pointer text-sm`}
                     >
                       Terms & Conditions
@@ -259,7 +259,23 @@ const Footer = () => {
                   </li>
                   <li>
                     <a 
-                      onClick={() => navigate('/privacy')} 
+                      onClick={() => navigate('/refund-policy')} 
+                      className={`${linkText} transition-colors cursor-pointer text-sm`}
+                    >
+                      Refund Policy
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      onClick={() => navigate('/cancellation-refunds')} 
+                      className={`${linkText} transition-colors cursor-pointer text-sm`}
+                    >
+                      Cancellation & Refunds
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      onClick={() => navigate('/privacy-policy')} 
                       className={`${linkText} transition-colors cursor-pointer text-sm`}
                     >
                       Privacy Policy

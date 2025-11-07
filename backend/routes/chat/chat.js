@@ -4,12 +4,14 @@ const mysql = require('mysql2/promise');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const { initDB } = require('../../config/db');
+const { authenticateToken } = require('../../middlewares/auth');
 
-// Initialize database connection
+// Database connection pool
 let db;
-const initDB = async () => {
+const getDB = async () => {
     if (!db) {
-        db = await mysql.createConnection({
+        db = mysql.createPool({
             host: process.env.DB_HOST || 'localhost',
             user: process.env.DB_USER || 'root',
             password: process.env.DB_PASSWORD || '',
@@ -55,41 +57,27 @@ const upload = multer({
     }
 });
 
-// Middleware to verify JWT token
-const authenticateToken = async (req, res, next) => {
+// Chat-specific middleware to enhance user data
+const enhanceUserData = async (req, res, next) => {
     try {
-        const authHeader = req.headers['authorization'];
-        const token = authHeader && authHeader.split(' ')[1];
-
-        if (!token) {
-            return res.status(401).json({ error: 'Access token required' });
-        }
-
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || process.env.JWT_SECRET_KEY || 'your-secret-key');
-
-        // Support tokens that use different claim keys
-        const verifiedUserId = decoded.userId || decoded.id || decoded.user_id;
-        if (!verifiedUserId) {
-            return res.status(401).json({ error: 'Invalid token payload' });
-        }
-
-        // Verify user exists
+        // The user is already authenticated by the global middleware
+        // We just need to enhance the user data with additional fields if needed
         const database = await initDB();
         const [users] = await database.execute(
             'SELECT id, name, email, phone_number FROM users WHERE id = ? AND is_active = 1',
-            [verifiedUserId]
+            [req.user.id]
         );
 
         if (users.length === 0) {
             return res.status(401).json({ error: 'Invalid user' });
         }
 
-        req.user = users[0];
-        req.userType = decoded.userType || decoded.role || 'customer';
+        // Enhance user data with database fields
+        req.user = { ...req.user, ...users[0] };
         next();
     } catch (error) {
-        return res.status(403).json({ error: 'Invalid token' });
+        console.error('Error enhancing user data:', error);
+        return res.status(500).json({ error: 'Internal server error' });
     }
 };
 

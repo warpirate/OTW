@@ -11,20 +11,21 @@ const transporter = nodemailer.createTransport({
     pass: process.env.USER_PASSWORD,
   },
   // Additional settings for better reliability
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,   // 10 seconds
-  socketTimeout: 30000,     // 30 seconds
-  logger: false,             // Set to true for debugging
-  debug: false,              // Set to true for debugging
+  connectionTimeout: 30000, // 30 seconds (increased)
+  greetingTimeout: 30000,   // 30 seconds (increased)
+  socketTimeout: 60000,     // 60 seconds (increased)
+  logger: true,             // Enable for debugging
+  debug: true,              // Enable for debugging
   tls: {
     rejectUnauthorized: false, // Accept self-signed certificates
-    minVersion: 'TLSv1.2'     // Minimum TLS version
+    minVersion: 'TLSv1.2',     // Minimum TLS version
+    ciphers: 'HIGH:!aNULL:!MD5' // Strong ciphers
   },
   pool: true,                // Use connection pooling
-  maxConnections: 5,         // Maximum simultaneous connections
-  maxMessages: 100,          // Maximum messages per connection
-  rateDelta: 1000,           // Rate limiting: 1 second
-  rateLimit: 5               // Rate limiting: 5 messages per rateDelta
+  maxConnections: 3,         // Reduced for stability
+  maxMessages: 50,           // Reduced for stability
+  rateDelta: 2000,           // Rate limiting: 2 seconds
+  rateLimit: 3,              // Rate limiting: 3 messages per rateDelta
 });
 
 const FROM_ADDRESS = process.env.USER_GMAIL || 'info@omwhub.com';

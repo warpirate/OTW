@@ -128,6 +128,15 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
 
         // Validate customer location data
         if (!booking.customer_latitude || !booking.customer_longitude) {
+            console.error('❌ Customer location validation failed:', {
+                bookingId,
+                bookingType: booking.booking_type,
+                customerLatitude: booking.customer_latitude,
+                customerLongitude: booking.customer_longitude,
+                hasRideBooking: !!booking.drop_lat,
+                hasServiceBooking: !!booking.location_lat
+            });
+            
             return res.status(400).json({
                 success: false,
                 message: 'Customer location not available for this booking. Cannot verify worker location.',
@@ -196,11 +205,12 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
 
             return res.status(400).json({
                 success: false,
-                message: locationVerification.message,
+                message: `You are too far from the ${booking.booking_type === 'ride' ? 'drop-off' : 'service'} location. Your distance: ${Math.round(locationVerification.distance)}m, Maximum allowed: ${maxDistance}m. Please move closer and try again.`,
                 locationVerification: {
                     withinRange: false,
-                    distance: locationVerification.distance,
-                    maxDistance: maxDistance
+                    distance: Math.round(locationVerification.distance),
+                    maxDistance: maxDistance,
+                    verificationType: booking.booking_type === 'ride' ? 'drop_location' : 'service_location'
                 }
             });
         }
@@ -462,17 +472,17 @@ router.get('/requirements/:bookingId', verifyToken, async (req, res) => {
                 u.name as customer_name,
                 p.profile_picture_url, 
                 p.id as provider_id,
-                -- For ride bookings, use pickup location
+                -- For ride bookings, use drop location (same as upload endpoint)
                 CASE 
-                    WHEN b.booking_type = 'ride' THEN rb.pickup_lat
+                    WHEN b.booking_type = 'ride' THEN rb.drop_lat
                     ELSE ca.location_lat 
                 END as customer_latitude,
                 CASE 
-                    WHEN b.booking_type = 'ride' THEN rb.pickup_lon
+                    WHEN b.booking_type = 'ride' THEN rb.drop_lon
                     ELSE ca.location_lng 
                 END as customer_longitude,
                 CASE 
-                    WHEN b.booking_type = 'ride' THEN rb.pickup_address
+                    WHEN b.booking_type = 'ride' THEN rb.drop_address
                     ELSE COALESCE(sb.address, ca.address, b.address)
                 END as customer_address
             FROM bookings b
