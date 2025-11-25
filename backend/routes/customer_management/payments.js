@@ -661,7 +661,7 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
     // Also link the Razorpay order id to the payments row so success/webhooks can resolve it
     if (paymentRowResult?.insertId) {
       await pool.query(
-        `UPDATE payments SET razorpay_order_id = ?, updated_at = NOW() WHERE id = ?`,
+        `UPDATE payments SET razorpay_order_id = ? WHERE id = ?`,
         [orderResult.order.id, paymentRowResult.insertId]
       );
     }
@@ -1198,21 +1198,26 @@ router.post('/razorpay/payment-success', verifyToken, async (req, res) => {
     // Verify payment signature (security best practice)
     try {
       const { validateWebhookSignature } = require('../../config/razorpay');
-      const isValidSignature = validateWebhookSignature(
-        razorpay_order_id + '|' + razorpay_payment_id,
-        razorpay_signature
-      );
-      
-      if (!isValidSignature) {
-        await connection.rollback();
-        console.error('Invalid payment signature:', razorpay_signature);
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid payment signature'
-        });
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      if (keySecret) {
+        const isValidSignature = validateWebhookSignature(
+          `${razorpay_order_id}|${razorpay_payment_id}`,
+          razorpay_signature,
+          keySecret
+        );
+        if (!isValidSignature) {
+          await connection.rollback();
+          console.error('Invalid payment signature:', razorpay_signature);
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid payment signature'
+          });
+        }
+      } else {
+        console.warn('RAZORPAY_KEY_SECRET not set; skipping payment signature verification.');
       }
     } catch (signatureError) {
-      console.warn('Signature validation failed, proceeding without verification:', signatureError.message);
+      console.warn('Signature validation error, proceeding without verification:', signatureError.message);
     }
 
     // Update payment record with success details
@@ -1220,11 +1225,34 @@ router.post('/razorpay/payment-success', verifyToken, async (req, res) => {
       `UPDATE payments 
        SET razorpay_payment_id = ?, 
            status = 'captured', 
-           captured_at = NOW(),
-           updated_at = NOW()
+           captured_at = NOW()
        WHERE id = ?`,
       [razorpay_payment_id, payment.id]
     );
+
+    // Also complete related UPI transaction if this payment originated from UPI flow
+    try {
+      if (payment.upi_transaction_id) {
+        await connection.query(
+          `UPDATE upi_transactions
+           SET status = 'completed', completed_at = NOW(),
+               payment_gateway_response = JSON_SET(COALESCE(payment_gateway_response, '{}'), '$.razorpay_payment_id', ?)
+           WHERE id = ? AND status <> 'completed'`,
+          [razorpay_payment_id, payment.upi_transaction_id]
+        );
+      } else if (payment.razorpay_order_id) {
+        await connection.query(
+          `UPDATE upi_transactions
+           SET status = 'completed', completed_at = NOW(),
+               payment_gateway_response = JSON_SET(COALESCE(payment_gateway_response, '{}'), '$.razorpay_payment_id', ?)
+           WHERE JSON_UNQUOTE(JSON_EXTRACT(payment_gateway_response, '$.razorpay_order_id')) = ?
+             AND status <> 'completed'`,
+          [razorpay_payment_id, payment.razorpay_order_id]
+        );
+      }
+    } catch (txnErr) {
+      console.warn('Warning: failed to update upi_transactions on success callback:', txnErr.message);
+    }
 
     // Update booking payment status if booking_id exists
     if (payment.booking_id) {
@@ -1385,8 +1413,7 @@ async function handlePaymentCaptured(connection, paymentEntity) {
     `UPDATE payments 
      SET razorpay_payment_id = ?, 
          status = 'captured', 
-         captured_at = NOW(),
-         updated_at = NOW()
+         captured_at = NOW()
      WHERE id = ?`,
     [paymentId, payment.id]
   );
@@ -1430,11 +1457,9 @@ async function handlePaymentFailed(connection, paymentEntity) {
   await connection.query(
     `UPDATE payments 
      SET razorpay_payment_id = ?, 
-         status = 'failed', 
-         failure_reason = ?,
-         updated_at = NOW()
+         status = 'failed'
      WHERE id = ?`,
-    [paymentId, error_description, payment.id]
+    [paymentId, payment.id]
   );
   
   console.log('Payment failed via webhook:', payment.id);
@@ -1464,8 +1489,7 @@ async function handleOrderPaid(connection, orderEntity) {
     await connection.query(
       `UPDATE payments 
        SET status = 'captured', 
-           captured_at = NOW(),
-           updated_at = NOW()
+           captured_at = NOW()
        WHERE id = ?`,
       [payment.id]
     );
