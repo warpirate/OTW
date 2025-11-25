@@ -983,7 +983,10 @@ const Booking = () => {
 
       if (paymentResponse.success) {
         // Open Razorpay checkout modal
-        const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || import.meta.env.VITE_REACT_APP_RAZORPAY_KEY_ID || 'rzp_test_1234567890';
+        // Prefer backend-provided key from the initiation response
+        const razorpayKey = (paymentResponse && (paymentResponse.key || paymentResponse.order_key))
+          || import.meta.env.VITE_RAZORPAY_KEY_ID
+          || import.meta.env.VITE_REACT_APP_RAZORPAY_KEY_ID;
 
         // Get real user info from AuthService and ProfileService
         const currentUser = AuthService.getCurrentUser('customer');
@@ -1046,12 +1049,33 @@ const Booking = () => {
           theme: {
             color: '#8B5CF6'
           },
-          handler: (response) => {
+          handler: async (response) => {
             // Payment successful callback
             console.log('Razorpay payment successful:', response);
-            setPaymentStatus('completed');
-            toast.success('Payment completed successfully!');
+            try {
+              const verify = await PaymentService.razorpay.handleSuccess({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+              });
+
+              if (verify?.success) {
+                setPaymentStatus('completed');
+                toast.success('Payment completed successfully!');
+              } else if (verify?.already_processed) {
+                setPaymentStatus('completed');
+                toast.success('Payment already processed successfully!');
+              } else {
+                setPaymentStatus('failed');
+                toast.error('Payment verification failed. Please contact support.');
+              }
+            } catch (err) {
+              console.error('Payment verification error:', err);
+              setPaymentStatus('failed');
+              toast.error('Payment verification failed. Please contact support.');
+            }
           },
+
           modal: {
             confirm_close: true, // Ask for confirmation before closing
             escape: false, // Disable escape key to close
@@ -1080,34 +1104,53 @@ const Booking = () => {
           // Override handlers to resolve promise
           razorpayOptions.handler = async (response) => {
             console.log('Razorpay payment successful:', response);
-            setPaymentStatus('completed');
-            toast.success('Payment completed successfully! Finalizing booking...');
+            try {
+              const verify = await PaymentService.razorpay.handleSuccess({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+              });
 
-            // If we have pending booking data, complete the booking flow
-            if (pendingBookingData) {
-              try {
-                // Clear cart after successful payment
-                await clearCart();
+              if (verify?.success || verify?.already_processed) {
+                setPaymentStatus('completed');
+                toast.success('Payment completed successfully! Finalizing booking...');
 
-                // Navigate to booking success
-                navigate('/booking-success', {
-                  state: {
-                    bookingIds: pendingBookingData.booking_ids,
-                    totalAmount: pendingBookingData.total_amount,
-                    scheduledDate: pendingBookingData.scheduled_date,
-                    paymentId: paymentResponse?.payment_id,
-                    paymentMethod: 'upi'
+                // If we have pending booking data, complete the booking flow
+                if (pendingBookingData) {
+                  try {
+                    // Clear cart after successful payment
+                    await clearCart();
+
+                    // Navigate to booking success
+                    navigate('/booking-success', {
+                      state: {
+                        bookingIds: pendingBookingData.booking_ids,
+                        totalAmount: pendingBookingData.total_amount,
+                        scheduledDate: pendingBookingData.scheduled_date,
+                        paymentId: paymentResponse?.payment_id,
+                        paymentMethod: 'upi'
+                      }
+                    });
+
+                    toast.success('Booking confirmed successfully!');
+                  } catch (error) {
+                    console.error('Error completing booking after payment:', error);
+                    toast.error('Payment successful but booking completion failed. Please contact support.');
                   }
-                });
+                }
 
-                toast.success('Booking confirmed successfully!');
-              } catch (error) {
-                console.error('Error completing booking after payment:', error);
-                toast.error('Payment successful but booking completion failed. Please contact support.');
+                resolve(true);
+              } else {
+                setPaymentStatus('failed');
+                toast.error('Payment verification failed. Please contact support.');
+                resolve(false);
               }
+            } catch (err) {
+              console.error('Payment verification error:', err);
+              setPaymentStatus('failed');
+              toast.error('Payment verification failed. Please contact support.');
+              resolve(false);
             }
-
-            resolve(true);
           };
 
           razorpayOptions.modal.ondismiss = () => {

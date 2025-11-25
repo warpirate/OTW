@@ -144,61 +144,54 @@ const SelfieCapture = ({
     }
   };
 
-  // Verify location is within acceptable range
+  // LOCATION VERIFICATION DISABLED - Skip location verification and always allow selfie capture
   const verifyLocation = async () => {
     try {
       setLocationError(null);
-      toast.info('Getting your current location...', { autoClose: 2000 });
       
-      const location = await getCurrentLocation();
-      setCurrentLocation(location);
-
-      if (customerLocation && customerLocation.latitude && customerLocation.longitude) {
-        const dist = calculateDistance(
-          location.latitude,
-          location.longitude,
-          customerLocation.latitude,
-          customerLocation.longitude
-        );
-
-        setDistance(Math.round(dist));
-        
-        console.log('[Location Verification]', {
-          workerLocation: { lat: location.latitude, lng: location.longitude },
-          customerLocation: { lat: customerLocation.latitude, lng: customerLocation.longitude },
-          distance: `${Math.round(dist)}m`,
-          maxDistance: `${maxDistance}m`,
-          accuracy: `${Math.round(location.accuracy)}m`,
-          withinRange: dist <= maxDistance
+      // Still get location for metadata but don't verify distance
+      try {
+        const location = await getCurrentLocation();
+        setCurrentLocation(location);
+        console.log('[Location] Location captured for metadata (verification disabled):', {
+          lat: location.latitude,
+          lng: location.longitude,
+          accuracy: `${Math.round(location.accuracy)}m`
         });
-        
-        if (dist <= maxDistance) {
-          setLocationVerified(true);
-          const accuracyWarning = location.accuracy > 50 ? ' (Low GPS accuracy - ensure location services are enabled)' : '';
-          toast.success(
-            `✓ Location verified: ${Math.round(dist)}m from customer${accuracyWarning}`,
-            { autoClose: 4000 }
-          );
-        } else {
-          setLocationVerified(false);
-          toast.error(
-            `✗ You are too far from customer location!\n\nYour distance: ${Math.round(dist)}m\nMaximum allowed: ${maxDistance}m\n\nPlease move closer to the customer location.`,
-            { autoClose: 6000 }
-          );
-        }
-      } else {
-        // If no customer location provided, assume location is valid
-        setLocationVerified(true);
-        console.log('[Location] No customer location to verify against, accepting current location');
-        toast.success('Location captured successfully');
+      } catch (locationError) {
+        // If location fails, use dummy coordinates
+        console.log('[Location] Location unavailable, using dummy coordinates');
+        setCurrentLocation({
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          timestamp: Date.now(),
+          source: 'dummy_location_disabled'
+        });
       }
+
+      // Always set location as verified since verification is disabled
+      setLocationVerified(true);
+      setDistance(0); // Set distance to 0 since verification is disabled
+      
+      console.log('[Location] Location verification disabled - selfie capture allowed');
+      toast.success('Ready to capture selfie - location verification disabled', { autoClose: 3000 });
+      
     } catch (error) {
-      console.error('[Location Verification Error]', error);
-      setLocationError(error.message);
-      toast.error(
-        `Location Error: ${error.message}\n\nPlease ensure:\n• Location permissions are enabled\n• GPS is turned on\n• You are not in airplane mode`,
-        { autoClose: 8000 }
-      );
+      console.error('[Location] Setup error (verification disabled):', error);
+      // Even if location setup fails, allow selfie capture
+      setCurrentLocation({
+        latitude: 0,
+        longitude: 0,
+        accuracy: 0,
+        timestamp: Date.now(),
+        source: 'fallback_location_disabled'
+      });
+      setLocationVerified(true);
+      setDistance(0);
+      setLocationError(null); // Clear any error since verification is disabled
+      
+      toast.success('Ready to capture selfie - location verification disabled', { autoClose: 3000 });
     }
   };
 
@@ -209,9 +202,26 @@ const SelfieCapture = ({
       return;
     }
 
+    // LOCATION VERIFICATION DISABLED - Skip location verification check
+    // if (!locationVerified) {
+    //   toast.error('Please verify your location first');
+    //   return;
+    // }
+    
+    // Always allow selfie capture since location verification is disabled
     if (!locationVerified) {
-      toast.error('Please verify your location first');
-      return;
+      console.log('[Location] Location not verified, but verification is disabled - proceeding with selfie capture');
+      // Set dummy location if not available
+      if (!currentLocation) {
+        setCurrentLocation({
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+          timestamp: Date.now(),
+          source: 'selfie_capture_fallback'
+        });
+      }
+      setLocationVerified(true);
     }
 
     setIsCapturing(true);
@@ -278,11 +288,14 @@ const SelfieCapture = ({
       return;
     }
 
-    if (!locationVerified) {
-      toast.error('Location not verified');
-      return;
-    }
-
+    // LOCATION VERIFICATION DISABLED - Skip location verification check
+    // if (!locationVerified) {
+    //   toast.error('Location not verified');
+    //   return;
+    // }
+    
+    // Always allow upload since location verification is disabled
+    console.log('[Upload] Uploading selfie (location verification disabled)');
     onCapture(capturedImage);
   };
 
@@ -345,10 +358,10 @@ const SelfieCapture = ({
             Verification Requirements:
           </h4>
           <ul className={`text-sm space-y-1 ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-            <li>• Take a clear selfie at the customer location</li>
-            <li>• Ensure you are within {maxDistance}m of the customer address</li>
+            <li>• Take a clear selfie for job completion verification</li>
             <li>• Your face will be compared with your profile picture</li>
-            <li>• Location and timestamp will be recorded</li>
+            <li>• Location verification is disabled - you can take selfie from anywhere</li>
+            <li>• Timestamp will be recorded for audit purposes</li>
           </ul>
         </div>
 
@@ -362,24 +375,16 @@ const SelfieCapture = ({
               </span>
             </div>
             <div className="flex items-center space-x-2">
-              {locationVerified ? (
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-orange-600" />
-              )}
-              <span className={`text-sm ${
-                locationVerified ? 'text-green-600' : 'text-orange-600'
-              }`}>
-                {locationVerified ? 'Verified' : 'Checking...'}
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              <span className="text-sm text-green-600">
+                Ready
               </span>
             </div>
           </div>
           
-          {distance !== null && (
-            <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Distance from customer: {distance}m (max {maxDistance}m)
-            </p>
-          )}
+          <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+            Location verification disabled - selfie capture allowed
+          </p>
           
           {locationError && (
             <p className="text-sm text-red-600 mt-1">{locationError}</p>
@@ -443,7 +448,7 @@ const SelfieCapture = ({
             <>
               <button
                 onClick={captureSelfie}
-                disabled={!locationVerified || isCapturing || cameraError}
+                disabled={isCapturing || cameraError}
                 className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
               >
                 {isCapturing ? (
@@ -494,14 +499,12 @@ const SelfieCapture = ({
           )}
         </div>
 
-        {/* Status Messages */}
-        {!locationVerified && (
-          <div className={`mt-4 p-3 rounded-lg ${darkMode ? 'bg-orange-900 border-orange-700' : 'bg-orange-50 border-orange-200'} border`}>
-            <p className={`text-sm ${darkMode ? 'text-orange-200' : 'text-orange-800'}`}>
-              Please ensure you are at the customer location before taking the selfie.
-            </p>
-          </div>
-        )}
+        {/* Info Message */}
+        <div className={`mt-4 p-3 rounded-lg ${darkMode ? 'bg-blue-900 border-blue-700' : 'bg-blue-50 border-blue-200'} border`}>
+          <p className={`text-sm ${darkMode ? 'text-blue-200' : 'text-blue-800'}`}>
+            Location verification is disabled. You can take your selfie from anywhere.
+          </p>
+        </div>
       </div>
     </div>
   );

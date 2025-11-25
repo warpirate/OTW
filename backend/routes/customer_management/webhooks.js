@@ -144,19 +144,36 @@ async function handlePaymentCaptured(payment) {
     // Update booking payment status if booking_id exists
     if (transaction.booking_id) {
       await pool.query(
-        'UPDATE bookings SET payment_status = "paid", payment_method = "UPI Payment", payment_completed_at = NOW(), updated_at = NOW() WHERE id = ?',
+        'UPDATE bookings SET payment_status = "paid", payment_method = "Razorpay", payment_completed_at = NOW(), updated_at = NOW() WHERE id = ? AND payment_status != "paid"',
         [transaction.booking_id]
       );
 
-      // Emit Socket.IO event to notify customer and worker that payment is completed
+      // If service was waiting for payment, mark it completed
+      const [svcRows] = await pool.query(
+        'SELECT service_status FROM bookings WHERE id = ? LIMIT 1',
+        [transaction.booking_id]
+      );
+      if (svcRows.length && svcRows[0].service_status === 'payment_required') {
+        await pool.query(
+          'UPDATE bookings SET service_status = "completed", updated_at = NOW() WHERE id = ?',
+          [transaction.booking_id]
+        );
+      }
+
+      // Emit Socket.IO events to notify customer and worker that payment is completed
       try {
         const io = require('../../server').get('io');
         if (io) {
           io.to(`booking_${transaction.booking_id}`).emit('payment_update', {
             booking_id: transaction.booking_id,
             payment_status: 'paid',
-            payment_method: 'UPI Payment',
+            payment_method: 'Razorpay',
             message: 'Payment completed successfully'
+          });
+          io.to(`booking_${transaction.booking_id}`).emit('status_update', {
+            booking_id: transaction.booking_id,
+            status: 'completed',
+            message: 'Service completed after online payment'
           });
         }
       } catch (socketError) {
@@ -323,9 +340,41 @@ async function handleOrderPaid(order) {
       // Update booking payment status if booking_id exists
       if (transaction.booking_id) {
         await pool.query(
-          'UPDATE bookings SET payment_status = "paid" WHERE id = ?',
+          'UPDATE bookings SET payment_status = "paid", payment_method = "Razorpay", payment_completed_at = NOW(), updated_at = NOW() WHERE id = ? AND payment_status != "paid"',
           [transaction.booking_id]
         );
+
+        // If service was waiting for payment, mark it completed
+        const [svcRows] = await pool.query(
+          'SELECT service_status FROM bookings WHERE id = ? LIMIT 1',
+          [transaction.booking_id]
+        );
+        if (svcRows.length && svcRows[0].service_status === 'payment_required') {
+          await pool.query(
+            'UPDATE bookings SET service_status = "completed", updated_at = NOW() WHERE id = ?',
+            [transaction.booking_id]
+          );
+        }
+
+        // Emit socket updates
+        try {
+          const io = require('../../server').get('io');
+          if (io) {
+            io.to(`booking_${transaction.booking_id}`).emit('payment_update', {
+              booking_id: transaction.booking_id,
+              payment_status: 'paid',
+              payment_method: 'Razorpay',
+              message: 'Payment completed successfully'
+            });
+            io.to(`booking_${transaction.booking_id}`).emit('status_update', {
+              booking_id: transaction.booking_id,
+              status: 'completed',
+              message: 'Service completed after online payment'
+            });
+          }
+        } catch (socketErr) {
+          console.error('Socket emit error (order.paid):', socketErr.message);
+        }
       }
     }
 

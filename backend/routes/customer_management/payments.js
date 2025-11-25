@@ -624,8 +624,8 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
       [userId, booking_id || null, paymentMethod[0].id, transactionId, amount]
     );
 
-    // Create payment record for payment history
-    await pool.query(
+    // Create payment record for payment history and keep the id for later update
+    const [paymentRowResult] = await pool.query(
       `INSERT INTO payments (user_id, booking_id, upi_transaction_id, amount_paid, status, method, payment_type)
        VALUES (?, ?, ?, ?, 'created', 'upi', 'upi')`,
       [userId, booking_id || null, transactionResult.insertId, amount]
@@ -658,7 +658,15 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
       [orderResult.order.id, transactionResult.insertId]
     );
 
-    // Return payment details for client
+    // Also link the Razorpay order id to the payments row so success/webhooks can resolve it
+    if (paymentRowResult?.insertId) {
+      await pool.query(
+        `UPDATE payments SET razorpay_order_id = ?, updated_at = NOW() WHERE id = ?`,
+        [orderResult.order.id, paymentRowResult.insertId]
+      );
+    }
+
+    // Return payment details for client (include public key for checkout)
     res.json({
       success: true,
       payment_id: transactionId,
@@ -668,6 +676,8 @@ router.post('/upi/initiate', verifyToken, async (req, res) => {
       amount: amount,
       currency: 'INR',
       status: 'order_created',
+      key: process.env.RAZORPAY_KEY_ID,
+      order_key: process.env.RAZORPAY_KEY_ID, // backward-compatible alias
       message: 'Order created. Complete the payment via UPI using Razorpay Checkout.'
     });
 
@@ -1079,6 +1089,35 @@ router.post('/upi/refund/:paymentId', verifyToken, async (req, res) => {
             'UPDATE bookings SET payment_status = "paid", payment_method = "UPI Payment", payment_completed_at = NOW() WHERE id = ?',
             [transaction.booking_id]
           );
+          // Also complete the service if it was waiting for payment and emit socket updates
+          const [svcRows] = await pool.query(
+            'SELECT service_status FROM bookings WHERE id = ? LIMIT 1',
+            [transaction.booking_id]
+          );
+          if (svcRows.length && svcRows[0].service_status === 'payment_required') {
+            await pool.query(
+              'UPDATE bookings SET service_status = "completed", updated_at = NOW() WHERE id = ?',
+              [transaction.booking_id]
+            );
+            try {
+              const io = require('../../server').get('io');
+              if (io) {
+                io.to(`booking_${transaction.booking_id}`).emit('status_update', {
+                  booking_id: transaction.booking_id,
+                  status: 'completed',
+                  message: 'Service completed after online payment'
+                });
+                io.to(`booking_${transaction.booking_id}`).emit('payment_update', {
+                  booking_id: transaction.booking_id,
+                  payment_status: 'paid',
+                  payment_method: 'UPI Payment',
+                  message: 'Payment status synced as completed'
+                });
+              }
+            } catch (socketErr) {
+              console.error('Socket emit error (sync-payment-status):', socketErr.message);
+            }
+          }
         }
 
         res.json({
@@ -1207,6 +1246,38 @@ router.post('/razorpay/payment-success', verifyToken, async (req, res) => {
         );
         
         console.log('Booking payment status updated:', payment.booking_id);
+      }
+      // Ensure service_status is completed if it was waiting for payment
+      const [svcRows] = await connection.query(
+        'SELECT service_status FROM bookings WHERE id = ? FOR UPDATE',
+        [payment.booking_id]
+      );
+      if (svcRows.length && svcRows[0].service_status === 'payment_required') {
+        await connection.query(
+          `UPDATE bookings
+           SET service_status = 'completed', updated_at = NOW()
+           WHERE id = ?`,
+          [payment.booking_id]
+        );
+        // Notify via sockets
+        try {
+          const io = req.app.get('io');
+          if (io) {
+            io.to(`booking_${payment.booking_id}`).emit('status_update', {
+              booking_id: payment.booking_id,
+              status: 'completed',
+              message: 'Service completed after online payment'
+            });
+            io.to(`booking_${payment.booking_id}`).emit('payment_update', {
+              booking_id: payment.booking_id,
+              payment_status: 'paid',
+              payment_method: 'Razorpay',
+              message: 'Payment captured successfully'
+            });
+          }
+        } catch (socketErr) {
+          console.error('Socket emit error (payment-success):', socketErr.message);
+        }
       } else {
         console.log('Booking payment already marked as paid:', payment.booking_id);
       }

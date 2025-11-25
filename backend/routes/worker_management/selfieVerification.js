@@ -45,8 +45,26 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
             timestamp 
         } = req.body;
 
+        // Debug logging - see what we received
+        console.log('📥 Received selfie upload request:', {
+            userId,
+            bookingId,
+            latitude,
+            longitude,
+            timestamp,
+            hasFile: !!req.file,
+            fileDetails: req.file ? {
+                fieldname: req.file.fieldname,
+                originalname: req.file.originalname,
+                mimetype: req.file.mimetype,
+                size: req.file.size
+            } : null,
+            bodyKeys: Object.keys(req.body)
+        });
+
         // Validate required parameters
         if (!userId) {
+            console.error('❌ No userId in token');
             return res.status(400).json({
                 success: false,
                 message: 'User ID not found in token. Please login as a worker.'
@@ -54,23 +72,33 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
         }
 
         // Validate required fields
-        if (!bookingId || !latitude || !longitude || !req.file) {
+        // LOCATION VERIFICATION DISABLED - Only require bookingId and selfie image
+        if (!bookingId || !req.file) {
+            console.error('❌ Missing required fields:', { 
+                hasBookingId: !!bookingId, 
+                hasFile: !!req.file,
+                receivedFields: Object.keys(req.body)
+            });
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: bookingId, latitude, longitude, and selfie image'
+                message: 'Missing required fields: bookingId and selfie image'
             });
         }
 
-        // Validate coordinates
-        const selfieLatitude = parseFloat(latitude);
-        const selfieLongitude = parseFloat(longitude);
+        // LOCATION VERIFICATION DISABLED - Skip coordinate validation
+        // const selfieLatitude = parseFloat(latitude);
+        // const selfieLongitude = parseFloat(longitude);
         
-        if (isNaN(selfieLatitude) || isNaN(selfieLongitude)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid GPS coordinates'
-            });
-        }
+        // if (isNaN(selfieLatitude) || isNaN(selfieLongitude)) {
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: 'Invalid GPS coordinates'
+        //     });
+        // }
+        
+        // Use dummy coordinates for database storage (location verification disabled)
+        const selfieLatitude = latitude ? parseFloat(latitude) : 0;
+        const selfieLongitude = longitude ? parseFloat(longitude) : 0;
 
         connection = await pool.getConnection();
 
@@ -126,27 +154,29 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
             }
         });
 
-        // Validate customer location data
-        if (!booking.customer_latitude || !booking.customer_longitude) {
-            console.error('❌ Customer location validation failed:', {
-                bookingId,
-                bookingType: booking.booking_type,
-                customerLatitude: booking.customer_latitude,
-                customerLongitude: booking.customer_longitude,
-                hasRideBooking: !!booking.drop_lat,
-                hasServiceBooking: !!booking.location_lat
-            });
-            
-            return res.status(400).json({
-                success: false,
-                message: 'Customer location not available for this booking. Cannot verify worker location.',
-                debug: {
-                    bookingType: booking.booking_type,
-                    hasLatitude: !!booking.customer_latitude,
-                    hasLongitude: !!booking.customer_longitude
-                }
-            });
-        }
+        // LOCATION VERIFICATION DISABLED - Skip customer location validation
+        // if (!booking.customer_latitude || !booking.customer_longitude) {
+        //     console.error('❌ Customer location validation failed:', {
+        //         bookingId,
+        //         bookingType: booking.booking_type,
+        //         customerLatitude: booking.customer_latitude,
+        //         customerLongitude: booking.customer_longitude,
+        //         hasRideBooking: !!booking.drop_lat,
+        //         hasServiceBooking: !!booking.location_lat
+        //     });
+        //     
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: 'Customer location not available for this booking. Cannot verify worker location.',
+        //         debug: {
+        //             bookingType: booking.booking_type,
+        //             hasLatitude: !!booking.customer_latitude,
+        //             hasLongitude: !!booking.customer_longitude
+        //         }
+        //     });
+        // }
+        
+        console.log('📍 Location verification disabled - proceeding with selfie verification only');
 
         // Upload selfie to S3 first
         if (!req.file) {
@@ -169,51 +199,62 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
             });
         }
 
-        // Verify worker is at customer location
-        const maxDistance = parseInt(process.env.SELFIE_MAX_DISTANCE_METERS || '400');
-        const locationVerification = await faceComparisonService.verifyLocation(
-            selfieLatitude,
-            selfieLongitude,
-            booking.customer_latitude,
-            booking.customer_longitude,
-            maxDistance
-        );
+        // LOCATION VERIFICATION DISABLED - Skip location distance checking
+        // const maxDistance = parseInt(process.env.SELFIE_MAX_DISTANCE_METERS || '400');
+        // const locationVerification = await faceComparisonService.verifyLocation(
+        //     selfieLatitude,
+        //     selfieLongitude,
+        //     booking.customer_latitude,
+        //     booking.customer_longitude,
+        //     maxDistance
+        // );
 
-        if (!locationVerification.success) {
-            return res.status(500).json({
-                success: false,
-                message: 'Failed to verify location',
-                error: locationVerification.error
-            });
-        }
+        // if (!locationVerification.success) {
+        //     return res.status(500).json({
+        //         success: false,
+        //         message: 'Failed to verify location',
+        //         error: locationVerification.error
+        //     });
+        // }
 
-        if (!locationVerification.withinRange) {
-            // Log audit trail for location verification failure
-            await faceComparisonService.logAuditTrail({
-                bookingId,
-                workerId,
-                action: 'location_verification_failed',
-                details: {
-                    distance: locationVerification.distance,
-                    maxDistance: maxDistance,
-                    selfieCoords: { latitude: selfieLatitude, longitude: selfieLongitude },
-                    customerCoords: { latitude: booking.customer_latitude, longitude: booking.customer_longitude }
-                },
-                ipAddress: req.ip,
-                userAgent: req.get('User-Agent')
-            });
+        // if (!locationVerification.withinRange) {
+        //     // Log audit trail for location verification failure
+        //     await faceComparisonService.logAuditTrail({
+        //         bookingId,
+        //         workerId,
+        //         action: 'location_verification_failed',
+        //         details: {
+        //             distance: locationVerification.distance,
+        //             maxDistance: maxDistance,
+        //             selfieCoords: { latitude: selfieLatitude, longitude: selfieLongitude },
+        //             customerCoords: { latitude: booking.customer_latitude, longitude: booking.customer_longitude }
+        //         },
+        //         ipAddress: req.ip,
+        //         userAgent: req.get('User-Agent')
+        //     });
 
-            return res.status(400).json({
-                success: false,
-                message: `You are too far from the ${booking.booking_type === 'ride' ? 'drop-off' : 'service'} location. Your distance: ${Math.round(locationVerification.distance)}m, Maximum allowed: ${maxDistance}m. Please move closer and try again.`,
-                locationVerification: {
-                    withinRange: false,
-                    distance: Math.round(locationVerification.distance),
-                    maxDistance: maxDistance,
-                    verificationType: booking.booking_type === 'ride' ? 'drop_location' : 'service_location'
-                }
-            });
-        }
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: `You are too far from the ${booking.booking_type === 'ride' ? 'drop-off' : 'service'} location. Your distance: ${Math.round(locationVerification.distance)}m, Maximum allowed: ${maxDistance}m. Please move closer and try again.`,
+        //         locationVerification: {
+        //             withinRange: false,
+        //             distance: Math.round(locationVerification.distance),
+        //             maxDistance: maxDistance,
+        //             verificationType: booking.booking_type === 'ride' ? 'drop_location' : 'service_location'
+        //         }
+        //     });
+        // }
+        
+        // Create mock location verification result (always pass)
+        const locationVerification = {
+            success: true,
+            withinRange: true,
+            distance: 0,
+            maxDistance: 400,
+            message: 'Location verification disabled - selfie verification only'
+        };
+        
+        console.log('📍 Location verification disabled - proceeding with face verification only');
 
         // Generate unique S3 key for selfie
         const timestamp_str = new Date().toISOString().replace(/[:.]/g, '-');
@@ -282,10 +323,10 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
             profilePictureS3Url: profilePictureData.url,
             selfieLatitude,
             selfieLongitude,
-            customerLatitude: booking.customer_latitude,
-            customerLongitude: booking.customer_longitude,
-            distanceMeters: locationVerification.distance,
-            locationVerified: locationVerification.withinRange,
+            customerLatitude: booking.customer_latitude || 0, // Fallback to 0 if null
+            customerLongitude: booking.customer_longitude || 0, // Fallback to 0 if null
+            distanceMeters: 0, // Location verification disabled
+            locationVerified: true, // Always true when location verification is disabled
             faceMatchConfidence: faceComparison.confidence || 0,
             faceComparisonSuccessful: faceComparison.success && faceComparison.matched,
             rekognitionResponse: faceComparison.rekognitionResponse || null,
@@ -310,10 +351,10 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
             action: 'selfie_uploaded',
             details: {
                 verificationStatus,
-                locationVerified: locationVerification.withinRange,
+                locationVerified: true, // Location verification disabled
                 faceMatched: faceComparison.matched,
                 confidence: faceComparison.confidence,
-                distance: locationVerification.distance
+                distance: 0 // Location verification disabled
             },
             ipAddress: req.ip,
             userAgent: req.get('User-Agent')
@@ -335,8 +376,8 @@ router.post('/upload', verifyToken, upload.single('selfie'), async (req, res) =>
             message: 'Selfie uploaded and verification completed',
             verification: {
                 status: verificationStatus,
-                locationVerified: locationVerification.withinRange,
-                distance: locationVerification.distance,
+                locationVerified: true, // Location verification disabled
+                distance: 0, // Location verification disabled
                 faceMatched: faceComparison.matched,
                 confidence: faceComparison.confidence,
                 notes: verificationNotes
@@ -526,7 +567,7 @@ router.get('/requirements/:bookingId', verifyToken, async (req, res) => {
                     longitude: booking.customer_longitude,
                     address: booking.customer_address
                 },
-                maxDistance: parseInt(process.env.SELFIE_MAX_DISTANCE_METERS || '400'),
+                maxDistance: 0, // Location verification disabled
                 faceMatchThreshold: parseFloat(process.env.SELFIE_FACE_MATCH_THRESHOLD || '80.0'),
                 timeoutHours: parseInt(process.env.SELFIE_VERIFICATION_TIMEOUT_HOURS || '24')
             }

@@ -526,14 +526,21 @@ const ServiceTracking = () => {
   };
 
   const messageProvider = () => {
-    // Allow chat in most states, but show different messages based on status
-    if (currentStatus === 'pending') {
-      toast.info('Chat will be available once a service provider is assigned to your booking.');
-      setShowChat(true); // Still allow opening chat for future messages
+    // Allow chat for most booking statuses
+    console.log('💬 Opening chat (Customer) - Current status:', currentStatus, 'Booking ID:', bookingId);
+    console.log('📋 Booking data:', booking);
+    
+    const allowedStatuses = ['pending', 'assigned', 'accepted', 'started', 'arrived', 'in_progress', 'confirmed', 'booked', 'pending_worker_assignment'];
+    
+    if (allowedStatuses.includes(currentStatus)) {
+      console.log('✅ Customer chat allowed for status:', currentStatus);
+      setShowChat(true);
     } else if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+      console.log('❌ Customer chat - completed/cancelled status, not allowing chat');
       toast.info('Chat is no longer available for completed or cancelled services.');
     } else {
-      setShowChat(true);
+      console.warn('❌ Customer chat not allowed for status:', currentStatus);
+      toast.info(`Chat is not available for booking status: ${currentStatus}`);
     }
   };
 

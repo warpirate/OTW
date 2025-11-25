@@ -27,12 +27,14 @@ class SocketServer {
             
             console.log('Socket.IO CORS allowed origins:', allowedOrigins);
             
-            // Add mobile app origins for React Native
+            // Add mobile app origins for React Native and API domain
             const mobileOrigins = [
               'capacitor://localhost',
               'http://localhost',
               'https://localhost',
               'file://',
+              'https://api.omwhub.com', // Add API domain for mobile app
+              'https://api.omwhub.com:443', // Add API domain with port
               null, // Allow null origin for mobile apps
               undefined // Allow undefined origin for mobile apps
             ];

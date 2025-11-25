@@ -1,0 +1,25 @@
+# Exclude local and development-only files from Elastic Beanstalk bundle
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# VCS and editor files
+.git
+.gitignore
+**/.DS_Store
+**/.vscode
+
+# Logs
+*.log
+logs/
+**/npm-debug.log*
+
+# Frontend and other non-backend folders (if deploying backend folder as EB app root)
+../frontend/
+frontend/
+
+# Build artifacts (if any)
+dist/
+build/

@@ -4,23 +4,10 @@ const mysql = require('mysql2/promise');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
-const { initDB } = require('../../config/db');
+const pool = require('../../config/db');
 const { authenticateToken } = require('../../middlewares/auth');
 
-// Database connection pool
-let db;
-const getDB = async () => {
-    if (!db) {
-        db = mysql.createPool({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || '',
-            database: process.env.DB_NAME || 'omw_db',
-            charset: 'utf8mb4'
-        });
-    }
-    return db;
-};
+// Using the shared database pool from config
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -62,7 +49,7 @@ const enhanceUserData = async (req, res, next) => {
     try {
         // The user is already authenticated by the global middleware
         // We just need to enhance the user data with additional fields if needed
-        const database = await initDB();
+        const database = pool;
         const [users] = await database.execute(
             'SELECT id, name, email, phone_number FROM users WHERE id = ? AND is_active = 1',
             [req.user.id]
@@ -84,7 +71,7 @@ const enhanceUserData = async (req, res, next) => {
 // Get user's active chat sessions
 router.get('/sessions', authenticateToken, async (req, res) => {
     try {
-        const database = await initDB();
+        const database = pool;
         const userId = req.user.id;
 
         const [sessions] = await database.execute(
@@ -141,7 +128,7 @@ router.get('/sessions/:sessionId/messages', authenticateToken, async (req, res) 
         const { limit = 50, offset = 0 } = req.query;
         const userId = req.user.id;
 
-        const database = await initDB();
+        const database = pool;
 
         // Verify user has access to this session
         // Verify user has access to this session (support legacy data where provider_id stores providers.id)
@@ -206,7 +193,7 @@ router.post('/sessions/:sessionId/messages', authenticateToken, async (req, res)
             return res.status(400).json({ error: 'Message content is required' });
         }
 
-        const database = await initDB();
+        const database = pool;
 
         // Verify user has access to this session and determine sender type
         const [sessions] = await database.execute(
@@ -319,7 +306,7 @@ router.put('/sessions/:sessionId/messages/read', authenticateToken, async (req, 
         const { messageIds } = req.body;
         const userId = req.user.id;
 
-        const database = await initDB();
+        const database = pool;
 
         // Verify user has access to this session
         const [sessions] = await database.execute(
@@ -401,7 +388,7 @@ router.post('/upload', authenticateToken, upload.single('file'), async (req, res
 // Get unread message count for user
 router.get('/unread-count', authenticateToken, async (req, res) => {
     try {
-        const database = await initDB();
+        const database = pool;
         const userId = req.user.id;
 
         const [result] = await database.execute(
@@ -428,7 +415,7 @@ router.get('/sessions/:sessionId', authenticateToken, async (req, res) => {
         const { sessionId } = req.params;
         const userId = req.user.id;
 
-        const database = await initDB();
+        const database = pool;
 
         const [sessions] = await database.execute(
             `SELECT 
@@ -515,7 +502,7 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Booking ID is required' });
         }
 
-        const database = await initDB();
+        const database = pool;
 
         // Resolve provider_id for workers (providers.user_id -> providers.id)
         let providerIdForUser = null;
@@ -563,10 +550,28 @@ router.post('/sessions', authenticateToken, async (req, res) => {
             });
         }
 
-        // Allow chat creation immediately after worker assignment and throughout service lifecycle
-        const allowedStatuses = ['assigned', 'accepted', 'started', 'en_route', 'arrived', 'in_progress'];
+        // Allow chat creation for all active booking statuses (expanded to include more statuses)
+        const allowedStatuses = ['assigned', 'accepted', 'started', 'en_route', 'arrived', 'in_progress', 'confirmed', 'booked', 'pending', 'pending_worker_assignment'];
+        
+        // Log the current booking status for debugging
+        console.log('📋 Chat session creation - Booking status check:', {
+            bookingId,
+            currentStatus: booking.service_status,
+            allowedStatuses,
+            isAllowed: allowedStatuses.includes(booking.service_status)
+        });
+        
         if (!allowedStatuses.includes(booking.service_status)) {
-            return res.status(400).json({ error: 'Chat can only be created for assigned bookings' });
+            console.warn('❌ Chat creation denied - booking status not allowed:', {
+                bookingId,
+                status: booking.service_status,
+                allowedStatuses
+            });
+            return res.status(400).json({ 
+                error: 'Chat can only be created for active bookings',
+                currentStatus: booking.service_status,
+                allowedStatuses
+            });
         }
 
         // Create chat session
@@ -644,7 +649,7 @@ router.put('/sessions/:sessionId/end', authenticateToken, async (req, res) => {
         const { sessionId } = req.params;
         const userId = req.user.id;
 
-        const database = await initDB();
+        const database = pool;
 
         // Verify user has access to this session
         const [sessions] = await database.execute(
@@ -678,7 +683,7 @@ router.delete('/sessions/:sessionId', authenticateToken, async (req, res) => {
         const { sessionId } = req.params;
         const userId = req.user.id;
 
-        const database = await initDB();
+        const database = pool;
 
         // Verify user has access to this session
         const [sessions] = await database.execute(

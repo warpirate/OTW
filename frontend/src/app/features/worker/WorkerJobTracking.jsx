@@ -43,7 +43,6 @@ const WorkerJobTracking = () => {
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [socket, setSocket] = useState(null);
-  const [serviceProgress, setServiceProgress] = useState(0);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showChat, setShowChat] = useState(false);
   
@@ -258,28 +257,13 @@ const WorkerJobTracking = () => {
         setSelfieVerificationStatus('verified');
         setShowSelfieCapture(false);
         
-        // Now update the booking status to completed
-        const token = AuthService.getToken('worker');
-        const response = await fetch(`${API_BASE_URL}/api/worker-management/bookings/${bookingId}/status`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ status: 'completed' })
-        });
-
-        const statusData = await response.json();
-        
-        if (statusData.success) {
-          setCurrentStatus('completed');
-          toast.success('Job completed and selfie verified successfully!');
-          setTimeout(() => {
-            navigate('/worker/jobs');
-          }, 2000);
-        } else {
-          toast.error('Failed to update job status after selfie verification');
-        }
+        // Backend automatically completes the job when selfie is verified
+        // No need to call status update API again - it's already completed
+        setCurrentStatus('completed');
+        toast.success('Job completed and selfie verified successfully!');
+        setTimeout(() => {
+          navigate('/worker/jobs');
+        }, 2000);
       } else {
         // Check if error is due to missing profile picture
         if (result.requiresProfilePicture) {
@@ -314,7 +298,24 @@ const WorkerJobTracking = () => {
     
     setUpdatingStatus(true);
     try {
-      // First update status to completed
+      // If trying to complete, check for selfie requirement first
+      if (newStatus === 'completed') {
+        try {
+          const verificationStatus = await SelfieVerificationService.getVerificationStatus(bookingId);
+          if (verificationStatus.verification?.required) {
+            setSelfieVerificationRequired(true);
+            setSelfieVerificationStatus('not_uploaded');
+            setShowSelfieCapture(true);
+            toast.info('Please take a selfie to complete the job');
+            setUpdatingStatus(false);
+            return;
+          }
+        } catch (error) {
+          console.error('Error checking selfie requirements:', error);
+        }
+      }
+
+      // Update status to the requested status (not hardcoded)
       const token = AuthService.getToken('worker');
       const response = await fetch(`${API_BASE_URL}/api/worker-management/bookings/${bookingId}/status`, {
         method: 'PUT',
@@ -322,32 +323,21 @@ const WorkerJobTracking = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ status: 'in_progress' }) // Keep it in progress until selfie verification
+        body: JSON.stringify({ status: newStatus })
       });
 
       const data = await response.json();
       
       if (data.success) {
-        // If trying to complete, check for selfie requirement
-        if (newStatus === 'completed') {
-          try {
-            const verificationStatus = await SelfieVerificationService.getVerificationStatus(bookingId);
-            if (verificationStatus.verification?.required) {
-              setSelfieVerificationRequired(true);
-              setSelfieVerificationStatus('not_uploaded');
-              setShowSelfieCapture(true);
-              toast.info('Please take a selfie to complete the job');
-              setUpdatingStatus(false);
-              return;
-            }
-          } catch (error) {
-            console.error('Error checking selfie requirements:', error);
-          }
-        }
-
-        // If no selfie required or not completing, update status normally
         setCurrentStatus(newStatus);
         toast.success(`Status updated to: ${statusFlow[newStatus]?.label || newStatus}`);
+        
+        // Navigate back to jobs list when completed
+        if (newStatus === 'completed') {
+          setTimeout(() => {
+            navigate('/worker/jobs');
+          }, 2000);
+        }
       } else {
         toast.error(data.message || 'Failed to update status');
       }
@@ -367,11 +357,15 @@ const WorkerJobTracking = () => {
 
   const messageCustomer = () => {
     // Allow chat from assignment through service completion
-    if (currentStatus === 'assigned' || currentStatus === 'accepted' || currentStatus === 'started' || 
-        currentStatus === 'arrived' || currentStatus === 'in_progress') {
+    console.log('💬 Opening chat - Current status:', currentStatus, 'Booking ID:', bookingId);
+    
+    const allowedStatuses = ['assigned', 'accepted', 'started', 'arrived', 'in_progress'];
+    if (allowedStatuses.includes(currentStatus)) {
+      console.log('✅ Chat allowed for status:', currentStatus);
       setShowChat(true);
     } else {
-      toast.info('Chat is only available when you have an active job.');
+      console.warn('❌ Chat not allowed for status:', currentStatus);
+      toast.info(`Chat is only available when you have an active job. Current status: ${currentStatus}`);
     }
   };
 
@@ -551,31 +545,6 @@ const WorkerJobTracking = () => {
               </div>
             </div>
 
-            {/* Progress Bar */}
-            {currentStatus === 'in_progress' && (
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Service Progress</span>
-                  <span className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{serviceProgress}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${serviceProgress}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-center mt-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={serviceProgress}
-                    onChange={(e) => setServiceProgress(parseInt(e.target.value))}
-                    className="w-full max-w-xs"
-                  />
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Customer Information */}

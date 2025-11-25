@@ -20,7 +20,7 @@ class FaceComparisonService {
 
         this.FACE_MATCH_THRESHOLD = parseFloat(process.env.SELFIE_FACE_MATCH_THRESHOLD || '80.0');
         this.SELFIE_BUCKET = process.env.SELFIE_S3_BUCKET || 'worker-verification-images';
-        this.PROFILE_BUCKET = process.env.AWS_S3_BUCKET || 'otw-service-app';
+        this.PROFILE_BUCKET = process.env.AWS_S3_BUCKET || 'files-and-image-storage-bucket';
     }
 
     /**
@@ -348,6 +348,14 @@ class FaceComparisonService {
         try {
             connection = await pool.getConnection();
             
+            console.log('💾 Saving selfie verification data:', {
+                bookingId: verificationData.bookingId,
+                workerId: verificationData.workerId,
+                verificationStatus: verificationData.verificationStatus,
+                hasS3Url: !!verificationData.selfieS3Url,
+                hasProfilePicture: !!verificationData.profilePictureS3Url
+            });
+            
             const {
                 bookingId,
                 workerId,
@@ -405,13 +413,26 @@ class FaceComparisonService {
                 WHERE id = ?
             `, [verificationStatus, verificationStatus, bookingId]);
 
+            console.log('✅ Selfie verification saved successfully:', {
+                bookingId,
+                verificationId: result.insertId || result.affectedRows,
+                affectedRows: result.affectedRows
+            });
+
             return {
                 success: true,
                 verificationId: result.insertId || result.affectedRows,
                 message: 'Selfie verification saved successfully'
             };
         } catch (error) {
-            console.error('Error saving selfie verification:', error);
+            console.error('❌ Error saving selfie verification:', {
+                bookingId: verificationData.bookingId,
+                workerId: verificationData.workerId,
+                error: error.message,
+                code: error.code,
+                sqlState: error.sqlState,
+                stack: error.stack
+            });
             return {
                 success: false,
                 error: 'Failed to save verification data',

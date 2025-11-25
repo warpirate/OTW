@@ -114,22 +114,45 @@ const ChatWindow = ({
                 console.log('Chat session created successfully:', sessionIdResp);
             } catch (createError) {
                 console.warn('Failed to create chat session, checking for existing one:', createError);
+                
+                // Enhanced error handling with detailed logging
+                const errorDetails = {
+                    message: createError?.message || 'Unknown error',
+                    status: createError?.response?.status,
+                    data: createError?.response?.data,
+                    bookingId
+                };
+                console.log('🔍 Chat session creation error details:', errorDetails);
+                
+                // If it's a 400 error with status information, show more specific message
+                if (createError?.response?.status === 400 && createError?.response?.data?.currentStatus) {
+                    console.log('📋 Booking status issue detected:', {
+                        currentStatus: createError.response.data.currentStatus,
+                        allowedStatuses: createError.response.data.allowedStatuses
+                    });
+                    setError(`Chat not available for booking status: ${createError.response.data.currentStatus}`);
+                }
+                
                 try {
                     const sessions = await chatService.getChatSessions();
                     const existing = sessions.find(s => s.bookingId === Number(bookingId) || s.bookingId === bookingId);
                     if (!existing) {
-                        // No session yet (booking likely not accepted). Render header + placeholder, keep input disabled.
-                        // Still set booking info from provided props so UI can reflect completed state
+                        // No session yet - provide better status-based messaging
+                        const bookingStatus = booking?.service_status || booking?.status || 'pending';
+                        console.log('📋 No existing session found, booking status:', bookingStatus);
+                        
                         setBookingInfo({ 
                             id: bookingId,
                             service: booking?.service_name || 'Service',
-                            status: booking?.service_status || booking?.status || 'pending'
+                            status: bookingStatus
                         });
                         setIsLoading(false);
                         return;
                     }
                     sessionIdResp = { sessionId: existing.sessionId };
+                    console.log('✅ Found existing session:', existing.sessionId);
                 } catch (sessionsError) {
+                    console.error('❌ Failed to get existing sessions:', sessionsError);
                     // Gracefully render placeholder if sessions endpoint not yet available
                     setBookingInfo({ 
                         id: bookingId,
@@ -734,8 +757,16 @@ const ChatWindow = ({
                         <p className="text-sm">
                             {isCompleted 
                                 ? 'This conversation has been closed because the job was completed.' 
-                                : (sessionId ? 'Start the conversation by sending a message' : 'Chat will be available once the job is accepted/assigned.')}
+                                : (sessionId ? 'Start the conversation by sending a message' : error ? error : 'Chat will be available once the job is accepted/assigned.')}
                         </p>
+                        {error && (
+                            <button 
+                                onClick={loadChatSession}
+                                className="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                            >
+                                Retry
+                            </button>
+                        )}
                     </div>
                 ) : (
                     messages.map((message, index) => {

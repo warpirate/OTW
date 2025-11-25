@@ -316,7 +316,7 @@ const Footer = () => {
                       siteData.settings?.company_city,
                       siteData.settings?.company_state,
                       siteData.settings?.company_country
-                    ].filter(Boolean).join(', ') || "123 Street, Toronto, ON, Canada"}
+                    ].filter(Boolean).join(', ')}
                   </p>
                 </div>
               )}
@@ -339,30 +339,6 @@ const Footer = () => {
                     {siteData.settings.support_email}
                   </p>
                 </div>
-              )}
-              
-              {/* Fallback contact info if no dynamic data */}
-              {!siteData.settings && (
-                <>
-                  <div className="flex items-start space-x-3">
-                    <MapPin className={`h-4 w-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-1 flex-shrink-0`} />
-                    <p className={`${mutedText} text-sm leading-relaxed`}>
-                      123 Street, Toronto, ON, Canada
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Phone className={`h-4 w-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'} flex-shrink-0`} />
-                    <p className={`${mutedText} text-sm`}>
-                      +1 234-567-8900
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Mail className={`h-4 w-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'} flex-shrink-0`} />
-                    <p className={`${mutedText} text-sm`}>
-                      contact@otw.ca
-                    </p>
-                  </div>
-                </>
               )}
             </div>
           </div>

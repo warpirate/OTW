@@ -1719,15 +1719,26 @@ router.get('/bookings/:bookingId', verifyToken, async (req, res) => {
  */
 router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
   const { bookingId } = req.params;
-  const { status } = req.body;
+  const { status, location } = req.body;
   const { id: user_id, role } = req.user;
 
+  console.log('📥 Status update request:', {
+    bookingId,
+    status,
+    location,
+    userId: user_id,
+    role,
+    timestamp: new Date().toISOString()
+  });
+
   if (role !== 'worker') {
+    console.error('❌ Access denied: Not a worker role');
     return res.status(403).json({ message: 'Only workers can update booking status' });
   }
 
-  const validStatuses = ['started', 'arrived', 'in_progress', 'completed', 'cancelled'];
+  const validStatuses = ['accepted', 'started', 'arrived', 'in_progress', 'completed', 'cancelled'];
   if (!validStatuses.includes(status)) {
+    console.error('❌ Invalid status:', status, 'Valid statuses:', validStatuses);
     return res.status(400).json({ message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
   }
 
@@ -1872,10 +1883,17 @@ router.put('/bookings/:bookingId/status', verifyToken, async (req, res) => {
       console.error('Socket emit error (status update):', socketErr.message);
     }
 
+    console.log('✅ Status update successful:', { bookingId, status, userId: user_id });
     return res.json({ success: true, message: 'Status updated', status });
   } catch (error) {
     await connection.rollback();
-    console.error('Error updating booking status:', error);
+    console.error('❌ Error updating booking status:', {
+      bookingId,
+      status,
+      userId: user_id,
+      error: error.message,
+      stack: error.stack
+    });
     return res.status(500).json({ message: 'Server error while updating booking status' });
   } finally {
     connection.release();

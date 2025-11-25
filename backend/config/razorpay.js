@@ -1,5 +1,7 @@
 const Razorpay = require('razorpay');
-require('dotenv').config();
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
 // Check if Razorpay keys are available
 const hasRazorpayKeys = process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET;
@@ -14,6 +16,10 @@ if (hasRazorpayKeys) {
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
     console.log('✅ Razorpay initialized successfully');
+    const keyId = process.env.RAZORPAY_KEY_ID || '';
+    const mode = keyId.startsWith('rzp_live_') ? 'live' : (keyId.startsWith('rzp_test_') ? 'test' : 'unknown');
+    const masked = keyId ? `${keyId.slice(0, 8)}...${keyId.slice(-4)}` : 'not-set';
+    console.log(`🔐 Razorpay mode: ${mode} (key: ${masked})`);
   } catch (error) {
     console.error('❌ Error initializing Razorpay:', error.message);
     razorpay = null;
