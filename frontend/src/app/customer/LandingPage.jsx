@@ -644,60 +644,80 @@ const LandingPage = () => {
               return activeTab === categoryKey && (
                 <div key={categoryKey}>
                   {categoryKey === 'driver' ? (
-                    <div className="max-w-4xl mx-auto">
+                    <div>
                       <h2 className={`text-3xl font-bold text-center mb-12 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        Driver Services
+                        {dynamicServiceCategories[activeTab]?.name || 'Driver'} Categories
                       </h2>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                        {/* Service Overview Card */}
-                        <div className="service-card">
-                          <div className="flex flex-col items-center text-center p-8">
-                            <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-blue-50'} rounded-full p-4`}>
-                              <Car className="h-12 w-12 text-brand" />
-                            </div>
-                            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                              Professional Drivers
-                            </h3>
-                            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
-                              Experienced and verified drivers for all your transportation needs
-                            </p>
-                            <div className="flex items-center space-x-2 text-sm">
-                              <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                              <span className="font-medium">4.8+ Rating</span>
-                            </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {loading ? (
+                          <div className="col-span-3 flex justify-center py-16">
+                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand"></div>
                           </div>
-                        </div>
-                        
-                        {/* Service Features Card */}
-                        <div className="service-card">
-                          <div className="flex flex-col items-center text-center p-8">
-                            <div className={`mb-6 ${darkMode ? 'bg-gray-700' : 'bg-green-50'} rounded-full p-4`}>
-                              <Shield className="h-12 w-12 text-brand" />
-                            </div>
-                            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                              Safe & Reliable
-                            </h3>
-                            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-500'} mb-4 text-sm leading-relaxed`}>
-                              Background-verified drivers with comprehensive insurance coverage
-                            </p>
-                            <div className="flex items-center space-x-2 text-sm">
-                              <Shield className="h-4 w-4 text-green-500" />
-                              <span className="font-medium">100% Verified</span>
-                            </div>
+                        ) : error ? (
+                          <div className="col-span-3 text-center py-16">
+                            <p className={`${darkMode ? 'text-red-400' : 'text-red-600'}`}>{error}</p>
+                            <button 
+                              onClick={() => window.location.reload()} 
+                              className="mt-4 px-4 py-2 bg-brand text-white rounded-md"
+                            >
+                              Retry
+                            </button>
                           </div>
-                        </div>
+                        ) : dynamicServiceCategories[activeTab]?.categories && dynamicServiceCategories[activeTab].categories.length > 0 ? (
+                          <>
+                            {dynamicServiceCategories[activeTab].categories.map((cat) => (
+                              <div
+                                key={cat.id}
+                                className={`group relative overflow-hidden ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer`}
+                                onClick={() => {
+                                  window.scrollTo(0, 0);
+                                  navigate(`/category/${cat.id}/${cat.name}`);
+                                }}
+                              >
+                                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-gradient-brand opacity-20 blur-2xl" />
+
+                                <div className="p-6 flex items-center gap-6 h-full">
+                                  <div className="relative flex-shrink-0">
+                                    <div className={`relative flex items-center justify-center rounded-2xl shadow-inner ring-1 ${darkMode ? 'ring-white/10' : 'ring-black/5'} bg-gradient-brand/20 w-28 h-28 md:w-36 md:h-36`}>
+                                      <S3Image
+                                        type="category"
+                                        id={cat.id}
+                                        fallbackSrc={getCategoryImageSrc(cat.name)}
+                                        alt={`${cat.name} icon`}
+                                        className="w-20 h-20 md:w-28 md:h-28 object-contain"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex-1">
+                                    <h3 className={`text-lg md:text-xl font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>{cat.name}</h3>
+                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} text-sm line-clamp-2`}>{cat.description}</p>
+                                    <div className="mt-4 flex items-center justify-between">
+                                      <span className={`text-sm font-medium ${darkMode ? 'text-brand-light' : 'text-brand'}`}>Explore Services</span>
+                                      <ChevronRight className={`h-5 w-5 ${darkMode ? 'text-gray-400 group-hover:text-white' : 'text-gray-400 group-hover:text-gray-700'} transition-colors`} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <div className="col-span-3 text-center py-16">
+                            <p className="text-lg">No services available in Driver category.</p>
+                          </div>
+                        )}
                       </div>
-                      
+
                       {/* Call to Action */}
                       <div className="text-center mt-12">
                         <button 
                           onClick={() => navigate('/driver')}
                           className="bg-brand text-white hover:bg-brand-dark transition-colors duration-200 px-12 py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0 active:shadow-md"
                         >
-                          Book Vehicle <ChevronRight className="inline-block h-5 w-5 ml-2" />
+                          Book Instant Vehicle <ChevronRight className="inline-block h-5 w-5 ml-2" />
                         </button>
-                        <p className={`mt-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-4 text-sm`}>
                           Choose your preferred vehicle type and booking duration
                         </p>
                       </div>
