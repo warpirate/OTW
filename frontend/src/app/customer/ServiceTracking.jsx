@@ -185,13 +185,16 @@ const ServiceTracking = () => {
 
       // Handle service completion
       if (data.status === 'completed') {
-        // Show payment modal for pay after service bookings
-        if (booking && booking.payment_method === 'pay_after_service') {
+        // For pay-after-service, do not show payment modal; go to rating
+        if (
+          booking &&
+          booking.payment_status !== 'paid' &&
+          (booking.payment_method === 'upi' || booking.payment_method === 'UPI Payment')
+        ) {
           setTimeout(() => {
             setShowPaymentModal(true);
           }, 1000);
         } else {
-          // Show rating modal directly for UPI payments (already paid)
           setTimeout(() => {
             setShowRatingModal(true);
           }, 2000);
@@ -233,16 +236,12 @@ const ServiceTracking = () => {
           // Check if service has already been rated
           setHasRated(data.booking.rating ? true : false);
           
-          // Check if service is completed and needs payment
-          if (data.booking.service_status === 'completed' && 
-              data.booking.payment_status !== 'paid' &&
-              (data.booking.payment_method === 'pay_after_service' || 
-               data.booking.payment_method === 'upi' ||
-               data.booking.payment_method === 'UPI Payment')) {
-            // Only show payment modal if payment is actually pending
-            console.log('Booking payment status:', data.booking.payment_status);
-            console.log('Booking payment method:', data.booking.payment_method);
-            
+          // If service is completed and payment pending via UPI, show payment modal
+          if (
+            data.booking.service_status === 'completed' &&
+            data.booking.payment_status !== 'paid' &&
+            (data.booking.payment_method === 'upi' || data.booking.payment_method === 'UPI Payment')
+          ) {
             setTimeout(() => {
               setShowPaymentModal(true);
             }, 1000);

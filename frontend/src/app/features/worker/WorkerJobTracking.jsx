@@ -87,8 +87,8 @@ const WorkerJobTracking = () => {
       color: 'text-purple-600', 
       bgColor: 'bg-purple-100',
       description: 'You have arrived at the customer location. Wait for OTP verification.',
-      nextAction: 'Start Service',
-      nextStatus: 'in_progress'
+      // nextAction: 'Start Service',
+      // nextStatus: 'in_progress'
     },
     in_progress: { 
       label: 'Service in Progress', 

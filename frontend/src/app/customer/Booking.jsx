@@ -49,7 +49,7 @@ const Booking = () => {
   const [workerAvailability, setWorkerAvailability] = useState({
     male: false,
     female: false,
-    any: true
+    any: false
   });
   const [loadingWorkerAvailability, setLoadingWorkerAvailability] = useState(false);
 
@@ -328,8 +328,12 @@ const Booking = () => {
       setWorkerAvailability({
         male: availabilityData.male_available || false,
         female: availabilityData.female_available || false,
-        any: availabilityData.any_available || true
+        any: !!availabilityData.any_available
       });
+
+      if (!availabilityData.any_available) {
+        toast.error('No workers are available in your area.');
+      }
 
       // Reset preference if current preference is not available
       if (workerPreference === 'male' && !availabilityData.male_available) {
@@ -341,11 +345,11 @@ const Booking = () => {
     } catch (error) {
       console.error('Error checking worker availability:', error);
       toast.error('Failed to check worker availability');
-      // Set default availability
+      // Be conservative on error: disable proceeding
       setWorkerAvailability({
-        male: true,
-        female: true,
-        any: true
+        male: false,
+        female: false,
+        any: false
       });
     } finally {
       setLoadingWorkerAvailability(false);
@@ -360,7 +364,7 @@ const Booking = () => {
     setWorkerAvailability({
       male: false,
       female: false,
-      any: true
+      any: false
     });
     loadTimeSlots(date);
   };
@@ -874,7 +878,10 @@ const Booking = () => {
         return;
       }
       setCurrentStep('datetime');
-    } else if (currentStep === 'datetime') {
+      return;
+    }
+
+    if (currentStep === 'datetime') {
       if (!selectedDate || !selectedTimeSlot) {
         toast.error('Please select date and time');
         return;
@@ -887,19 +894,24 @@ const Booking = () => {
         toast.error('Please select a worker preference');
         return;
       }
+      // Require at least one worker available overall for this slot
+      const anyAvailableOverall = !!(workerAvailability.any || workerAvailability.male || workerAvailability.female);
+      if (!anyAvailableOverall) {
+        toast.error('No workers are available in your area.');
+        return;
+      }
       // Ensure preferred worker gender is available for this slot
       const avail = workerAvailability;
-      const ok = workerPreference === 'any'
-        ? !!avail.any
-        : workerPreference === 'male'
-          ? !!avail.male
-          : !!avail.female;
+      const ok = workerPreference === 'any' ? !!avail.any : workerPreference === 'male' ? !!avail.male : !!avail.female;
       if (!ok) {
         toast.error('Selected worker preference is not available for this time slot. Please adjust preference or pick another time.');
         return;
       }
       setCurrentStep('payment');
-    } else if (currentStep === 'payment') {
+      return;
+    }
+
+    if (currentStep === 'payment') {
       handleCreateBooking();
     }
   };
@@ -1819,7 +1831,7 @@ const Booking = () => {
 
                       {!loadingWorkerAvailability && !workerAvailability.male && !workerAvailability.female && !workerAvailability.any && (
                         <div className={`text-center py-4 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
-                          <p>No workers available for this time slot. Please select a different time.</p>
+                          <p>No workers are available in your area.</p>
                         </div>
                       )}
                     </div>
@@ -2106,7 +2118,23 @@ const Booking = () => {
                 {/* Action Button */}
                 <button
                   onClick={proceedToNextStep}
-                  disabled={isProcessing}
+                  disabled={
+                    isProcessing || (
+                      currentStep === 'datetime' && (
+                        !selectedDate ||
+                        !selectedTimeSlot ||
+                        !selectedTimeSlot.available ||
+                        loadingWorkerAvailability ||
+                        // require at least 1 worker available overall AND matching preference
+                        !(workerAvailability.any || workerAvailability.male || workerAvailability.female) ||
+                        (workerPreference === 'any'
+                          ? !workerAvailability.any
+                          : workerPreference === 'male'
+                            ? !workerAvailability.male
+                            : !workerAvailability.female)
+                      )
+                    )
+                  }
                   className="w-full btn-brand py-3"
                 >
                   {isProcessing ? 'Processing...' :

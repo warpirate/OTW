@@ -461,63 +461,102 @@ const DriverBooking = () => {
       toast.error('Geolocation is not supported');
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        // Try Google Geocoder if available for a nice address; otherwise fallback
-        const setLocation = (display) => {
-          const location = { display_name: display || 'Current location', lat, lon, place_id: `${lat},${lon}` };
-          setPickupLocation({ query: location.display_name, suggestions: [], selected: location });
-          setCurrentQuote(null);
-          setFareBreakdown(null);
-          toast.success('Pickup set to current location');
-        };
-        try {
-          // eslint-disable-next-line no-undef
-          const gm = window.google && window.google.maps;
-          if (gm) {
-            const geocoder = new gm.Geocoder();
-            geocoder.geocode({ location: { lat, lng: lon } }, (results, status) => {
-              if (status === 'OK' && results && results[0]) {
-                setLocation(results[0].formatted_address);
-              } else {
-                setLocation('Current location');
-              }
-            });
-          } else {
-            setLocation('Current location');
-          }
-        } catch {
+
+    let resolved = false;
+    let watchId = null;
+
+    const finishWithPosition = (pos) => {
+      if (resolved) return;
+      resolved = true;
+      try { if (watchId !== null) navigator.geolocation.clearWatch(watchId); } catch (_) {}
+
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+
+      const setLocation = (display) => {
+        const location = { display_name: display || 'Current location', lat, lon, place_id: `${lat},${lon}` };
+        setPickupLocation({ query: location.display_name, suggestions: [], selected: location });
+        setCurrentQuote(null);
+        setFareBreakdown(null);
+        toast.success('Pickup set to current location');
+      };
+
+      try {
+        const gm = window.google && window.google.maps;
+        if (gm) {
+          const geocoder = new gm.Geocoder();
+          geocoder.geocode({ location: { lat, lng: lon } }, (results, status) => {
+            if (status === 'OK' && results && results[0]) {
+              setLocation(results[0].formatted_address);
+            } else {
+              setLocation('Current location');
+            }
+          });
+        } else {
           setLocation('Current location');
         }
-      },
-      (error) => {
-        // Show user-friendly error messages based on error code
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            toast.error(
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="h-4 w-4" />
-                <div>
-                  <div className="font-medium">Location Access Denied</div>
-                  <div className="text-sm">Please allow location access in your browser settings to use this feature.</div>
-                </div>
-              </div>,
-              { autoClose: 8000 }
-            );
-            break;
-          case error.POSITION_UNAVAILABLE:
-            toast.error('Location information is unavailable. Please check your device settings.');
-            break;
-          case error.TIMEOUT:
-            toast.error('Location request timed out. Please try again.');
-            break;
-          default:
-            toast.error('Unable to get your location. Please try again or enter your location manually.');
-            break;
-        }
+      } catch (_) {
+        setLocation('Current location');
       }
+    };
+
+    const handleError = (error) => {
+      if (resolved) return;
+      try { if (watchId !== null) navigator.geolocation.clearWatch(watchId); } catch (_) {}
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          toast.error(
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="h-4 w-4" />
+              <div>
+                <div className="font-medium">Location Access Denied</div>
+                <div className="text-sm">Please allow location access in your browser settings to use this feature.</div>
+              </div>
+            </div>,
+            { autoClose: 8000 }
+          );
+          break;
+        case error.POSITION_UNAVAILABLE:
+          toast.error('Location information is unavailable. Please check your device settings.');
+          break;
+        case error.TIMEOUT:
+          toast.error('Location request timed out. Please try again.');
+          break;
+        default:
+          toast.error('Unable to get your location. Please try again or enter your location manually.');
+          break;
+      }
+    };
+
+    // Start a high-accuracy watch to refine accuracy (aim <= 50m)
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (pos?.coords?.accuracy && pos.coords.accuracy <= 50) {
+            finishWithPosition(pos);
+          }
+        },
+        (err) => {
+          // If watch fails, we still rely on single shot below
+          try { if (watchId !== null) navigator.geolocation.clearWatch(watchId); } catch (_) {}
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    } catch (_) {}
+
+    // Also request a single high-accuracy position; use it if watch doesn't reach threshold in time
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (resolved) return;
+        if (!pos?.coords?.accuracy || pos.coords.accuracy > 50) {
+          // Give watch up to 5s to improve accuracy; then fall back to this reading
+          setTimeout(() => { if (!resolved) finishWithPosition(pos); }, 5000);
+        } else {
+          finishWithPosition(pos);
+        }
+      },
+      (err) => handleError(err),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
