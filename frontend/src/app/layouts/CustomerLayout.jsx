@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { isDarkMode, addThemeListener } from '../utils/themeUtils';
+import CustomerAssistantWidget from '../customer/components/CustomerAssistantWidget';
 
 const CustomerLayout = () => {
   const [darkMode, setDarkMode] = useState(isDarkMode());
@@ -23,6 +24,7 @@ const CustomerLayout = () => {
       darkMode ? 'bg-gray-900' : 'bg-gray-50'
     }`} data-theme={darkMode ? 'dark' : 'light'}>
       <Outlet />
+      <CustomerAssistantWidget />
     </div>
   );
 };

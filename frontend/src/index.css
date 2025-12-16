@@ -151,6 +151,43 @@
     color: var(--text-primary);
     border-color: var(--border-color);
   }
+
+  /* Assistant Chat Widget (theme-aware) */
+  .customer-theme .assistant-widget {
+    @apply rounded-2xl shadow-2xl border flex flex-col;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+  }
+
+  .customer-theme .assistant-header {
+    @apply px-4 py-3 border-b flex items-center justify-between;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+  }
+
+  .customer-theme .assistant-bubble {
+    @apply px-3 py-2 rounded-lg;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+  }
+
+  .customer-theme .assistant-input {
+    @apply flex-1 rounded-md border px-3 py-2 focus:outline-none;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+  }
+  .customer-theme .assistant-input::placeholder {
+    color: var(--text-secondary);
+  }
+
+  .customer-theme .assistant-footer {
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+  }
   
   .customer-theme .input-search {
     @apply w-full pl-12 pr-20 py-4 text-lg border rounded-2xl shadow-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200;

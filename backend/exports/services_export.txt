@@ -1,0 +1,140 @@
+OMW Services Export
+Generated: 2025-12-11T15:38:02.640Z
+
+Category: AC Services (maintenance)
+  1) Cleaning & Servicing - Base price: 2000
+     Description: Deep cleaning and servicing of AC units
+  2) Duct Cleaning - Base price: 2000
+     Description: AC duct cleaning and maintenance
+  3) Gas Refilling - Base price: 2500
+     Description: Refrigerant gas refilling service
+  4) Installation - Base price: 3000
+     Description: New AC unit installation
+  5) Repair & Maintenance - Base price: 1500
+     Description: AC troubleshooting and regular maintenance
+  6) Thermostat Installation - Base price: 1800
+     Description: Smart thermostat installation and setup
+
+Category: Carpenter (maintenance)
+  1) Custom Shelving - Base price: 4000
+     Description: Tailored built-in shelves designed for your space.
+
+Smart storage solutions crafted for convenience.
+
+Seamless designs that blend function with style.
+
+Personalized organization to maximize every corner
+  2) Deck Building - Base price: 8000
+     Description: Outdoor deck construction and maintenance
+  3) Door Installation - Base price: 3000
+     Description: Door fitting and frame installation
+  4) Flooring Installation - Base price: 6000
+     Description: Wooden flooring installation and repair
+  5) Furniture Repair - Base price: 2000
+     Description: Repair and restoration of wooden furniture
+  6) Kitchen Cabinets - Base price: 5000
+     Description: Custom kitchen cabinet installation and repair
+  7) Window Frames - Base price: 3500
+     Description: Window frame repair and replacement
+
+Category: Cleaner (maid)
+  1) Carpet Cleaning - Base price: 2000
+     Description: Professional carpet cleaning and nice work
+  2) Deep Cleaning - Base price: 3000
+     Description: Thorough deep cleaning service
+  3) House Cleaning - Base price: 1500
+     Description: Standard home cleaning service
+  4) Move-in/Move-out Cleaning - Base price: 4000
+     Description: Complete home cleaning for moving
+  5) Office Cleaning - Base price: 2500
+     Description: Commercial office cleaning
+  6) Post-Construction Cleanup - Base price: 3500
+     Description: Post-construction debris removal
+  7) Window Cleaning - Base price: 1200
+     Description: Interior/exterior window cleaning
+
+Category: Cook (maid)
+  1) Bulk Cooking - Base price: 7000
+     Description: Large quantity meal preparation
+  2) Cooking Classes - Base price: 2000
+     Description: In-home cooking lessons
+  3) Daily Meal Prep - Base price: 5000
+     Description: Daily home-cooked meal preparation
+  4) Diet-specific Meals - Base price: 5500
+     Description: Special diet meal preparation
+  5) Meal Planning - Base price: 3000
+     Description: Personalized meal planning service
+  6) Party Catering - Base price: 8000
+     Description: Event and party catering service
+  7) Special Occasion Cooking - Base price: 6000
+     Description: Custom meals for special events
+
+Category: Electrician (maintenance)
+  1) Circuit Breaker Repair - Base price: 1500
+     Description: Circuit breaker troubleshooting and repair
+  2) Electrical Inspection - Base price: 2000
+     Description: Complete electrical safety inspection
+  3) Emergency Electrical - Base price: 2500
+     Description: 24/7 emergency electrical services
+  4) Fan Installation - Base price: 1000
+     Description: Ceiling and exhaust fan installation
+  5) Light Fixture Setup - Base price: 800
+     Description: Light fixture installation and repair
+  6) Outlet Installation - Base price: 600
+     Description: Electrical outlet and switch installation
+  7) Wiring Installation - Base price: 5000
+     Description: Complete house wiring installation
+
+Category: General Help (maid)
+  1) Furniture Assembly - Base price: 1500
+     Description: Furniture assembly and setup
+  2) Handyman Tasks - Base price: 2200
+     Description: Various handyman services
+  3) Minor Repairs - Base price: 1800
+     Description: Various home repair services
+  4) Moving Assistance - Base price: 2500
+     Description: Help with moving and packing
+  5) Organizing Services - Base price: 3000
+     Description: Home organization and decluttering
+  6) Painting - Base price: 4000
+     Description: Interior/exterior painting service
+  7) Yard Work - Base price: 2000
+     Description: Gardening and yard maintenance
+
+Category: Innova Crysta (driver)
+  1) Corporate Travel - Base price: 3000
+     Description: Business travel services
+  2) Hourly Rental - Base price: 1800
+     Description: Vehicle rental by the hour
+
+Category: Pest Control (maintenance)
+  1) Ant Control - Base price: 1800
+     Description: Ant colony removal and prevention
+  2) Bed Bug Treatment - Base price: 3500
+     Description: Bed bug extermination service
+  3) Cockroach Treatment - Base price: 2000
+     Description: Cockroach elimination service
+  4) General Fumigation - Base price: 4000
+     Description: Complete home fumigation service
+  5) Mosquito Control - Base price: 2200
+     Description: Mosquito fogging and prevention
+  6) Rodent Control - Base price: 2500
+     Description: Rat and mouse extermination
+  7) Termite Treatment - Base price: 3000
+     Description: Termite inspection and treatment
+
+Category: Plumber (maintenance)
+  1) Bathroom Renovation - Base price: 10000
+     Description: Complete bathroom plumbing renovation
+  2) Drain Cleaning - Base price: 800
+     Description: Clogged drain cleaning and unblocking
+  3) Emergency Plumbing - Base price: 2000
+     Description: 24/7 emergency plumbing services
+  4) Faucet Repair - Base price: 500
+     Description: Faucet repair and replacement
+  5) Pipe Repair - Base price: 1000
+     Description: Leaky pipe repair and replacement
+  6) Toilet Installation - Base price: 2500
+     Description: Toilet fitting and installation
+  7) Water Heater Service - Base price: 3500
+     Description: Water heater installation and repair

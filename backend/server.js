@@ -99,6 +99,7 @@ const siteSettingsRoute = require('./routes/site_management/siteSettings');
 const contentPagesRoute = require('./routes/site_management/contentPages');
 const socialLinksRoute = require('./routes/site_management/socialLinks');
 const paymentSettingsRoute = require('./routes/admin_management/paymentSettings');
+const assistantRoute = require('./routes/assistant/assistant');
 const baseURL = process.env.BASE_URL1 || '/api';
 
 // Test routes (only in development)
@@ -143,6 +144,7 @@ app.use(`${baseURL}/worker/trip`, tripTrackingRoute);
 // Wallet admin routes disabled
 // app.use(`${baseURL}/admin`, require('./routes/admin_management/wallet'));
 app.use(`${baseURL}/chat`, chatRoute);
+app.use(`${baseURL}/assistant`, assistantRoute);
 
 // Initialize chat socket server with proper ChatService integration
 const SocketServer = require('./socketServer');

@@ -388,9 +388,12 @@ router.put('/pages/:id',
             
             // Prepare update data
             const updateData = { ...req.body };
+            // Remove fields that are not real columns on content_pages
             delete updateData.id;
             delete updateData.created_at;
             delete updateData.created_by;
+            delete updateData.created_by_name;
+            delete updateData.updated_by_name;
             
             // Sanitize HTML content if provided
             if (updateData.page_content) {
