@@ -94,21 +94,20 @@ class WorkerService {
       );
 
       // Insert into providers table and capture newly created provider_id
+      // Note: location coordinates are now stored in provider_addresses table, not providers
       const [providerResult] = await connection.query(
         `INSERT INTO providers (
           user_id, experience_years, bio, service_radius_km, 
-          location_lat, location_lng, verified, active, rating,
+          verified, active, rating,
           created_at, updated_at, alternate_email,
           alternate_phone_number, emergency_contact_name, 
           emergency_contact_relationship, emergency_contact_phone
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, ?)`,
         [
           userId,
           provider_data.experience_years,
           provider_data.bio,
           provider_data.service_radius_km,
-          provider_data.location_lat,
-          provider_data.location_lng,
           provider_data.verified || false,
           provider_data.active || true,
           provider_data.rating || 0,
@@ -122,7 +121,7 @@ class WorkerService {
       
       const providerId = providerResult.insertId;
       
-      // Insert permanent address
+      // Insert permanent address (coordinates stored here for providers)
       await connection.query(
         `INSERT INTO provider_addresses (
           provider_id, address_type, street_address, city, 
@@ -136,6 +135,25 @@ class WorkerService {
           provider_data.permanent_address.zip
         ]
       );
+
+      // If registration already has coordinates, store them on the permanent address record
+      if (
+        provider_data.location_lat !== undefined &&
+        provider_data.location_lat !== null &&
+        provider_data.location_lng !== undefined &&
+        provider_data.location_lng !== null
+      ) {
+        await connection.query(
+          `UPDATE provider_addresses
+           SET latitude = ?, longitude = ?
+           WHERE provider_id = ? AND address_type = 'permanent'`,
+          [
+            provider_data.location_lat,
+            provider_data.location_lng,
+            providerId
+          ]
+        );
+      }
 
       // Map any provided subcategoryIds (either array of numbers or objects) and filter invalid entries
       const cleanSubcategoryIds = Array.isArray(subcategory_ids)
@@ -198,10 +216,15 @@ class WorkerService {
       // Get basic provider info
       const [provider] = await connection.query(
         `SELECT p.*, 
-          a.street_address, a.city, a.state, a.zip_code,
+          perm.street_address, perm.city, perm.state, perm.zip_code,
+          temp.street_address AS temp_street_address,
+          temp.city AS temp_city,
+          temp.state AS temp_state,
+          temp.zip_code AS temp_zip_code,
           u.name, u.email, u.phone_number
          FROM providers p
-         LEFT JOIN provider_addresses a ON p.id = a.provider_id AND a.address_type = 'permanent'
+         LEFT JOIN provider_addresses perm ON p.id = perm.provider_id AND perm.address_type = 'permanent'
+         LEFT JOIN provider_addresses temp ON p.id = temp.provider_id AND temp.address_type = 'temporary'
          LEFT JOIN users u ON p.user_id = u.id
 
          WHERE p.user_id = ?`,
@@ -254,12 +277,23 @@ class WorkerService {
         ]
       );
       
-      // Update address if provided
+      const [providerResult] = await connection.query(
+        'SELECT id FROM providers WHERE user_id = ? LIMIT 1',
+        [userId]
+      );
+
+      if (providerResult.length === 0) {
+        throw new Error('Worker not found');
+      }
+
+      const providerId = providerResult[0].id;
+      
+      // Update permanent address if provided
       if (updateData.street_address) {
         await connection.query(
           `UPDATE provider_addresses pa JOIN providers p ON pa.provider_id = p.id SET
             pa.street_address = ?, pa.city = ?, pa.state = ?, pa.zip_code = ?, pa.updated_at = NOW()
-           WHERE p.user_id = ?`,
+           WHERE p.user_id = ? AND pa.address_type = 'permanent'`,
           [
             updateData.street_address,
             updateData.city,
@@ -268,6 +302,121 @@ class WorkerService {
             userId
           ]
         );
+
+        const hasFullAddress = updateData.street_address && updateData.city && updateData.state && updateData.zip_code;
+        if (hasFullAddress) {
+          try {
+            const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+            if (apiKey) {
+              const address = `${updateData.street_address}, ${updateData.city}, ${updateData.state}, India`;
+              const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+              const geocodeResponse = await fetch(geocodeUrl);
+              const geocodeData = await geocodeResponse.json();
+
+              if (geocodeData && geocodeData.status === 'OK' && geocodeData.results && geocodeData.results.length > 0) {
+                const loc = geocodeData.results[0].geometry.location;
+                const latitude = parseFloat(loc.lat);
+                const longitude = parseFloat(loc.lng);
+
+                if (!isNaN(latitude) && !isNaN(longitude)) {
+                  await connection.query(
+                    `UPDATE provider_addresses
+                     SET latitude = ?, longitude = ?
+                     WHERE provider_id = ? AND address_type = 'permanent'`,
+                    [latitude, longitude, providerId]
+                  );
+                }
+              } else {
+                console.warn('Google geocoding failed for worker profile update:', geocodeData && geocodeData.status ? geocodeData.status : 'NO_RESULTS');
+              }
+            } else {
+              console.warn('GOOGLE_MAPS_API_KEY not configured, skipping geocoding for worker profile update');
+            }
+          } catch (geoError) {
+            console.error('Error geocoding worker permanent address:', geoError);
+          }
+        }
+      }
+
+      // Update temporary address if provided
+            // Update temporary address if provided
+      if (updateData.temp_street_address) {
+        const hasTempAddress =
+          updateData.temp_street_address &&
+          updateData.temp_city &&
+          updateData.temp_state &&
+          updateData.temp_zip_code;
+
+        const [tempRows] = await connection.query(
+          'SELECT id FROM provider_addresses WHERE provider_id = ? AND address_type = \'temporary\' LIMIT 1',
+          [providerId]
+        );
+
+        if (tempRows.length > 0) {
+          await connection.query(
+            `UPDATE provider_addresses
+             SET street_address = ?, city = ?, state = ?, zip_code = ?, updated_at = NOW()
+             WHERE id = ?`,
+            [
+              updateData.temp_street_address,
+              updateData.temp_city,
+              updateData.temp_state,
+              updateData.temp_zip_code,
+              tempRows[0].id
+            ]
+          );
+        } else if (hasTempAddress) {
+          await connection.query(
+            `INSERT INTO provider_addresses (
+              provider_id, address_type, street_address, city, state, zip_code, created_at, updated_at
+            ) VALUES (?, 'temporary', ?, ?, ?, ?, NOW(), NOW())`,
+            [
+              providerId,
+              updateData.temp_street_address,
+              updateData.temp_city,
+              updateData.temp_state,
+              updateData.temp_zip_code
+            ]
+          );
+        }
+
+        // Geocode and update coordinates for temporary address when full temp address is provided
+        if (hasTempAddress) {
+          try {
+            const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+            if (apiKey) {
+              const tempAddress = `${updateData.temp_street_address}, ${updateData.temp_city}, ${updateData.temp_state}, India`;
+              const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(tempAddress)}&key=${apiKey}`;
+              const geocodeResponse = await fetch(geocodeUrl);
+              const geocodeData = await geocodeResponse.json();
+
+              if (geocodeData && geocodeData.status === 'OK' && geocodeData.results && geocodeData.results.length > 0) {
+                const loc = geocodeData.results[0].geometry.location;
+                const tLat = parseFloat(loc.lat);
+                const tLng = parseFloat(loc.lng);
+
+                if (!isNaN(tLat) && !isNaN(tLng)) {
+                  await connection.query(
+                    `UPDATE provider_addresses
+                     SET latitude = ?, longitude = ?
+                     WHERE provider_id = ? AND address_type = 'temporary'`,
+                    [tLat, tLng, providerId]
+                  );
+                }
+              } else {
+                console.warn(
+                  'Google geocoding failed for worker temporary address update:',
+                  geocodeData && geocodeData.status ? geocodeData.status : 'NO_RESULTS'
+                );
+              }
+            } else {
+              console.warn('GOOGLE_MAPS_API_KEY not configured, skipping geocoding for worker temporary address update');
+            }
+          } catch (geoError) {
+            console.error('Error geocoding worker temporary address:', geoError);
+          }
+        }
       }
       
       await connection.commit();
@@ -559,6 +708,7 @@ router.put('/worker/profile', verifyToken, async (req, res) => {
       'name', 'phone_number', 'experience_years', 'bio', 
       'service_radius_km', 'active',
       'street_address', 'city', 'state', 'zip_code',
+      'temp_street_address', 'temp_city', 'temp_state', 'temp_zip_code',
       'alternate_email', 'alternate_phone_number',
       'emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_phone'
     ];
@@ -812,6 +962,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.scheduled_time,
           b.duration,
           b.cost_type,
+          b.service_unit_count,
           b.subcategory_id,
           r.rating AS ride_rating,
           r.review AS ride_review,

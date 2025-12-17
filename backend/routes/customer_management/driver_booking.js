@@ -136,8 +136,8 @@ router.post('/search', async (req, res) => {
       SELECT DISTINCT
         p.id as provider_id,
         p.service_radius_km,
-        p.location_lat,
-        p.location_lng,
+        pa.latitude AS location_lat,
+        pa.longitude AS location_lng,
         u.name as provider_name,
         pa.street_address,
         pa.city,
@@ -147,7 +147,7 @@ router.post('/search', async (req, res) => {
       INNER JOIN provider_services ps ON p.id = ps.provider_id
       INNER JOIN subcategories s ON ps.subcategory_id = s.id
       INNER JOIN users u ON p.user_id = u.id
-      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
+      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'temporary'
       WHERE p.active = 1 
         AND p.verified = 1 
         AND s.category_id = ?
@@ -174,9 +174,11 @@ router.post('/search', async (req, res) => {
             latitude = parseFloat(loc.lat);
             longitude = parseFloat(loc.lng);
 
-            // Update provider's location in database for future use
+            // Update provider's address coordinates in database for future use
             await pool.query(
-              'UPDATE providers SET location_lat = ?, location_lng = ? WHERE id = ?',
+              `UPDATE provider_addresses
+               SET latitude = ?, longitude = ?
+               WHERE provider_id = ? AND address_type = 'temporary'`,
               [latitude, longitude, provider.provider_id]
             );
           } else {
@@ -385,7 +387,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
     const rideCategoryId = rideCategory[0].id;
     console.log('Ride category ID:', rideCategoryId);
 
-    // 5. Fetch provider permanent addresses and convert to coordinates
+    // 5. Fetch provider addresses and convert to coordinates
     const [providers] = await connection.query(`
       SELECT 
         p.id as provider_id,
@@ -394,10 +396,10 @@ router.post('/book-ride', verifyToken, async (req, res) => {
         pa.city,
         pa.state,
         pa.zip_code,
-        p.location_lat,
-        p.location_lng
+        pa.latitude AS location_lat,
+        pa.longitude AS location_lng
       FROM providers p
-      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'permanent'
+      LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'temporary'
       WHERE p.active = 1 AND p.verified = 1
     `);
 
@@ -406,7 +408,7 @@ router.post('/book-ride', verifyToken, async (req, res) => {
       let latitude = provider.location_lat;
       let longitude = provider.location_lng;
       
-      // If no coordinates in providers table, geocode the permanent address
+      // If no coordinates in provider_addresses table, geocode the address
       if (!latitude || !longitude) {
         const address = `${provider.street_address}, ${provider.city}, ${provider.state}, ${provider.zip_code}, India`;
         try {
@@ -420,9 +422,11 @@ router.post('/book-ride', verifyToken, async (req, res) => {
             latitude = parseFloat(loc.lat);
             longitude = parseFloat(loc.lng);
 
-            // Update provider's location in database
+            // Update provider's address coordinates in database
             await connection.query(
-              'UPDATE providers SET location_lat = ?, location_lng = ? WHERE id = ?',
+              `UPDATE provider_addresses
+               SET latitude = ?, longitude = ?
+               WHERE provider_id = ? AND address_type = 'temporary'`,
               [latitude, longitude, provider.provider_id]
             );
           } else {

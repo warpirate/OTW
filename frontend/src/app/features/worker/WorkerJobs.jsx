@@ -205,6 +205,23 @@ const WorkerJobs = () => {
     return `₹${cost.toLocaleString('en-IN')}`;
   };
 
+  const getDurationText = (request) => {
+    const units = request?.service_unit_count || request?.duration;
+    if (!units || units <= 0) return '';
+
+    // For rides, we typically don't show duration based on units
+    if (request?.booking_type === 'ride') {
+      return '';
+    }
+
+    const costType = request?.cost_type || 'per_hour';
+    if (costType === 'per_day') {
+      return `${units} day${units > 1 ? 's' : ''}`;
+    }
+
+    return `${units} hour${units > 1 ? 's' : ''}`;
+  };
+
   const getDisplayStatus = (request) => {
     // If the service is completed, show completed status regardless of booking_request status
     if (request.service_status === 'completed') {
@@ -368,7 +385,9 @@ const WorkerJobs = () => {
                 </p>
               </div>
             ) : (
-              filteredRequests.map((request) => (
+              filteredRequests.map((request) => {
+                const durationText = getDurationText(request);
+                return (
                 <div
                   key={request.request_id}
                   className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg p-6 hover:shadow-md transition-shadow`}
@@ -417,10 +436,10 @@ const WorkerJobs = () => {
                         </div>
                       )}
 
-                      {request.duration && (
+                      {durationText && (
                         <div className="mb-3">
                           <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                            <strong>Duration:</strong> {request.duration} hour{request.duration > 1 ? 's' : ''}
+                            <strong>Duration:</strong> {durationText}
                           </p>
                         </div>
                       )}
@@ -532,7 +551,8 @@ const WorkerJobs = () => {
                     </div>
                   </div>
                 </div>
-              ))
+              );
+              })
             )}
           </div>
         )}

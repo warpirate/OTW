@@ -21,13 +21,18 @@ const corsOptions = {
       'https://www.omwhub.com',
       'https://test.omwhub.com',
       'https://d1v40s48mdt8sd.cloudfront.net',
+      'http://10.0.2.2:5001',
+      'http://10.0.2.2:8081',
+      'http://localhost:8081',
       // Development domains (only if NODE_ENV is not production)
       ...(process.env.NODE_ENV !== 'production' ? [
         'http://localhost:5173',
         'http://localhost:3000',
         'http://localhost:5001',
         'capacitor://localhost',
-        'http://localhost'
+        'http://localhost',
+        'http://192.168.1.100:5001',  // Add your host IP for mobile emulator
+        'http://10.0.2.2:5001'        // Android emulator alias
       ] : []),
       // Add any additional production frontend URLs from environment
       ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])

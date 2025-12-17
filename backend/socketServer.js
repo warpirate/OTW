@@ -19,7 +19,7 @@ class SocketServer {
             this.server = http.createServer(this.app);
 
             // Initialize Socket.IO
-            const corsOrigins = process.env.CORS_ORIGINS || 'http://localhost:5173,https://omwhub.com,https://www.omwhub.com,https://d1v40s48mdt8sd.cloudfront.net,https://test.omwhub.com';
+            const corsOrigins = process.env.CORS_ORIGINS || 'http://localhost:5173,https://omwhub.com,https://www.omwhub.com,https://d1v40s48mdt8sd.cloudfront.net,https://test.omwhub.com,http://10.0.2.2:5001,http://10.0.2.2:8081,http://localhost:8081';
             const allowedOrigins = corsOrigins
               .split(',')
               .map(o => o.trim())
@@ -33,6 +33,10 @@ class SocketServer {
               'http://localhost',
               'https://localhost',
               'file://',
+              'http://192.168.1.100:5001',
+              'http://10.0.2.2:5001',
+              'http://localhost:8081',
+              'http://10.0.2.2:8081',
               'https://api.omwhub.com', // Add API domain for mobile app
               'https://api.omwhub.com:443', // Add API domain with port
               null, // Allow null origin for mobile apps

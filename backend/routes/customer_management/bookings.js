@@ -112,7 +112,7 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
     const { date, time, address_id, services } = req.body || {};
-
+    console.log("worker check payload body" , req.body )
     // Basic validation
     if (!date || !time || !address_id || !Array.isArray(services) || services.length === 0) {
       return res.status(400).json({ message: 'date, time, address_id, and services[] are required' });
@@ -156,7 +156,8 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
     }
     const customerLat = addrRows[0].location_lat;
     const customerLng = addrRows[0].location_lng;
-
+    console.log("custo latitude",customerLat);
+    console.log("custo long " , customerLng);
     // Enforce per-slot capacity (match logic from /available-slots)
     const [slotCntRows] = await pool.query(
       `SELECT COUNT(*) AS booking_count
@@ -193,17 +194,20 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
     // Find candidate providers by service and active/verified status
     const placeholders = subcategoryIds.map(() => '?').join(',');
     const [providers] = await pool.query(
-      `SELECT DISTINCT p.id AS provider_id, p.service_radius_km, p.location_lat, p.location_lng, u.gender
+      `SELECT DISTINCT p.id AS provider_id, p.service_radius_km,
+              pa.latitude AS location_lat, pa.longitude AS location_lng,
+              u.gender
        FROM providers p
        INNER JOIN provider_services ps ON p.id = ps.provider_id
        INNER JOIN users u ON u.id = p.user_id
+       LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'temporary'
        WHERE ps.subcategory_id IN (${placeholders})
          AND p.active = 1
          AND p.verified = 1
-         AND p.location_lat IS NOT NULL AND p.location_lng IS NOT NULL`,
+         AND pa.latitude IS NOT NULL AND pa.longitude IS NOT NULL`,
       subcategoryIds
     );
-
+    console.log("providers check " , providers)
     // Filter by radius from customer address (if coords exist)
     let inRadius = providers;
     if (customerLat !== null && customerLat !== undefined && customerLng !== null && customerLng !== undefined) {
@@ -215,6 +219,7 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
             parseFloat(p.location_lat),
             parseFloat(p.location_lng)
           );
+          console.log("distance ", dist);
           return dist <= parseFloat(p.service_radius_km || 0);
         } catch (e) {
           return false;
@@ -243,6 +248,7 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
          AND service_status IN ('assigned','accepted','in_progress')`,
       [scheduledTime]
     );
+    console.log("busy providers" , busyRows);
     const busySet = new Set(busyRows.map(r => r.provider_id));
     const availableProviders = inRadius.filter(p => !busySet.has(p.provider_id));
 
@@ -375,14 +381,15 @@ router.post('/create', verifyToken, async (req, res) => {
         // Create booking with explicit UTC created_at and total_amount for payment
         const [bookingResult] = await pool.query(
           `INSERT INTO bookings
-           (user_id, provider_id, booking_type, subcategory_id, scheduled_time, gst,
+           (user_id, provider_id, booking_type, subcategory_id, service_unit_count, scheduled_time, gst,
             estimated_cost, price, total_amount, service_status, payment_status, created_at, duration, cost_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
           [
             customerId,
             provider_id,
             booking_type,
             subcategory_id,
+            quantity,
             scheduled_time,
             gst,
             totalPrice, // estimated_cost
@@ -424,15 +431,18 @@ router.post('/create', verifyToken, async (req, res) => {
         console.log("bookingId", bookingId);
         console.log("scheduled_time", scheduled_time);
         const [providers] = await pool.query(`
-          SELECT p.id as provider_id, p.service_radius_km, p.location_lat, p.location_lng, u.gender
+          SELECT p.id as provider_id, p.service_radius_km,
+                 pa.latitude AS location_lat, pa.longitude AS location_lng,
+                 u.gender
           FROM providers p
           INNER JOIN provider_services ps ON p.id = ps.provider_id
           INNER JOIN users u ON u.id = p.user_id
+          LEFT JOIN provider_addresses pa ON p.id = pa.provider_id AND pa.address_type = 'temporary'
           WHERE ps.subcategory_id = ? 
             AND p.active = 1 
             AND p.verified = 1
-            AND p.location_lat IS NOT NULL 
-            AND p.location_lng IS NOT NULL
+            AND pa.latitude IS NOT NULL 
+            AND pa.longitude IS NOT NULL
         `, [subcategory_id]);
         console.log("providers", providers);
         // Exclude providers already busy at this scheduled_time

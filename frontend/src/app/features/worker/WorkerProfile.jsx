@@ -49,6 +49,10 @@ const WorkerProfile = () => {
     city: '',
     state: '',
     zip_code: '',
+    temp_street_address: '',
+    temp_city: '',
+    temp_state: '',
+    temp_zip_code: '',
 
     alternate_email: '',
     alternate_phone_number: '',
@@ -310,6 +314,10 @@ const WorkerProfile = () => {
         city: editedProfile.city,
         state: editedProfile.state,
         zip_code: editedProfile.zip_code,
+        temp_street_address: editedProfile.temp_street_address,
+        temp_city: editedProfile.temp_city,
+        temp_state: editedProfile.temp_state,
+        temp_zip_code: editedProfile.temp_zip_code,
         alternate_email: editedProfile.alternate_email,
         alternate_phone_number: editedProfile.alternate_phone_number,
         emergency_contact_name: editedProfile.emergency_contact_name,
@@ -997,6 +1005,119 @@ const WorkerProfile = () => {
                           darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
                         }`}>
                           {profile.zip_code || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Temporary Address Section */}
+              <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg p-6 shadow-sm`}>
+                <h4 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Temporary Address
+                </h4>
+
+                <div className="space-y-6">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Street Address
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        name="temp_street_address"
+                        value={editedProfile.temp_street_address || ''}
+                        onChange={handleInputChange}
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                            : 'bg-white border-gray-300 text-gray-900'
+                        }`}
+                        placeholder="Enter your temporary street address"
+                      />
+                    ) : (
+                      <div className={`w-full px-3 py-2 border rounded-lg ${
+                        darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                      }`}>
+                        {profile.temp_street_address || 'Not provided'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        City
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          name="temp_city"
+                          value={editedProfile.temp_city || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter city"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.temp_city || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        State
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          name="temp_state"
+                          value={editedProfile.temp_state || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter state"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.temp_state || 'Not provided'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        ZIP Code
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          name="temp_zip_code"
+                          value={editedProfile.temp_zip_code || ''}
+                          onChange={handleInputChange}
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                          placeholder="Enter ZIP code"
+                        />
+                      ) : (
+                        <div className={`w-full px-3 py-2 border rounded-lg ${
+                          darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'
+                        }`}>
+                          {profile.temp_zip_code || 'Not provided'}
                         </div>
                       )}
                     </div>
