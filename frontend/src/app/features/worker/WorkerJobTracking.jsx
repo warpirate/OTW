@@ -242,15 +242,11 @@ const WorkerJobTracking = () => {
       const formData = new FormData();
       formData.append('selfie', captureData.file);
       formData.append('bookingId', bookingId);
-      formData.append('latitude', captureData.location.latitude.toString());
-      formData.append('longitude', captureData.location.longitude.toString());
       formData.append('timestamp', captureData.timestamp || new Date().toISOString());
 
       const result = await SelfieVerificationService.completeSelfieVerification(
         bookingId,
-        formData,
-        captureData.location,
-        captureData.timestamp
+        formData
       );
 
       if (result.success) {

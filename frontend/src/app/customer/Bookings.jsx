@@ -30,6 +30,7 @@ import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import { toast } from 'react-toastify';
 import BookingStatusBadge from '../../components/BookingStatusBadge';
+import PaymentService from '../services/payment.service';
 
 const Bookings = () => {
   const navigate = useNavigate();
@@ -47,6 +48,8 @@ const Bookings = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [summary, setSummary] = useState({ totalBookings: 0, activeBookings: 0, totalSpent: 0 });
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [bookingPaymentInfo, setBookingPaymentInfo] = useState(null);
+  const [paymentActionLoading, setPaymentActionLoading] = useState(false);
 
   // Listen for theme changes
   useEffect(() => {
@@ -240,6 +243,14 @@ const Bookings = () => {
       const detailedBooking = BookingService.utils.mapBookingData(response.booking);
       setSelectedBooking(detailedBooking);
       setShowBookingDetails(true);
+
+      // Also fetch latest payment status for this booking
+      try {
+        const paymentInfo = await PaymentService.razorpay.checkBookingPaymentStatus(booking.booking_id);
+        setBookingPaymentInfo(paymentInfo);
+      } catch (paymentError) {
+        console.error('Error checking booking payment status:', paymentError);
+      }
     } catch (error) {
       console.error('Error fetching booking details:', error);
       toast.error('Failed to load booking details');
@@ -254,6 +265,151 @@ const Bookings = () => {
   const canCancelBooking = (booking) => {
     const status = booking.status?.toLowerCase();
     return status === 'pending' || status === 'assigned';
+  };
+
+  const isBookingPaymentCompleted = (booking, paymentInfo) => {
+    if (!booking) return false;
+    const rawStatus = (paymentInfo?.booking_payment_status || booking.payment_status || '').toLowerCase();
+    if (paymentInfo?.payment_completed) return true;
+    return rawStatus === 'paid' || rawStatus === 'completed';
+  };
+
+  const getDisplayPaymentStatus = (booking, paymentInfo) => {
+    if (!booking) return 'Unknown';
+
+    const rawStatus = (paymentInfo?.booking_payment_status || booking.payment_status || '').toLowerCase();
+    const method = (booking.payment_method || '').toLowerCase();
+
+    if (paymentInfo?.payment_completed || rawStatus === 'paid' || rawStatus === 'completed') {
+      return 'Paid';
+    }
+
+    if (method.includes('pay after') || method === 'pay_after_service') {
+      return 'Pay After Service (Pending)';
+    }
+
+    if (!rawStatus || rawStatus === 'pending' || rawStatus === 'created' || rawStatus === 'processing') {
+      if (method.includes('upi') || method.includes('razorpay')) {
+        return 'Online Payment Pending';
+      }
+      return 'Payment Pending';
+    }
+
+    if (rawStatus === 'failed') return 'Payment Failed';
+    if (rawStatus === 'refunded') return 'Refunded';
+
+    return booking.payment_status || 'Unknown';
+  };
+
+  const paymentCompletedForSelected = selectedBooking
+    ? isBookingPaymentCompleted(selectedBooking, bookingPaymentInfo)
+    : false;
+
+  const canPayNowForSelected = selectedBooking
+    ? (!paymentCompletedForSelected && selectedBooking.status !== 'cancelled')
+    : false;
+
+  const handlePayNow = async (bookingId) => {
+    if (!bookingId) return;
+
+    if (!window.Razorpay) {
+      toast.error('Payment gateway not available. Please refresh the page and try again.');
+      return;
+    }
+
+    setPaymentActionLoading(true);
+    try {
+      const session = await PaymentService.razorpay.createCheckoutSession(bookingId);
+
+      if (!session || session.success === false) {
+        toast.error(session?.message || 'Failed to start payment. Please try again.');
+        setPaymentActionLoading(false);
+        return;
+      }
+
+      if (session.payment_completed) {
+        toast.success('Payment already completed for this booking.');
+        setBookingPaymentInfo(session);
+
+        try {
+          const refreshed = await BookingService.bookings.getById(bookingId);
+          const updatedBooking = BookingService.utils.mapBookingData(refreshed.booking);
+          setSelectedBooking(updatedBooking);
+        } catch (refreshError) {
+          console.error('Error refreshing booking after completed payment:', refreshError);
+        }
+
+        setPaymentActionLoading(false);
+        return;
+      }
+
+      const { order } = session;
+
+      const options = {
+        key: order.key,
+        amount: order.amount,
+        currency: order.currency,
+        name: order.name,
+        description: order.description,
+        order_id: order.id,
+        prefill: order.prefill,
+        theme: order.theme,
+        handler: async (response) => {
+          try {
+            const verify = await PaymentService.razorpay.handleSuccess({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature
+            });
+
+            if (verify?.success || verify?.already_processed) {
+              toast.success('Payment completed successfully!');
+
+              try {
+                const status = await PaymentService.razorpay.checkBookingPaymentStatus(bookingId);
+                setBookingPaymentInfo(status);
+              } catch (statusError) {
+                console.error('Error refreshing payment status after success:', statusError);
+              }
+
+              try {
+                const refreshed = await BookingService.bookings.getById(bookingId);
+                const updatedBooking = BookingService.utils.mapBookingData(refreshed.booking);
+                setSelectedBooking(updatedBooking);
+              } catch (refreshError) {
+                console.error('Error refreshing booking after payment success:', refreshError);
+              }
+            } else {
+              toast.error('Payment verification failed. Please contact support.');
+            }
+          } catch (err) {
+            console.error('Error handling payment success:', err);
+            toast.error('Payment verification failed. Please contact support.');
+          } finally {
+            setPaymentActionLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setPaymentActionLoading(false);
+            toast.info('Payment was cancelled.');
+          }
+        }
+      };
+
+      try {
+        const razorpay = new window.Razorpay(options);
+        razorpay.open();
+      } catch (openError) {
+        console.error('Error opening Razorpay checkout:', openError);
+        toast.error('Failed to open payment gateway. Please try again.');
+        setPaymentActionLoading(false);
+      }
+    } catch (error) {
+      console.error('Error starting payment for booking:', error);
+      toast.error('Failed to start payment. Please try again.');
+      setPaymentActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -568,6 +724,14 @@ const Bookings = () => {
                           {selectedBooking.subcategory_name}
                         </span>
                       </div>
+                      {(Number(selectedBooking.service_unit_count || selectedBooking.duration || 0) > 0) && (
+                        <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                          <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>No of requests:</span>
+                          <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {Number(selectedBooking.service_unit_count || selectedBooking.duration)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
                         <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Scheduled Date & Time:</span>
                         <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -606,7 +770,7 @@ const Bookings = () => {
                           {selectedBooking.provider_name || 'Not Assigned'}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center py-2">
+                      <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
                         <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Phone:</span>
                         <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                           {selectedBooking.provider_phone || 'N/A'}
@@ -623,30 +787,80 @@ const Bookings = () => {
                     Pricing Details
                   </h4>
                   {(() => {
-                    // Derive pricing when gst_amount is missing or 0
-                    const total = Number(selectedBooking.total_amount || 0);
-                    const rawGst = Number(selectedBooking.gst_amount || 0);
                     const GST_RATE = 0.18;
-                    // If GST provided and positive, trust it; else infer assuming total includes GST
-                    const inferredGst = rawGst > 0 ? rawGst : Number((total - (total / (1 + GST_RATE))).toFixed(2));
-                    const base = total > 0 ? Number((total - inferredGst).toFixed(2)) : 0;
+
+                    const total = Number(selectedBooking.total_amount || 0);
+                    const hasBackendBreakdown =
+                      typeof selectedBooking.base_item_price === 'number' &&
+                      !Number.isNaN(selectedBooking.base_item_price);
+
+                    let base = 0;
+                    let nightCharge = 0;
+                    let discountAmount = 0;
+                    let discountPercentage = 0;
+                    let gstAmount = 0;
+
+                    if (hasBackendBreakdown) {
+                      base = Number(selectedBooking.base_item_price || 0);
+                      nightCharge = Number(selectedBooking.night_charge_amount || 0);
+                      discountAmount = Number(selectedBooking.discount_amount || 0);
+                      discountPercentage = Number(selectedBooking.discount_percentage || 0);
+
+                      if (selectedBooking.gst_amount !== null && selectedBooking.gst_amount !== undefined) {
+                        gstAmount = Number(selectedBooking.gst_amount) || 0;
+                      } else {
+                        const computedSubtotal = base + nightCharge - discountAmount;
+                        gstAmount = Math.max(total - computedSubtotal, 0);
+                      }
+                    } else {
+                      // Fallback for legacy bookings without breakdown data
+                      const rawGst = Number(selectedBooking.gst_amount || 0);
+                      const inferredGst = rawGst > 0
+                        ? rawGst
+                        : (total > 0 ? Number((total - (total / (1 + GST_RATE))).toFixed(2)) : 0);
+                      gstAmount = inferredGst;
+                      base = total > 0 ? Number((total - inferredGst).toFixed(2)) : 0;
+                    }
+
                     return (
                       <div className="space-y-3">
                         <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
-                          <span className="text-emerald-700 dark:text-emerald-300">Base Price:</span>
-                          <span className={`font-medium ${darkMode ? 'text-emerald-100' : 'text-emerald-900'}`}>
+                          <span className={`${darkMode ? 'text-emerald-300' : 'text-gray-900'}`}>Base Price:</span>
+                          <span className={`font-medium ${darkMode ? 'text-emerald-100' : 'text-gray-900'}`}>
                             {formatPrice(base)}
                           </span>
                         </div>
+                        {nightCharge > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
+                            <span className={`${darkMode ? 'text-emerald-300' : 'text-gray-900'}`}>
+                              Night Charges:
+                            </span>
+                            <span className={`font-medium ${darkMode ? 'text-emerald-100' : 'text-gray-900'}`}>
+                              {formatPrice(nightCharge)}
+                            </span>
+                          </div>
+                        )}
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
+                            <span className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {(selectedBooking.customer_type || 'Customer')}
+                              {discountPercentage > 0 && ` Discount (${discountPercentage}%):`}
+                              {discountPercentage === 0 && ' Discount:'}
+                            </span>
+                            <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                              -{formatPrice(discountAmount)}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-between items-center py-2 border-b border-green-200 dark:border-green-700">
-                          <span className="text-emerald-700 dark:text-emerald-300">GST (18%):</span>
-                          <span className={`font-medium ${darkMode ? 'text-emerald-100' : 'text-emerald-900'}`}>
-                            {formatPrice(inferredGst)}
+                          <span className={`${darkMode ? 'text-emerald-300' : 'text-gray-900'}`}>GST (18%):</span>
+                          <span className={`font-medium ${darkMode ? 'text-emerald-100' : 'text-gray-900'}`}>
+                            {formatPrice(gstAmount)}
                           </span>
                         </div>
                         <div className="flex justify-between items-center py-3 bg-green-100 dark:bg-green-900/30 rounded-lg px-4">
-                          <span className="font-semibold text-lg text-emerald-800 dark:text-emerald-200">Total Amount:</span>
-                          <span className={`text-2xl font-bold ${darkMode ? 'text-emerald-50' : 'text-emerald-900'}`}>
+                          <span className={`font-semibold text-lg ${darkMode ? 'text-emerald-200' : 'text-gray-900'}`}>Total Amount:</span>
+                          <span className={`text-2xl font-bold ${darkMode ? 'text-emerald-50' : 'text-gray-900'}`}>
                             {formatPrice(total)}
                           </span>
                         </div>
@@ -667,8 +881,27 @@ const Bookings = () => {
                       <div>
                         <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Payment Status</p>
                         <p className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {selectedBooking.payment_status === 'pending' ? 'Pay After Service' : selectedBooking.payment_status}
+                          {getDisplayPaymentStatus(selectedBooking, bookingPaymentInfo)}
                         </p>
+                        {canPayNowForSelected && (
+                          <button
+                            onClick={() => handlePayNow(selectedBooking.booking_id)}
+                            disabled={paymentActionLoading}
+                            className="mt-2 inline-flex items-center px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 text-sm"
+                          >
+                            {paymentActionLoading ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                <span>Processing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard className="h-4 w-4 mr-2" />
+                                <span>Pay Now with Razorpay</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
@@ -695,15 +928,16 @@ const Bookings = () => {
                         <div className="flex justify-between items-center py-2 border-b border-indigo-200 dark:border-indigo-700">
                           <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Payment Method:</span>
                           <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                            {selectedBooking.payment_method || 'Cash Payment'}
+                            {selectedBooking.payment_method || bookingPaymentInfo?.payment_method || 'N/A'}
                           </span>
                         </div>
                         <div className="flex justify-between items-center py-2 border-b border-indigo-200 dark:border-indigo-700">
                           <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Payment Status:</span>
-                          <span className={`font-medium ${selectedBooking.payment_status === 'paid' ? 'text-green-600' : 'text-orange-600'}`}>
-                            {selectedBooking.payment_status === 'paid' ? '✅ Paid' : '⏳ Pending'}
+                          <span className={`font-medium ${paymentCompletedForSelected ? 'text-green-600' : 'text-orange-600'}`}>
+                            {paymentCompletedForSelected ? '✅ Paid' : '⏳ Pending'}
                           </span>
                         </div>
+
                         {selectedBooking.payment_completed_at && (
                           <div className="flex justify-between items-center py-2 border-b border-indigo-200 dark:border-indigo-700">
                             <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Payment Date:</span>

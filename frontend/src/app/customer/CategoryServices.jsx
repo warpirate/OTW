@@ -80,12 +80,16 @@ const CategoryServices = () => {
       // Create a cart item from the service
       const cartItem = {
         id: service.id,
+        subcategory_id: service.id,
         name: service.name,
         description: service.description || `Professional ${service.name} service`,
         price: service.base_price || Math.floor(Math.random() * 5000) + 1000, // Use base_price or generate a random price
         quantity: 1,
         category_id: categoryId,
-        category_name: categoryName
+        category_name: categoryName,
+        night_charge: service.night_charge ?? 0,
+        night_start_time: service.night_start_time || '17:00:00',
+        night_end_time: service.night_end_time || '06:00:00'
       };
       
       await addItem(cartItem);

@@ -365,6 +365,45 @@ const BookingService = {
 
     // Map backend booking data to frontend format
     mapBookingData: (backendBooking) => {
+      if (!backendBooking) return null;
+
+      // Prefer explicit total_amount from backend when available, fall back to display_price/price
+      const resolvedTotalAmount =
+        (backendBooking.total_amount !== undefined && backendBooking.total_amount !== null)
+          ? Number(backendBooking.total_amount)
+          : Number(backendBooking.display_price || backendBooking.price || backendBooking.estimated_cost || 0);
+
+      const gstAmount = backendBooking.gst !== undefined && backendBooking.gst !== null
+        ? Number(backendBooking.gst)
+        : 0;
+
+      const baseItemPrice = backendBooking.base_item_price !== undefined && backendBooking.base_item_price !== null
+        ? Number(backendBooking.base_item_price)
+        : undefined;
+
+      const nightChargeAmount = backendBooking.night_charge_amount !== undefined && backendBooking.night_charge_amount !== null
+        ? Number(backendBooking.night_charge_amount)
+        : 0;
+
+      const nightChargePerUnit = backendBooking.night_charge_per_unit !== undefined && backendBooking.night_charge_per_unit !== null
+        ? Number(backendBooking.night_charge_per_unit)
+        : undefined;
+
+      const discountAmount = backendBooking.discount_amount !== undefined && backendBooking.discount_amount !== null
+        ? Number(backendBooking.discount_amount)
+        : 0;
+
+      const discountPercentage =
+        backendBooking.discount_percentage !== undefined && backendBooking.discount_percentage !== null
+          ? Number(backendBooking.discount_percentage)
+          : (backendBooking.customer_discount_percentage !== undefined && backendBooking.customer_discount_percentage !== null
+              ? Number(backendBooking.customer_discount_percentage)
+              : 0);
+
+      const subtotalBeforeGst = backendBooking.subtotal_before_gst !== undefined && backendBooking.subtotal_before_gst !== null
+        ? Number(backendBooking.subtotal_before_gst)
+        : undefined;
+
       return {
         booking_id: backendBooking.id,
         service_name: backendBooking.service_name,
@@ -373,16 +412,35 @@ const BookingService = {
         payment_status: backendBooking.payment_status,
         payment_method: backendBooking.payment_method,
         payment_completed_at: backendBooking.payment_completed_at,
+        service_unit_count: backendBooking.service_unit_count,
+        duration: backendBooking.duration,
         // scheduled_time is stored in UTC (YYYY-MM-DD HH:mm:ss). Parse to local for UI.
-        booking_date: backendBooking.scheduled_time ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T')) : null,
-        time_slot: backendBooking.scheduled_time ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T')).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '',
+        booking_date: backendBooking.scheduled_time
+          ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T'))
+          : null,
+        time_slot: backendBooking.scheduled_time
+          ? new Date((backendBooking.scheduled_time + 'Z').replace(' ', 'T')).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            })
+          : '',
         address: backendBooking.display_address || backendBooking.address,
-        total_amount: backendBooking.display_price || backendBooking.price,
-        gst_amount: backendBooking.gst,
+        total_amount: resolvedTotalAmount,
+        gst_amount: gstAmount,
         provider_name: backendBooking.provider_name || 'Not Assigned',
         provider_phone: backendBooking.provider_phone,
         created_at: backendBooking.created_at,
         notes: backendBooking.notes,
+        // Pricing breakdown (available for detailed booking view)
+        base_item_price: baseItemPrice,
+        night_charge_amount: nightChargeAmount,
+        night_charge_per_unit: nightChargePerUnit,
+        is_night_booking: Boolean(backendBooking.is_night_booking),
+        discount_percentage: discountPercentage,
+        discount_amount: discountAmount,
+        subtotal_before_gst: subtotalBeforeGst,
+        customer_type: backendBooking.customer_type_name,
         // Rating and review fields
         rating: backendBooking.rating,
         review: backendBooking.review,

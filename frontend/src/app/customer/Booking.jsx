@@ -96,6 +96,11 @@ const Booking = () => {
   const [serviceBookingId, setServiceBookingId] = useState(null);
   const [backendCalculatedTotal, setBackendCalculatedTotal] = useState(null);
 
+  // Per-service availability for the selected time slot (keyed by subcategory_id)
+  const [serviceAvailability, setServiceAvailability] = useState({});
+  // Night pricing info from backend check-worker-availability (keyed by subcategory_id)
+  const [nightPricing, setNightPricing] = useState({});
+
   // Discount state
   const [discountInfo, setDiscountInfo] = useState({
     has_discount: false,
@@ -103,6 +108,48 @@ const Booking = () => {
     customer_type: 'Normal'
   });
   const [loadingDiscount, setLoadingDiscount] = useState(false);
+
+  const generateAvailableDates = (daysCount = 14) => {
+    const dates = [];
+    const today = new Date();
+
+    const formatLocalDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    for (let i = 0; i < daysCount; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+
+      const dateString = formatLocalDate(date);
+
+      dates.push({
+        date: dateString,
+        displayDate: date.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        shortDate: date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        }),
+        isToday: i === 0,
+        isTomorrow: i === 1,
+      });
+    }
+
+    return dates;
+  };
+
+  const getEffectiveDateForTime = (baseDateStr, _timeStr) => {
+    return baseDateStr;
+  };
 
   // Sync dark mode with global theme changes
   useEffect(() => {
@@ -208,84 +255,149 @@ const Booking = () => {
     }
   };
 
-  // Calculate totals with discount (matching backend logic)
-  const calculateTotals = () => {
-    if (!cart || !cart.items) return { subtotal: 0, discount: 0, tax: 0, total: 0 };
+  const computeNightFeeForItem = (item, time24) => {
 
-    const subtotal = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    // Ensure discountInfo is properly loaded before calculating discount
-    const discount = (discountInfo && discountInfo.has_discount) ? subtotal * (discountInfo.discount_percentage / 100) : 0;
-    const discountedSubtotal = subtotal - discount;
-    const tax = discountedSubtotal * 0.18; // 18% GST on discounted amount (matching backend)
-    const total = discountedSubtotal + tax;
+    const qty = item.quantity || 1;
+    const id = item.subcategory_id || item.id;
+    const backendNight = nightPricing[id];
 
-    return { subtotal, discount, tax, total };
-  };
+    // Prefer backend-calculated night_charge and is_night when available
+    if (backendNight) {
+      const perUnitNightFromBackend = parseInt(backendNight.night_charge ?? 0, 10) || 0;
 
-  // Generate available dates for booking
-  const generateAvailableDates = (daysCount = 14) => {
-    const dates = [];
-    const today = new Date();
+      // If backend says there is no night_charge configured, skip
+      if (!perUnitNightFromBackend) {
+        return 0;
+      }
 
-    for (let i = 0; i < daysCount; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
+      // If backend explicitly tells us whether this time is night, trust it
+      if (typeof backendNight.is_night === 'boolean') {
+        if (!backendNight.is_night) return 0;
+        return perUnitNightFromBackend * qty;
+      }
 
-      // Format date as YYYY-MM-DD for consistent usage
-      const dateString = date.toISOString().split('T')[0];
-
-      dates.push({
-        date: dateString,
-        displayDate: date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        }),
-        shortDate: date.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric'
-        }),
-        isToday: i === 0,
-        isTomorrow: i === 1
-      });
+      // Otherwise, fall through to local time-window logic using backend window
+      item = {
+        ...item,
+        night_charge: perUnitNightFromBackend,
+        night_start_time: backendNight.night_start_time || item.night_start_time,
+        night_end_time: backendNight.night_end_time || item.night_end_time
+      };
     }
 
-    return dates;
+    if (!time24) return 0;
+
+    const rawNight = item.night_charge != null ? item.night_charge : 0;
+    const perUnitNight = parseInt(rawNight, 10) || 0;
+    if (!perUnitNight) return 0;
+
+    const toMinutes = (t) => {
+      const parts = String(t).split(':');
+      if (parts.length < 2) return NaN;
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      if (isNaN(h) || isNaN(m)) return NaN;
+      return h * 60 + m;
+    };
+
+    const nightStart = item?.night_start_time || '17:00:00';
+    const nightEnd = item?.night_end_time || '06:00:00';
+
+    const slotMinutes = toMinutes(`${time24}:00`);
+    const startMinutes = toMinutes(nightStart);
+    const endMinutes = toMinutes(nightEnd);
+    if (isNaN(slotMinutes) || isNaN(startMinutes) || isNaN(endMinutes) || startMinutes === endMinutes) {
+      return 0;
+    }
+
+    let isNight = false;
+    if (startMinutes < endMinutes) {
+      isNight = slotMinutes >= startMinutes && slotMinutes < endMinutes;
+    } else {
+      isNight = slotMinutes >= startMinutes || slotMinutes < endMinutes;
+    }
+
+    if (!isNight) return 0;
+    return perUnitNight * qty;
   };
 
-  // Generate time slots with frontend calculations
+  const calculateTotals = () => {
+    if (!cart || !cart.items) return { subtotal: 0, discount: 0, tax: 0, total: 0, nightChargeTotal: 0 };
+
+    let subtotal = 0;
+    let nightChargeTotal = 0;
+    let discountTotal = 0;
+    let gstTotal = 0;
+
+    const slotTime = selectedTimeSlot?.time || null; // "HH:MM"
+
+    cart.items.forEach((item) => {
+      const qty = item.quantity || 1;
+      const base = (item.price || 0) * qty;
+      const nightFee = computeNightFeeForItem(item, slotTime);
+
+      const itemPriceBeforeDiscount = base + nightFee;
+      subtotal += itemPriceBeforeDiscount;
+      nightChargeTotal += nightFee;
+
+      const discountPercentage = (discountInfo && discountInfo.has_discount)
+        ? discountInfo.discount_percentage
+        : 0;
+
+      const discountAmount = discountPercentage > 0 && itemPriceBeforeDiscount > 0
+        ? Number(((itemPriceBeforeDiscount * discountPercentage) / 100).toFixed(2))
+        : 0;
+
+      discountTotal += discountAmount;
+
+      const discountedPrice = Math.max(itemPriceBeforeDiscount - discountAmount, 0);
+
+      // 18% GST with 2-decimal precision per item (kept in sync with backend logic)
+      const gst = Number((discountedPrice * 0.18).toFixed(2));
+      gstTotal += gst;
+    });
+
+    const total = Number((subtotal - discountTotal + gstTotal).toFixed(2));
+
+    return {
+      subtotal,
+      discount: discountTotal,
+      tax: gstTotal,
+      total,
+    };
+  };
+
   const generateTimeSlots = (date) => {
     const slots = [];
     const now = new Date();
-    const selectedDateObj = new Date(`${date}T00:00:00`);
-    const isToday = selectedDateObj.toDateString() === now.toDateString();
+    const baseDate = new Date(`${date}T00:00:00`);
 
-    // Generate slots from 9 AM to 6 PM (every 30 minutes)
-    for (let hour = 9; hour <= 18; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        // Skip 6:30 PM slot
-        if (hour === 18 && minute === 30) break;
+    const addSlot = (hour) => {
+      const timeString = `${hour.toString().padStart(2, '0')}:00`;
 
-        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const slotDateTime = new Date(`${date}T${timeString}:00`);
+      const effectiveDate = getEffectiveDateForTime(date, timeString);
+      const slotDateTime = new Date(`${effectiveDate}T${timeString}:00`);
 
-        // Check if slot is in the past (for today only) - add 30 minute buffer
-        const isPast = isToday && slotDateTime <= new Date(now.getTime() + 30 * 60000);
+      let isPast;
 
-        slots.push({
-          time: timeString,
-          available: !isPast,
-          isPast: isPast
-        });
-      }
+      // Add small buffer (30 min) when deciding past/future
+      isPast = slotDateTime <= new Date(now.getTime() + 30 * 60000);
+
+      slots.push({
+        time: timeString,
+        available: !isPast,
+        isPast
+      });
+    };
+
+    // Slots: 00:00 - 23:00
+    for (let hour = 0; hour <= 23; hour++) {
+      addSlot(hour);
     }
 
     return slots;
   };
 
-  // Load time slots for selected date (frontend calculation)
   const loadTimeSlots = (date) => {
     setLoadingSlots(true);
 
@@ -297,17 +409,18 @@ const Booking = () => {
     }, 300);
   };
 
-  // Check worker availability for selected time slot
   const checkWorkerAvailability = async (date, timeSlot) => {
     if (!selectedAddress || !date || !timeSlot) {
       return;
     }
 
+    const effectiveDate = getEffectiveDateForTime(date);
+
     setLoadingWorkerAvailability(true);
     try {
       // Call backend API to check worker availability
       const availabilityData = await BookingService.checkWorkerAvailability({
-        date: date,
+        date: effectiveDate,
         time: timeSlot,
         address_id: selectedAddress.address_id,
         services: cart.items.map(item => ({
@@ -321,6 +434,8 @@ const Booking = () => {
         setTimeSlots(prev => prev.map(s => s.time === timeSlot ? { ...s, available: false } : s));
         setSelectedTimeSlot(null);
         setWorkerAvailability({ male: false, female: false, any: false });
+        setServiceAvailability({});
+        setNightPricing({});
         toast.warn(availabilityData.reason || 'Selected time slot is not available. Please pick another slot.');
         return;
       }
@@ -330,6 +445,38 @@ const Booking = () => {
         female: availabilityData.female_available || false,
         any: !!availabilityData.any_available
       });
+
+      // Map per-subcategory availability for UI
+      const perService = {};
+      if (Array.isArray(availabilityData.subcategories)) {
+        availabilityData.subcategories.forEach(sc => {
+          if (!sc || sc.subcategory_id == null) return;
+          const id = sc.subcategory_id;
+          const available = sc.available === true || (sc.total_count || 0) > 0;
+          perService[id] = {
+            available,
+            male_count: sc.male_count || 0,
+            female_count: sc.female_count || 0,
+            total_count: sc.total_count || 0
+          };
+        });
+      }
+      setServiceAvailability(perService);
+
+      // Map night_pricing from backend (per subcategory) for use in night charge calculation
+      const nightMap = {};
+      if (Array.isArray(availabilityData.night_pricing)) {
+        availabilityData.night_pricing.forEach(np => {
+          if (!np || np.subcategory_id == null) return;
+          nightMap[np.subcategory_id] = {
+            night_charge: np.night_charge ?? 0,
+            night_start_time: np.night_start_time,
+            night_end_time: np.night_end_time,
+            is_night: !!np.is_night
+          };
+        });
+      }
+      setNightPricing(nightMap);
 
       if (!availabilityData.any_available) {
         toast.error('No workers are available in your area.');
@@ -351,25 +498,28 @@ const Booking = () => {
         female: false,
         any: false
       });
+      setServiceAvailability({});
+      setNightPricing({});
     } finally {
       setLoadingWorkerAvailability(false);
     }
   };
 
-  // Handle date selection
   const handleDateSelect = (date) => {
     setSelectedDate(date);
     setSelectedTimeSlot(null);
+
     setWorkerPreference('any');
     setWorkerAvailability({
       male: false,
       female: false,
       any: false
     });
+    setServiceAvailability({});
+    setNightPricing({});
     loadTimeSlots(date);
   };
 
-  // Handle time slot selection
   const handleTimeSlotSelect = (slot) => {
     if (slot.available) {
       setSelectedTimeSlot(slot);
@@ -378,15 +528,6 @@ const Booking = () => {
     }
   };
 
-  // Handle address form input
-  const handleAddressInput = (field, value) => {
-    setNewAddress(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Debounced pincode validation to reduce API calls
   const debouncedPincodeValidation = useCallback(
     debounce(async (pincode) => {
       if (!pincode || pincode.length !== 6) return;
@@ -429,13 +570,77 @@ const Booking = () => {
         return null;
       }
 
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        });
+      const getPosition = (options) => new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
       });
+
+      const getBestAccuratePosition = ({
+        sampleTimeoutMs = 25000,
+        desiredAccuracyMeters = 50,
+        minSamples = 2,
+        maxSamples = 5
+      } = {}) => new Promise((resolve, reject) => {
+        let best = null;
+        let samples = 0;
+        let done = false;
+
+        const finish = (result, isError) => {
+          if (done) return;
+          done = true;
+          if (watchId != null) navigator.geolocation.clearWatch(watchId);
+          clearTimeout(timer);
+          if (isError) reject(result);
+          else resolve(result);
+        };
+
+        const onSuccess = (pos) => {
+          samples += 1;
+          const acc = pos?.coords?.accuracy;
+          if (typeof acc === 'number' && !Number.isNaN(acc)) {
+            if (!best || acc < best.coords.accuracy) best = pos;
+          } else if (!best) {
+            best = pos;
+          }
+
+          const goodEnough = best?.coords?.accuracy != null && best.coords.accuracy <= desiredAccuracyMeters;
+          const haveEnoughSamples = samples >= minSamples;
+          if ((goodEnough && haveEnoughSamples) || samples >= maxSamples) {
+            finish(best, false);
+          }
+        };
+
+        const onError = (err) => {
+          finish(err, true);
+        };
+
+        let watchId = null;
+        try {
+          watchId = navigator.geolocation.watchPosition(onSuccess, onError, {
+            enableHighAccuracy: true,
+            timeout: sampleTimeoutMs,
+            maximumAge: 0
+          });
+        } catch (e) {
+          finish(e, true);
+          return;
+        }
+
+        const timer = setTimeout(() => {
+          if (best) finish(best, false);
+          else finish({ code: 3, message: 'Timeout expired' }, true);
+        }, sampleTimeoutMs);
+      });
+
+      let position;
+      try {
+        position = await getBestAccuratePosition();
+      } catch (err) {
+        position = await getPosition({
+          enableHighAccuracy: false,
+          timeout: 30000,
+          maximumAge: 60000
+        });
+      }
 
       const coords = {
         latitude: position.coords.latitude,
@@ -470,7 +675,7 @@ const Booking = () => {
       } else if (error.code === 2) {
         toast.error('Location unavailable. Please try again.');
       } else if (error.code === 3) {
-        toast.error('Location request timed out. Please try again.');
+        toast.error('Location request timed out. Please check GPS/network and try again.');
       } else {
         toast.error('Failed to get current location');
       }
@@ -480,14 +685,45 @@ const Booking = () => {
     }
   };
 
+  const handleAddressInput = (field, value) => {
+    setNewAddress(prev => {
+      if (field === 'pin_code') {
+        const cleaned = String(value || '').replace(/\D/g, '').slice(0, 6);
+        return { ...prev, [field]: cleaned };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
   // Reverse geocode coordinates to address using Google Maps API
   const reverseGeocode = async (latitude, longitude) => {
     try {
       const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_REACT_APP_GOOGLE_MAPS_API_KEY;
 
       if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === 'YOUR_API_KEY_HERE') {
-        console.warn('Google Maps API key not configured, skipping reverse geocoding');
-        return null;
+        try {
+          const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`;
+          const osmResp = await fetch(osmUrl, {
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          if (!osmResp.ok) {
+            console.warn('OSM reverse geocoding failed:', osmResp.statusText);
+            return null;
+          }
+          const osmData = await osmResp.json();
+          const addr = osmData?.address || {};
+          const address = osmData?.display_name || '';
+          const city = addr.city || addr.town || addr.village || addr.suburb || '';
+          const state = addr.state || '';
+          const pin_code = addr.postcode || '';
+          const country = addr.country || 'India';
+          return { address, city, state, pin_code, country };
+        } catch (e) {
+          console.warn('OSM reverse geocoding error:', e);
+          return null;
+        }
       }
 
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
@@ -495,7 +731,25 @@ const Booking = () => {
 
       if (!response.ok) {
         console.error('Reverse geocoding API error:', response.statusText);
-        return null;
+        try {
+          const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`;
+          const osmResp = await fetch(osmUrl, {
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+          if (!osmResp.ok) return null;
+          const osmData = await osmResp.json();
+          const addr = osmData?.address || {};
+          const address = osmData?.display_name || '';
+          const city = addr.city || addr.town || addr.village || addr.suburb || '';
+          const state = addr.state || '';
+          const pin_code = addr.postcode || '';
+          const country = addr.country || 'India';
+          return { address, city, state, pin_code, country };
+        } catch (_) {
+          return null;
+        }
       }
 
       const data = await response.json();
@@ -907,6 +1161,16 @@ const Booking = () => {
         toast.error('Selected worker preference is not available for this time slot. Please adjust preference or pick another time.');
         return;
       }
+      // Ensure all selected services have at least one available provider for this slot
+      const unavailableServices = cart.items.filter((item) => {
+        const id = item.subcategory_id || item.id;
+        const info = serviceAvailability[id];
+        return info && !info.available;
+      });
+      if (unavailableServices.length > 0) {
+        toast.error(`Selected time slot is not available for: ${unavailableServices.map((s) => s.name).join(', ')}. Please update your service requests.`);
+        return;
+      }
       setCurrentStep('payment');
       return;
     }
@@ -945,19 +1209,21 @@ const Booking = () => {
     return localDateTime.toISOString().slice(0, 19).replace('T', ' ');
   };
 
-  // Validate selected time is not in the past
+  // Validate selected time is not in the past (respecting effective date for late-night slots)
   const validateSelectedTime = () => {
     if (!selectedDate || !selectedTimeSlot) {
       toast.error('Please select date and time');
       return false;
     }
 
+    const effectiveDate = getEffectiveDateForTime(selectedDate, selectedTimeSlot.time);
+
     const now = new Date();
-    const selectedDateTime = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
+    const selectedDateTime = new Date(`${effectiveDate}T${selectedTimeSlot.time}:00`);
 
     // Check if the constructed date is valid
     if (isNaN(selectedDateTime.getTime())) {
-      console.error('Invalid selected date/time:', selectedDate, selectedTimeSlot.time);
+      console.error('Invalid selected date/time:', effectiveDate, selectedTimeSlot.time);
       toast.error('Invalid date or time selected. Please try again.');
       return false;
     }
@@ -1310,7 +1576,8 @@ const Booking = () => {
         return;
       }
 
-      const scheduledAt = buildUTCMySQLDateTime(selectedDate, selectedTimeSlot.time);
+      const effectiveDate = getEffectiveDateForTime(selectedDate, selectedTimeSlot.time);
+      const scheduledAt = buildUTCMySQLDateTime(effectiveDate, selectedTimeSlot.time);
       const totals = calculateTotals();
 
       // Prepare booking data
@@ -1340,7 +1607,7 @@ const Booking = () => {
         // Clear cart
         await clearCart();
 
-        const scheduledLocalDate = new Date(`${selectedDate}T${selectedTimeSlot.time}:00`);
+        const scheduledLocalDate = new Date(`${effectiveDate}T${selectedTimeSlot.time}:00`);
         navigate('/booking-success', {
           state: {
             bookingIds: result.booking_ids,
@@ -1357,7 +1624,7 @@ const Booking = () => {
         const pendingBookingData = {
           booking_ids: result.booking_ids,
           total_amount: result.total_amount,
-          scheduled_date: new Date(`${selectedDate}T${selectedTimeSlot.time}:00`).toISOString()
+          scheduled_date: new Date(`${effectiveDate}T${selectedTimeSlot.time}:00`).toISOString()
         };
 
         // Use backend-calculated total to ensure consistency with discount
@@ -1721,38 +1988,78 @@ const Booking = () => {
                           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-600"></div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                          {timeSlots.map((slot, index) => (
-                            <button
-                              key={index}
-                              onClick={() => handleTimeSlotSelect(slot)}
-                              disabled={!slot.available}
-                              className={`p-3 rounded-lg border text-center transition-colors ${selectedTimeSlot?.time === slot.time
-                                  ? 'border-purple-600 bg-purple-100 text-purple-700'
-                                  : slot.available
-                                    ? darkMode
-                                      ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
-                                      : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
-                                    : darkMode
-                                      ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
-                                      : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-                                }`}
-                            >
-                              <div className="font-medium">
-                                {formatTimeSlot(slot.time)}
-                              </div>
-                              {!slot.available && (
-                                <div className="text-xs mt-1">
-                                  {slot.isPast ? 'Past' : 'Booked'}
+                        <>
+                          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                            {timeSlots.map((slot, index) => (
+                              <button
+                                key={index}
+                                onClick={() => handleTimeSlotSelect(slot)}
+                                disabled={!slot.available}
+                                className={`p-3 rounded-lg border text-center transition-colors ${selectedTimeSlot?.time === slot.time
+                                    ? 'border-purple-600 bg-purple-100 text-purple-700'
+                                    : slot.available
+                                      ? darkMode
+                                        ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-purple-500'
+                                        : 'border-gray-200 bg-white text-gray-700 hover:border-purple-300'
+                                      : darkMode
+                                        ? 'border-gray-700 bg-gray-800 text-gray-500 cursor-not-allowed'
+                                        : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                                  }`}
+                              >
+                                <div className="font-medium">
+                                  {formatTimeSlot(slot.time)}
                                 </div>
-                              )}
-                            </button>
-                          ))}
-                        </div>
+                                {!slot.available && (
+                                  <div className="text-xs mt-1">
+                                    {slot.isPast ? 'Past' : 'Booked'}
+                                  </div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+
+                          {selectedTimeSlot && !loadingWorkerAvailability && (
+                            <div className="mt-4">
+                              {(() => {
+                                const unavailable = cart.items.filter((item) => {
+                                  const id = item.subcategory_id || item.id;
+                                  const info = serviceAvailability[id];
+                                  return info && !info.available;
+                                });
+
+                                const allKnown = cart.items.every((item) => {
+                                  const id = item.subcategory_id || item.id;
+                                  return !!serviceAvailability[id];
+                                });
+
+                                if (!allKnown) {
+                                  return (
+                                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} text-sm`}>
+                                      Checking worker availability for selected services...
+                                    </p>
+                                  );
+                                }
+
+                                if (unavailable.length > 0) {
+                                  return (
+                                    <p className={`${darkMode ? 'text-red-400' : 'text-red-600'} text-sm`}>
+                                     Not available for: {unavailable.map((u) => u.name).join(', ')}. Please choose a different time slot.
+                                    </p>
+                                  );
+                                }
+
+                                return (
+                                  <p className={`${darkMode ? 'text-green-400' : 'text-green-600'} text-sm`}>
+                                    All selected services are available for this time slot.
+                                  </p>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
-
                   {/* Worker Preference Selection */}
                   {selectedTimeSlot && (
                     <div className="mt-8">
@@ -2037,6 +2344,16 @@ const Booking = () => {
                           ₹{calculateTotals().subtotal.toFixed(2)}
                         </span>
                       </div>
+                      {calculateTotals().nightChargeTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                            Night Charges
+                          </span>
+                          <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+                            ₹{calculateTotals().nightChargeTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
                       {discountInfo.has_discount && (
                         <div className="flex justify-between text-green-600">
                           <span>{discountInfo.customer_type} Discount ({discountInfo.discount_percentage}%)</span>
@@ -2070,21 +2387,31 @@ const Booking = () => {
               <div className="p-6">
                 {/* Services */}
                 <div className="space-y-4 mb-6">
-                  {cart.items.map((item, index) => (
-                    <div key={index} className="flex justify-between">
-                      <div>
-                        <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                          {item.name}
-                        </h4>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Qty: {item.quantity}
-                        </p>
+                  {cart.items.map((item, index) => {
+                    const slotTime = selectedTimeSlot?.time || null;
+                    const nightFee = computeNightFeeForItem(item, slotTime);
+
+                    return (
+                      <div key={index} className="flex justify-between">
+                        <div>
+                          <h4 className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {item.name}
+                          </h4>
+                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Qty: {item.quantity}
+                          </p>
+                          {slotTime && nightFee > 0 && (
+                            <p className={`text-xs mt-1 ${darkMode ? 'text-purple-300' : 'text-purple-700'}`}>
+                              Night charge: ₹{nightFee.toFixed(2)} (included)
+                            </p>
+                          )}
+                        </div>
+                        <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          ₹{(item.price * item.quantity).toFixed(2)}
+                        </span>
                       </div>
-                      <span className={`font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                        ₹{(item.price * item.quantity).toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Price Breakdown */}
@@ -2095,6 +2422,16 @@ const Booking = () => {
                       ₹{totals.subtotal.toFixed(2)}
                     </span>
                   </div>
+                  {totals.nightChargeTotal > 0 && (
+                    <div className="flex justify-between">
+                      <span className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                        Night Charges
+                      </span>
+                      <span className={`${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                        ₹{totals.nightChargeTotal.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                   {discountInfo.has_discount && (
                     <div className="flex justify-between text-green-600">
                       <span>{discountInfo.customer_type} Discount ({discountInfo.discount_percentage}%)</span>

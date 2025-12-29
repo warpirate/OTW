@@ -387,10 +387,15 @@ const WorkerJobs = () => {
             ) : (
               filteredRequests.map((request) => {
                 const durationText = getDurationText(request);
+                const isNightBooking = request.is_night_booking && request.night_charge_amount > 0;
+                const cardClasses = `${darkMode ? 'bg-gray-800' : 'bg-white'} border rounded-lg p-6 hover:shadow-md transition-shadow ` +
+                  (isNightBooking
+                    ? 'border-purple-500 ring-1 ring-purple-300'
+                    : (darkMode ? 'border-gray-700' : 'border-gray-200'));
                 return (
                 <div
                   key={request.request_id}
-                  className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg p-6 hover:shadow-md transition-shadow`}
+                  className={cardClasses}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
@@ -420,10 +425,15 @@ const WorkerJobs = () => {
                               Category: {request.category_name}
                             </p>
                           )}
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 mt-1">
                             <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                               {formatCost(request.estimated_cost || request.price || 0)}
                             </span>
+                            {isNightBooking && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                                Night charge: {formatCost(request.night_charge_amount || 0)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -452,6 +462,11 @@ const WorkerJobs = () => {
                             <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                               <strong>Scheduled:</strong> {formatDateTime(request.scheduled_time)}
                             </p>
+                            {isNightBooking && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">
+                                Night Slot
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}

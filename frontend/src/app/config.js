@@ -15,7 +15,7 @@ export const API_URL = import.meta.env.VITE_API_URL || `${API_BASE_URL}/api`;
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL;
 
 // Google Maps API key for map services
-export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+export const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||'AIzaSyAH8081SHaUSXwnvIVOoEC4dCGhftZrfGg';
 
 // Environment-specific configuration
 export const config = {

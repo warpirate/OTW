@@ -14,22 +14,70 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Helper to determine if a given scheduled_time ("YYYY-MM-DD HH:mm:ss")
+// falls within the configured night window (TIME columns as "HH:MM:SS").
+// Handles both same-day windows (start < end) and overnight windows (start > end).
+function isNightTimeForSubcategory(scheduledTime, nightStartTime, nightEndTime) {
+  try {
+    if (!scheduledTime || !nightStartTime || !nightEndTime) return false;
+
+    const extractMinutes = (timeStr) => {
+      const parts = String(timeStr).split(':');
+      if (parts.length < 2) return NaN;
+      const hours = parseInt(parts[0], 10);
+      const minutes = parseInt(parts[1], 10);
+      if (isNaN(hours) || isNaN(minutes)) return NaN;
+      return hours * 60 + minutes;
+    };
+
+    const scheduledPart = scheduledTime.slice(11, 16); // "HH:MM" from "YYYY-MM-DD HH:MM:SS"
+    const scheduledMinutes = extractMinutes(scheduledPart);
+    const startMinutes = extractMinutes(nightStartTime);
+    const endMinutes = extractMinutes(nightEndTime);
+
+    if (isNaN(scheduledMinutes) || isNaN(startMinutes) || isNaN(endMinutes)) return false;
+
+    if (startMinutes === endMinutes) {
+      // Degenerate case: treat as no night window
+      return false;
+    }
+
+    if (startMinutes < endMinutes) {
+      // Same-day window (e.g., 20:00 -> 23:00)
+      return scheduledMinutes >= startMinutes && scheduledMinutes < endMinutes;
+    }
+
+    // Overnight window (e.g., 17:00 -> 06:00)
+    return scheduledMinutes >= startMinutes || scheduledMinutes < endMinutes;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Helper function to generate available time slots for a given date
+// Uses 1-hour gap with daytime slots 09:00-23:00 and early-morning slots 00:00-06:00
 const generateTimeSlots = (date) => {
   const slots = [];
-  const startHour = 8; // 8 AM
-  const endHour = 20; // 8 PM
-  const intervalMinutes = 60; // 1 hour slots
 
-  for (let hour = startHour; hour < endHour; hour++) {
-    for (let minute = 0; minute < 60; minute += intervalMinutes) {
-      const timeSlot = {
-        time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-        datetime: `${date} ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`,
-        available: true
-      };
-      slots.push(timeSlot);
-    }
+  const addSlot = (hour) => {
+    const hh = hour.toString().padStart(2, '0');
+    const time = `${hh}:00`;
+    const datetime = `${date} ${hh}:00:00`;
+    slots.push({
+      time,
+      datetime,
+      available: true
+    });
+  };
+
+  // Daytime hours: 09:00 - 23:00
+  for (let hour = 9; hour <= 23; hour++) {
+    addSlot(hour);
+  }
+
+  // Early morning hours: 00:00 - 06:00
+  for (let hour = 0; hour <= 6; hour++) {
+    addSlot(hour);
   }
 
   return slots;
@@ -194,9 +242,13 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
     // Find candidate providers by service and active/verified status
     const placeholders = subcategoryIds.map(() => '?').join(',');
     const [providers] = await pool.query(
-      `SELECT DISTINCT p.id AS provider_id, p.service_radius_km,
-              pa.latitude AS location_lat, pa.longitude AS location_lng,
-              u.gender
+      `SELECT DISTINCT
+         p.id AS provider_id,
+         p.service_radius_km,
+         pa.latitude AS location_lat,
+         pa.longitude AS location_lng,
+         u.gender,
+         ps.subcategory_id
        FROM providers p
        INNER JOIN provider_services ps ON p.id = ps.provider_id
        INNER JOIN users u ON u.id = p.user_id
@@ -204,9 +256,11 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
        WHERE ps.subcategory_id IN (${placeholders})
          AND p.active = 1
          AND p.verified = 1
-         AND pa.latitude IS NOT NULL AND pa.longitude IS NOT NULL`,
+         AND pa.latitude IS NOT NULL
+         AND pa.longitude IS NOT NULL`,
       subcategoryIds
     );
+
     console.log("providers check " , providers)
     // Filter by radius from customer address (if coords exist)
     let inRadius = providers;
@@ -219,7 +273,7 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
             parseFloat(p.location_lat),
             parseFloat(p.location_lng)
           );
-          console.log("distance ", dist);
+          console.log('distance ', dist);
           return dist <= parseFloat(p.service_radius_km || 0);
         } catch (e) {
           return false;
@@ -248,12 +302,92 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
          AND service_status IN ('assigned','accepted','in_progress')`,
       [scheduledTime]
     );
-    console.log("busy providers" , busyRows);
-    const busySet = new Set(busyRows.map(r => r.provider_id));
-    const availableProviders = inRadius.filter(p => !busySet.has(p.provider_id));
 
-    const maleCount = availableProviders.filter(p => (p.gender || '').toLowerCase() === 'male').length;
-    const femaleCount = availableProviders.filter(p => (p.gender || '').toLowerCase() === 'female').length;
+    console.log('busy providers', busyRows);
+    const busySet = new Set(busyRows.map(r => r.provider_id));
+
+    // Filter out busy providers, keep rows with subcategory information
+    const availableRows = inRadius.filter(p => !busySet.has(p.provider_id));
+
+    // Aggregate overall gender counts by unique provider
+    const providerGenderMap = new Map();
+    availableRows.forEach(row => {
+      if (!providerGenderMap.has(row.provider_id)) {
+        providerGenderMap.set(row.provider_id, (row.gender || '').toLowerCase());
+      }
+    });
+
+    let maleCount = 0;
+    let femaleCount = 0;
+    providerGenderMap.forEach(gender => {
+      if (gender === 'male') maleCount += 1;
+      else if (gender === 'female') femaleCount += 1;
+    });
+
+    // Build per-subcategory availability using available providers
+    const subcategoryMap = {};
+    availableRows.forEach(row => {
+      const sid = row.subcategory_id;
+      if (!sid) return;
+      if (!subcategoryMap[sid]) {
+        subcategoryMap[sid] = {
+          subcategory_id: sid,
+          male_count: 0,
+          female_count: 0,
+          total_count: 0
+        };
+      }
+
+      const gender = (row.gender || '').toLowerCase();
+      if (gender === 'male') subcategoryMap[sid].male_count += 1;
+      else if (gender === 'female') subcategoryMap[sid].female_count += 1;
+      subcategoryMap[sid].total_count += 1;
+    });
+
+    // Ensure every requested subcategory is represented, even if zero
+    subcategoryIds.forEach(sid => {
+      if (!subcategoryMap[sid]) {
+        subcategoryMap[sid] = {
+          subcategory_id: sid,
+          male_count: 0,
+          female_count: 0,
+          total_count: 0
+        };
+      }
+    });
+
+    const subcategories = Object.values(subcategoryMap).map(sc => ({
+      ...sc,
+      available: sc.total_count > 0
+    }));
+
+    // Night charge details per subcategory from subcategories table
+    const [subcatRows] = await pool.query(
+      `SELECT id, night_charge, night_start_time, night_end_time
+       FROM subcategories
+       WHERE id IN (${placeholders})`,
+      subcategoryIds
+    );
+
+    const nightPricing = subcatRows.map((row) => {
+      const nightChargeRaw = row.night_charge != null ? row.night_charge : 0;
+      const perUnitNightCharge = parseInt(nightChargeRaw, 10) || 0;
+      const isNight = perUnitNightCharge > 0
+        ? isNightTimeForSubcategory(
+            scheduledTime,
+            row.night_start_time || '17:00:00',
+            row.night_end_time || '06:00:00'
+          )
+        : false;
+
+      return {
+        subcategory_id: row.id,
+        night_charge: perUnitNightCharge,
+        night_start_time: row.night_start_time,
+        night_end_time: row.night_end_time,
+        is_night: isNight
+      };
+    });
 
     return res.json({
       date,
@@ -266,8 +400,11 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
         male: maleCount,
         female: femaleCount,
         total: maleCount + femaleCount
-      }
+      },
+      subcategories,
+      night_pricing: nightPricing
     });
+
   } catch (err) {
     console.error('Error checking worker availability:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -371,33 +508,81 @@ router.post('/create', verifyToken, async (req, res) => {
         const provider_id = null;
 
         // Calculate prices with customer-type discount before GST
-        const itemPrice = price * quantity;
-        const discountAmount = Math.round((itemPrice * discountPercentage) / 100);
-        const discountedPrice = Math.max(itemPrice - discountAmount, 0);
-        const gst = Math.round(discountedPrice * 0.18); // 18% GST
-        const totalPrice = discountedPrice + gst;
-        totalAmount += totalPrice;
+        const baseItemPrice = Number((price * quantity).toFixed(2));
 
-        // Create booking with explicit UTC created_at and total_amount for payment
+        // Apply night charge if scheduled time falls in the subcategory's night window
+        const nightChargeRaw = subcategory.night_charge != null ? subcategory.night_charge : 0;
+        const perUnitNightCharge = Number((parseFloat(nightChargeRaw) || 0).toFixed(2));
+
+        const isNightBooking = perUnitNightCharge > 0 && isNightTimeForSubcategory(
+          scheduled_time,
+          subcategory.night_start_time || '17:00:00',
+          subcategory.night_end_time || '06:00:00'
+        );
+
+        const nightChargeAmount = isNightBooking
+          ? Number((perUnitNightCharge * quantity).toFixed(2))
+          : 0;
+
+        const itemPriceBeforeDiscount = Number((baseItemPrice + nightChargeAmount).toFixed(2));
+
+        // Use 2-decimal precision for discount and GST
+        const discountAmount = discountPercentage > 0 && itemPriceBeforeDiscount > 0
+          ? Number(((itemPriceBeforeDiscount * discountPercentage) / 100).toFixed(2))
+          : 0;
+
+        const subtotalBeforeGst = Number(Math.max(itemPriceBeforeDiscount - discountAmount, 0).toFixed(2));
+
+        // 18% GST with 2-decimal precision
+        const gst = Number((subtotalBeforeGst * 0.18).toFixed(2));
+
+        // Total price per item including GST, kept at 2 decimals
+        const totalPrice = Number((subtotalBeforeGst + gst).toFixed(2));
+
+        // Accumulate total amount for all items with 2-decimal precision
+        totalAmount = Number((totalAmount + totalPrice).toFixed(2));
+
+        // Create booking with explicit UTC created_at and full pricing breakdown
         const [bookingResult] = await pool.query(
           `INSERT INTO bookings
-           (user_id, provider_id, booking_type, subcategory_id, service_unit_count, scheduled_time, gst,
-            estimated_cost, price, total_amount, service_status, payment_status, created_at, duration, cost_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`,
+           (user_id, provider_id, booking_type, subcategory_id, service_unit_count,
+            base_item_price, night_charge_per_unit, night_charge_amount, is_night_booking,
+            scheduled_time, gst, discount_percentage, discount_amount, subtotal_before_gst, night_charge,
+            estimated_cost, actual_cost, price, total_amount,
+            service_status, payment_status, created_at, duration, cost_type)
+           VALUES
+           (?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            'pending', 'pending', ?, ?, ?)`,
           [
             customerId,
             provider_id,
             booking_type,
             subcategory_id,
             quantity,
+
+            baseItemPrice,
+            perUnitNightCharge,
+            nightChargeAmount,
+            isNightBooking ? 1 : 0,
+
             scheduled_time,
             gst,
-            totalPrice, // estimated_cost
-            totalPrice, // price
-            totalPrice, // total_amount - required for payment processing
+            discountPercentage,
+            discountAmount,
+            subtotalBeforeGst,
+            nightChargeAmount,
+
+            subtotalBeforeGst, // estimated_cost: subtotal before GST
+            null,              // actual_cost: can be updated later after service
+            subtotalBeforeGst, // price: subtotal before GST
+            totalPrice,        // total_amount: final payable amount
+
             createdAtUTC,
-            1, // duration - default 1 hour/day
-            'per_hour' // cost_type - default per hour
+            1,                 // duration - default 1 hour/day
+            'per_hour'         // cost_type - default per hour
           ]
         );
 
@@ -610,91 +795,183 @@ router.get('/history', verifyToken, async (req, res) => {
 
 // GET /summary - Get aggregate stats for customer's bookings (independent of pagination)
 router.get('/summary', verifyToken, async (req, res) => {
-try {
-  const customerId = req.user.id;
+  try {
+    const customerId = req.user.id;
 
-  const [rows] = await pool.query(
-    `SELECT 
-       COUNT(*) AS totalBookings,
-       SUM(CASE WHEN service_status IN ('pending','assigned') THEN 1 ELSE 0 END) AS activeBookings,
-       COALESCE(SUM(CASE WHEN service_status = 'completed' THEN 
-         (CASE WHEN booking_type = 'ride' THEN estimated_cost ELSE price END)
-       ELSE 0 END), 0) AS totalSpent
-     FROM bookings
-     WHERE user_id = ?`,
-    [customerId]
-  );
+    const [rows] = await pool.query(
+      `SELECT 
+         COUNT(*) AS totalBookings,
+         SUM(CASE WHEN service_status IN ('pending','assigned') THEN 1 ELSE 0 END) AS activeBookings,
+         COALESCE(SUM(CASE WHEN service_status = 'completed' THEN total_amount ELSE 0 END), 0) AS totalSpent
+       FROM bookings
+       WHERE user_id = ?`,
+      [customerId]
+    );
 
-  const { totalBookings = 0, activeBookings = 0, totalSpent = 0 } = rows[0] || {};
-  return res.json({ totalBookings, activeBookings, totalSpent });
-} catch (err) {
-  console.error('Error fetching booking summary:', err);
-  res.status(500).json({ message: 'Server error', error: err.message });
-}
+    const { totalBookings = 0, activeBookings = 0, totalSpent = 0 } = rows[0] || {};
+    return res.json({ totalBookings, activeBookings, totalSpent });
+  } catch (err) {
+    console.error('Error fetching booking summary:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
 });
 
-// GET /:id - Get booking details
+// GET /:id - Get booking details with pricing breakdown
 router.get('/:id', verifyToken, async (req, res) => {
-try {
-  const customerId = req.user.id;
-  const bookingId = req.params.id;
+  try {
+    const customerId = req.user.id;
+    const bookingId = req.params.id;
 
-  const [bookings] = await pool.query(
-    `SELECT b.*,
-            COALESCE(s.name, 'Ride Service') as service_name,
-            COALESCE(s.description, 'Driver transportation service') as service_description,
-            CASE WHEN b.provider_id IS NOT NULL THEN
-              (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
-            ELSE 'Not Assigned' END as provider_name,
-            CASE WHEN b.provider_id IS NOT NULL THEN
-              (SELECT u.phone_number FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
-            ELSE NULL END as provider_phone,
-            CASE
-              WHEN b.booking_type = 'ride' THEN
-                CONCAT(rb.pickup_address, ' → ', rb.drop_address)
-              ELSE sb.address
-            END as display_address,
-            -- Use total_amount if available, fallback to price or estimated_cost
-            COALESCE(b.total_amount, b.price, b.estimated_cost) as display_price,
-            -- Get payment info from payments table
-            p.id as payment_id,
-            p.razorpay_payment_id,
-            p.razorpay_order_id,
-            p.amount_paid,
-            CASE
-              WHEN p.status = 'captured' THEN 'paid'
-              WHEN p.status = 'authorized' THEN 'authorized'
-              WHEN p.status = 'created' THEN 'pending'
-              WHEN p.status = 'failed' THEN 'failed'
-              WHEN b.cash_payment_id IS NOT NULL THEN 'paid'
-              WHEN b.payment_status = 'paid' THEN 'paid'
-              ELSE COALESCE(b.payment_status, 'pending')
-            END as payment_status,
-            CASE
-              WHEN p.payment_type = 'razorpay' THEN 'Razorpay'
-              WHEN p.payment_type = 'upi' THEN 'UPI Payment'
-              WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
-              WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
-              WHEN b.payment_method IS NOT NULL THEN b.payment_method
-              ELSE 'pay_after_service'
-            END as payment_method,
-            COALESCE(p.captured_at, b.payment_completed_at) as payment_completed_at
-     FROM bookings b
-     LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
-     LEFT JOIN service_bookings sb ON sb.booking_id = b.id
-     LEFT JOIN subcategories s ON s.id = b.subcategory_id
-     LEFT JOIN payments p ON b.id = p.booking_id AND p.status IN ('created', 'authorized', 'captured')
-     WHERE b.id = ? AND b.user_id = ?
-     ORDER BY p.created_at DESC
-     LIMIT 1`,
-    [bookingId, customerId]
-  );
+    const [bookings] = await pool.query(
+      `SELECT b.*,
+              COALESCE(s.name, 'Ride Service') as service_name,
+              COALESCE(s.description, 'Driver transportation service') as service_description,
+              s.base_price AS subcategory_base_price,
+              s.night_charge AS subcategory_night_charge,
+              s.night_start_time AS subcategory_night_start_time,
+              s.night_end_time AS subcategory_night_end_time,
+              CASE WHEN b.provider_id IS NOT NULL THEN
+                (SELECT u.name FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
+              ELSE 'Not Assigned' END as provider_name,
+              CASE WHEN b.provider_id IS NOT NULL THEN
+                (SELECT u.phone_number FROM users u WHERE u.id = (SELECT user_id FROM providers WHERE id = b.provider_id))
+              ELSE NULL END as provider_phone,
+              CASE
+                WHEN b.booking_type = 'ride' THEN
+                  CONCAT(rb.pickup_address, ' → ', rb.drop_address)
+                ELSE sb.address
+              END as display_address,
+              -- Use total_amount if available, fallback to price or estimated_cost
+              COALESCE(b.total_amount, b.price, b.estimated_cost) as display_price,
+              -- Customer discount information
+              COALESCE(ct.discount_percentage, 0) AS customer_discount_percentage,
+              ct.name AS customer_type_name,
+              -- Get payment info from payments table
+              p.id as payment_id,
+              p.razorpay_payment_id,
+              p.razorpay_order_id,
+              p.amount_paid,
+              CASE
+                WHEN p.status = 'captured' THEN 'paid'
+                WHEN p.status = 'authorized' THEN 'authorized'
+                WHEN p.status = 'created' THEN 'pending'
+                WHEN p.status = 'failed' THEN 'failed'
+                WHEN b.cash_payment_id IS NOT NULL THEN 'paid'
+                WHEN b.payment_status = 'paid' THEN 'paid'
+                ELSE COALESCE(b.payment_status, 'pending')
+              END as payment_status,
+              CASE
+                WHEN p.payment_type = 'razorpay' THEN 'Razorpay'
+                WHEN p.payment_type = 'upi' THEN 'UPI Payment'
+                WHEN b.cash_payment_id IS NOT NULL THEN 'pay_after_service'
+                WHEN b.upi_payment_method_id IS NOT NULL THEN 'UPI Payment'
+                WHEN b.payment_method IS NOT NULL THEN b.payment_method
+                ELSE 'pay_after_service'
+              END as payment_method,
+              COALESCE(p.captured_at, b.payment_completed_at) as payment_completed_at
+       FROM bookings b
+       LEFT JOIN ride_bookings rb ON rb.booking_id = b.id
+       LEFT JOIN service_bookings sb ON sb.booking_id = b.id
+       LEFT JOIN subcategories s ON s.id = b.subcategory_id
+       LEFT JOIN customers c ON c.id = b.user_id
+       LEFT JOIN customer_types ct ON ct.id = c.customer_type_id
+       LEFT JOIN payments p ON b.id = p.booking_id AND p.status IN ('created', 'authorized', 'captured')
+       WHERE b.id = ? AND b.user_id = ?
+       ORDER BY p.created_at DESC
+       LIMIT 1`,
+      [bookingId, customerId]
+    );
 
     if (bookings.length === 0) {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    res.json({ booking: bookings[0] });
+    const booking = bookings[0];
+
+    // Derive pricing breakdown for service bookings so frontend can display
+    // base price, night charges and customer discounts separately.
+    const quantity = Number(booking.service_unit_count || 1);
+
+    // Prefer stored base_item_price; fall back to subcategory_base_price * quantity
+    const baseItemPrice = booking.base_item_price != null
+      ? Number(booking.base_item_price)
+      : (booking.subcategory_base_price != null
+          ? Number(booking.subcategory_base_price) * quantity
+          : 0);
+
+    // Prefer stored per-unit night charge; fall back to subcategory_night_charge
+    const perUnitNightCharge = booking.night_charge_per_unit != null
+      ? Number(booking.night_charge_per_unit)
+      : (booking.subcategory_night_charge != null
+          ? Number(booking.subcategory_night_charge)
+          : 0);
+
+    // Prefer stored is_night_booking; otherwise recompute using time window
+    let isNightBooking = booking.is_night_booking != null
+      ? Boolean(booking.is_night_booking)
+      : (perUnitNightCharge > 0 && booking.scheduled_time
+          ? isNightTimeForSubcategory(
+              booking.scheduled_time,
+              booking.subcategory_night_start_time || '17:00:00',
+              booking.subcategory_night_end_time || '06:00:00'
+            )
+          : false);
+
+    // Prefer stored night_charge_amount; otherwise derive
+    let nightChargeAmount = booking.night_charge_amount != null
+      ? Number(booking.night_charge_amount)
+      : (isNightBooking
+          ? Number((perUnitNightCharge * quantity).toFixed(2))
+          : 0);
+
+    const itemPriceBeforeDiscount = Number((baseItemPrice + nightChargeAmount).toFixed(2));
+
+    // Prefer stored discount_percentage; fall back to customer_discount_percentage
+    const discountPercentage = booking.discount_percentage != null
+      ? Number(booking.discount_percentage)
+      : (booking.customer_discount_percentage != null
+          ? Number(booking.customer_discount_percentage)
+          : 0);
+
+    // Prefer stored discount_amount; otherwise derive with 2-decimal precision
+    const discountAmount = booking.discount_amount != null
+      ? Number(booking.discount_amount)
+      : (discountPercentage > 0 && itemPriceBeforeDiscount > 0
+          ? Number(((itemPriceBeforeDiscount * discountPercentage) / 100).toFixed(2))
+          : 0);
+
+    // Prefer stored subtotal_before_gst; otherwise derive
+    const subtotalBeforeGst = booking.subtotal_before_gst != null
+      ? Number(booking.subtotal_before_gst)
+      : Number(Math.max(itemPriceBeforeDiscount - discountAmount, 0).toFixed(2));
+
+    // Prefer stored gst; otherwise derive 18% of subtotal_before_gst
+    const gstAmount = booking.gst != null
+      ? Number(booking.gst)
+      : Number((subtotalBeforeGst * 0.18).toFixed(2));
+
+    // Prefer stored total_amount; otherwise derive
+    let totalAmount = booking.total_amount != null
+      ? Number(booking.total_amount)
+      : Number((subtotalBeforeGst + gstAmount).toFixed(2));
+
+    if (!Number.isFinite(totalAmount)) {
+      totalAmount = Number((subtotalBeforeGst + gstAmount).toFixed(2));
+    }
+
+    const enrichedBooking = {
+      ...booking,
+      base_item_price: baseItemPrice,
+      night_charge_per_unit: perUnitNightCharge,
+      night_charge_amount: nightChargeAmount,
+      is_night_booking: isNightBooking,
+      discount_percentage: discountPercentage,
+      discount_amount: discountAmount,
+      subtotal_before_gst: subtotalBeforeGst,
+      total_amount: totalAmount
+    };
+
+    return res.json({ booking: enrichedBooking });
 
   } catch (err) {
     console.error('Error fetching booking details:', err);
@@ -708,7 +985,8 @@ router.put('/:id/cancel', verifyToken, async (req, res) => {
     const customerId = req.user.id;
     const bookingId = req.params.id;
     const { cancellation_reason } = req.body;
-    console.log("booking cancel " , req.body);
+    console.log('booking cancel ', req.body);
+
     // Check if booking exists and belongs to customer
     const [bookings] = await pool.query(
       'SELECT * FROM bookings WHERE id = ? AND user_id = ?',

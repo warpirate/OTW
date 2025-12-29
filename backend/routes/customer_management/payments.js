@@ -244,11 +244,13 @@ router.get('/payment-status/:booking_id', verifyToken, async (req, res) => {
     const bookingId = req.params.booking_id;
 
     // Check booking exists and belongs to user
+    // Support both legacy bookings that store the customer on user_id
+    // and newer records that may use customer_id.
     const [bookings] = await pool.query(
       `SELECT b.id, b.payment_status, b.payment_method, b.payment_completed_at, b.total_amount
        FROM bookings b 
-       WHERE b.id = ? AND b.customer_id = ?`,
-      [bookingId, userId]
+       WHERE b.id = ? AND (b.customer_id = ? OR b.user_id = ?)`,
+      [bookingId, userId, userId]
     );
 
     if (bookings.length === 0) {
@@ -311,11 +313,13 @@ router.get('/checkout-session/:booking_id', verifyToken, async (req, res) => {
     const bookingId = req.params.booking_id;
 
     // First check if booking exists and belongs to user
+    // Support both legacy bookings that store the customer on user_id
+    // and newer records that may use customer_id.
     const [bookings] = await pool.query(
       `SELECT b.*, b.payment_status, b.payment_method, b.payment_completed_at, b.total_amount
        FROM bookings b 
-       WHERE b.id = ? AND b.customer_id = ?`,
-      [bookingId, userId]
+       WHERE b.id = ? AND (b.customer_id = ? OR b.user_id = ?)`,
+      [bookingId, userId, userId]
     );
 
     if (bookings.length === 0) {
@@ -351,6 +355,27 @@ router.get('/checkout-session/:booking_id', verifyToken, async (req, res) => {
     // If there's an existing pending payment, return it
     if (existingPayments.length > 0) {
       const existingPayment = existingPayments[0];
+
+      // Always base the Razorpay order amount on the booking's total_amount
+      // so that the payment gateway shows the same total as the UI.
+      const amount = booking.total_amount != null
+        ? Number(booking.total_amount)
+        : (existingPayment.amount_paid != null ? Number(existingPayment.amount_paid) : 0);
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid booking amount for payment session'
+        });
+      }
+
+      // Optionally keep the payments table in sync with the latest booking total
+      if (existingPayment.amount_paid !== amount) {
+        await pool.query(
+          'UPDATE payments SET amount_paid = ? WHERE id = ?',
+          [amount, existingPayment.id]
+        );
+      }
       
       // Get user details for prefill
       const [userRows] = await pool.query(
@@ -365,7 +390,7 @@ router.get('/checkout-session/:booking_id', verifyToken, async (req, res) => {
         existing_session: true,
         order: {
           id: existingPayment.razorpay_order_id,
-          amount: existingPayment.amount_paid * 100, // Convert to paise
+          amount: Math.round(amount * 100), // Convert rupees to paise using booking total
           currency: 'INR',
           key: process.env.RAZORPAY_KEY_ID,
           name: "OMW - On My Way",
@@ -390,8 +415,11 @@ router.get('/checkout-session/:booking_id', verifyToken, async (req, res) => {
     }
 
     // Create new checkout session
-    const amount = booking.total_amount || 0;
-    if (amount <= 0) {
+    // Always base the Razorpay order amount on the booking's total_amount
+    // and normalize it to 2-decimal precision (rupees) before creating the order.
+    const rawAmount = booking.total_amount;
+    const amount = rawAmount != null ? Number(Number(rawAmount).toFixed(2)) : 0;
+    if (!Number.isFinite(amount) || amount <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Invalid booking amount'
@@ -478,7 +506,11 @@ router.post('/razorpay/create-order', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { amount, description, booking_id, user_details } = req.body;
-
+      console.log("user details",user_details);
+      console.log("amount",amount);
+      console.log("description",description);
+      console.log("booking_id",booking_id);
+      console.log("user_id",userId);
     // Validation
     if (!amount || !description) {
       return res.status(400).json({

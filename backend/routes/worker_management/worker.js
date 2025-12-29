@@ -20,6 +20,101 @@ const sanitizeFileName = (name) => {
     .slice(0, 200);
 };
 
+function isNightTimeForSubcategory(scheduledTime, nightStartTime, nightEndTime) {
+  try {
+    if (!scheduledTime || !nightStartTime || !nightEndTime) return false;
+
+    const extractMinutes = (timeStr) => {
+      const parts = String(timeStr).split(':');
+      if (parts.length < 2) return NaN;
+      const hours = parseInt(parts[0], 10);
+      const minutes = parseInt(parts[1], 10);
+      if (isNaN(hours) || isNaN(minutes)) return NaN;
+      return hours * 60 + minutes;
+    };
+
+    let scheduledMinutes;
+
+    if (scheduledTime instanceof Date) {
+      // Already a Date object: use local clock time directly
+      scheduledMinutes = scheduledTime.getHours() * 60 + scheduledTime.getMinutes();
+    } else {
+      const raw = String(scheduledTime).trim();
+
+      // If format is 'YYYY-MM-DD HH:MM:SS' coming from MySQL, treat it as UTC
+      // by converting to 'YYYY-MM-DDTHH:MM:SSZ' (same as frontend WorkerJobs.jsx).
+      let isoLike = raw;
+      if (!raw.includes('T') && raw.length >= 19) {
+        isoLike = raw.slice(0, 19).replace(' ', 'T') + 'Z';
+      } else if (raw.includes('T') && !raw.endsWith('Z')) {
+        isoLike = raw + 'Z';
+      }
+
+      const d = new Date(isoLike);
+      if (!isNaN(d.getTime())) {
+        scheduledMinutes = d.getHours() * 60 + d.getMinutes();
+      } else {
+        // Fallback: keep old behaviour for unexpected formats
+        const scheduledPart = raw.slice(11, 16);
+        scheduledMinutes = extractMinutes(scheduledPart);
+      }
+    }
+
+    const startMinutes = extractMinutes(nightStartTime);
+    const endMinutes = extractMinutes(nightEndTime);
+
+    if (isNaN(scheduledMinutes) || isNaN(startMinutes) || isNaN(endMinutes)) return false;
+
+    if (startMinutes === endMinutes) {
+      return false;
+    }
+
+    if (startMinutes < endMinutes) {
+      // Simple window within same day (e.g. 20:00-23:00)
+      return scheduledMinutes >= startMinutes && scheduledMinutes < endMinutes;
+    }
+
+    // Window crosses midnight (e.g. 17:00-06:00)
+    return scheduledMinutes >= startMinutes || scheduledMinutes < endMinutes;
+  } catch (_) {
+    return false;
+  }
+}
+
+function computeNightPricingForRequest(row) {
+  const nightChargeRaw = row.night_charge != null ? row.night_charge : 0;
+  const perUnitNightCharge = parseInt(nightChargeRaw, 10) || 0;
+
+  if (!perUnitNightCharge || !row.scheduled_time) {
+    return {
+      is_night: false,
+      night_charge_amount: 0,
+      night_charge_per_unit: perUnitNightCharge
+    };
+  }
+
+  const isNight = isNightTimeForSubcategory(
+    row.scheduled_time,
+    row.night_start_time || '17:00:00',
+    row.night_end_time || '06:00:00'
+  );
+
+  let units = 1;
+  if (row.service_unit_count && Number(row.service_unit_count) > 0) {
+    units = Number(row.service_unit_count);
+  } else if (row.duration && Number(row.duration) > 0) {
+    units = Number(row.duration);
+  }
+
+  const amount = isNight ? perUnitNightCharge * units : 0;
+
+  return {
+    is_night: isNight,
+    night_charge_amount: amount,
+    night_charge_per_unit: perUnitNightCharge
+  };
+}
+
 /**
  * WorkerService class merged from backend/services/worker.service.js
  */
@@ -33,7 +128,7 @@ class WorkerService {
     try {
       await connection.beginTransaction();
 
-      const { first_name, last_name, email, phone, password, provider_data, subcategory_ids = [] } = userData;
+      const { first_name, last_name, email, phone, password, gender, provider_data, subcategory_ids = [] } = userData;
       const name = `${first_name} ${last_name}`;
       console.log('Worker registration attempt:', { email, first_name, last_name, hasProviderData: !!provider_data });
       
@@ -73,14 +168,20 @@ class WorkerService {
         // User exists with different role, use existing user
         userId = existingUser[0].id;
         console.log('User exists with different role, adding worker role to existing user:', userId);
+        if (gender) {
+          await connection.query(
+            'UPDATE users SET gender = ? WHERE id = ? LIMIT 1',
+            [gender, userId]
+          );
+        }
       } else {
         // New user, create user record
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const [userResult] = await connection.query(
-          `INSERT INTO users (name, email, password, phone_number, is_active, created_at) 
-           VALUES (?, ?, ?, ?, 1, NOW())`,
-          [name, email, hashedPassword, phone]
+          `INSERT INTO users (name, email, password, phone_number, gender, is_active, created_at) 
+           VALUES (?, ?, ?, ?, ?, 1, NOW())`,
+          [name, email, hashedPassword, phone, gender || null]
         );
 
         userId = userResult.insertId;
@@ -194,6 +295,7 @@ class WorkerService {
           name,
           email,
           phone,
+          gender: gender || null,
           role: 'worker',
           role_id: roleId
         }
@@ -221,7 +323,7 @@ class WorkerService {
           temp.city AS temp_city,
           temp.state AS temp_state,
           temp.zip_code AS temp_zip_code,
-          u.name, u.email, u.phone_number
+          u.name, u.email, u.phone_number, u.gender
          FROM providers p
          LEFT JOIN provider_addresses perm ON p.id = perm.provider_id AND perm.address_type = 'permanent'
          LEFT JOIN provider_addresses temp ON p.id = temp.provider_id AND temp.address_type = 'temporary'
@@ -473,7 +575,7 @@ class WorkerService {
 
       const [workers] = await pool.query(
         `SELECT 
-          u.id, u.name, u.email, u.phone_number, u.created_at as user_created,
+          u.id, u.name, u.email, u.phone_number, u.created_at as user_created, u.gender,
           p.id as provider_id, p.experience_years, p.bio, p.rating,
           p.verified, p.active, p.service_radius_km,
           p.location_lat, p.location_lng, p.last_active_at,
@@ -600,13 +702,13 @@ class WorkerService {
  * Worker Registration Route
  */
 router.post('/worker/register', async (req, res) => {
-  const { first_name, last_name, email, phone, password, provider_data, subcategory_ids = [] } = req.body;
+  const { first_name, last_name, email, phone, password, gender, provider_data, subcategory_ids = [] } = req.body;
 
   // Validate required fields
-  if (!first_name || !last_name || !email || !password || !provider_data) {
+  if (!first_name || !last_name || !email || !password || !gender || !provider_data) {
     return res.status(400).json({
       message: 'Missing required fields',
-      required: ['first_name', 'last_name', 'email', 'password', 'provider_data', 'subcategory_ids']
+      required: ['first_name', 'last_name', 'email', 'password', 'gender', 'provider_data', 'subcategory_ids']
     });
   }
 
@@ -638,6 +740,7 @@ router.post('/worker/register', async (req, res) => {
       email,
       phone,
       password,
+      gender,
       provider_data,
       subcategory_ids
     });   
@@ -964,6 +1067,9 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.cost_type,
           b.service_unit_count,
           b.subcategory_id,
+          s.night_charge,
+          s.night_start_time,
+          s.night_end_time,
           r.rating AS ride_rating,
           r.review AS ride_review,
           r.created_at AS ride_rating_submitted_at,
@@ -1024,12 +1130,22 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
       const [bookingRequests] = await pool.query(query, params);
 
-      const hasMore = bookingRequests.length === parseInt(limit);
-      const nextCursor = hasMore ? bookingRequests[bookingRequests.length - 1].request_id : null;
+      const enhancedRequests = bookingRequests.map((row) => {
+        const night = computeNightPricingForRequest(row);
+        return {
+          ...row,
+          is_night_booking: night.is_night,
+          night_charge_amount: night.night_charge_amount,
+          night_charge_per_unit: night.night_charge_per_unit
+        };
+      });
+
+      const hasMore = enhancedRequests.length === parseInt(limit);
+      const nextCursor = hasMore ? enhancedRequests[enhancedRequests.length - 1].request_id : null;
 
       return res.json({
         message: 'Booking requests retrieved successfully',
-        booking_requests: bookingRequests,
+        booking_requests: enhancedRequests,
         pagination: {
           limit: parseInt(limit),
           nextCursor,
@@ -1070,6 +1186,9 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
           b.duration,
           b.cost_type,
           b.subcategory_id,
+          s.night_charge,
+          s.night_start_time,
+          s.night_end_time,
           r.rating AS ride_rating,
           r.review AS ride_review,
           r.created_at AS ride_rating_submitted_at,
@@ -1126,6 +1245,16 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
       // Get booking requests
       const [bookingRequests] = await pool.query(query, queryParams);
 
+      const enhancedRequests = bookingRequests.map((row) => {
+        const night = computeNightPricingForRequest(row);
+        return {
+          ...row,
+          is_night_booking: night.is_night,
+          night_charge_amount: night.night_charge_amount,
+          night_charge_per_unit: night.night_charge_per_unit
+        };
+      });
+
       // Get total count for pagination
       let countQuery = `
         SELECT COUNT(*) as total
@@ -1167,7 +1296,7 @@ router.get('/worker/booking-requests', verifyToken, async (req, res) => {
 
       return res.json({
         message: 'Booking requests retrieved successfully',
-        booking_requests: bookingRequests,
+        booking_requests: enhancedRequests,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),

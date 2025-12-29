@@ -125,14 +125,62 @@ router.post('/create-sub-category', verifyToken, authorizeRole(['admin', 'super 
     try {
         
         console.log(req.body);
-        const { name, category_id, description, base_price, is_active, image_url } = req.body;
+        const {
+            name,
+            category_id,
+            description,
+            base_price,
+            is_active,
+            image_url,
+            night_charge,
+            night_start_time,
+            night_end_time
+        } = req.body;
+
         if (!name || !category_id) {
             return res.status(400).json({ message: 'Name and category_id are required' });
         }
-        const sql = `INSERT INTO subcategories (name, category_id, description, base_price, is_active, image_url)
-         VALUES (?, ?, ?, ?, ?, ?)`;
-        const [result] = await pool.query(sql, [name, category_id, description || null, base_price || null, is_active !== undefined ? is_active : 1, image_url || null]);
-        res.status(201).json({ id: result.insertId, name, category_id, description, base_price, is_active: is_active !== undefined ? is_active : 1, image_url: image_url || null });
+
+        const sql = `INSERT INTO subcategories (
+            name,
+            category_id,
+            description,
+            base_price,
+            is_active,
+            image_url,
+            night_charge,
+            night_start_time,
+            night_end_time
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        const nightChargeValue = night_charge != null ? night_charge : 0;
+        const nightStartTimeValue = night_start_time || '17:00:00';
+        const nightEndTimeValue = night_end_time || '06:00:00';
+
+        const [result] = await pool.query(sql, [
+            name,
+            category_id,
+            description || null,
+            base_price || null,
+            is_active !== undefined ? is_active : 1,
+            image_url || null,
+            nightChargeValue,
+            nightStartTimeValue,
+            nightEndTimeValue
+        ]);
+
+        res.status(201).json({
+            id: result.insertId,
+            name,
+            category_id,
+            description,
+            base_price,
+            is_active: is_active !== undefined ? is_active : 1,
+            image_url: image_url || null,
+            night_charge: nightChargeValue,
+            night_start_time: nightStartTimeValue,
+            night_end_time: nightEndTimeValue
+        });
     } catch (err) {
         console.error('Error:', err);
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -171,14 +219,64 @@ router.put('/:category_id/subcategories/:id', verifyToken, authorizeRole(['admin
     try {
         const { category_id, id } = req.params;
         console.log("Updating subcategory with ID:", id, "in category:", category_id);
-        const { name, description, base_price, is_active, image_url } = req.body;
-        const sql = `UPDATE subcategories SET name = ?, category_id = ?, description = ?, base_price = ?, is_active = ?, image_url = ? 
+
+        const {
+            name,
+            description,
+            base_price,
+            is_active,
+            image_url,
+            night_charge,
+            night_start_time,
+            night_end_time
+        } = req.body;
+
+        const sql = `UPDATE subcategories SET
+                        name = ?,
+                        category_id = ?,
+                        description = ?,
+                        base_price = ?,
+                        is_active = ?,
+                        image_url = ?,
+                        night_charge = ?,
+                        night_start_time = ?,
+                        night_end_time = ?
                     WHERE id = ? AND category_id = ?`;
-        const [result] = await pool.query(sql, [name, category_id, description, base_price, is_active !== undefined ? is_active : 1, image_url || null, id, category_id]);
+
+        const nightChargeValue = night_charge != null ? night_charge : 0;
+        const nightStartTimeValue = night_start_time || '17:00:00';
+        const nightEndTimeValue = night_end_time || '06:00:00';
+
+        const [result] = await pool.query(sql, [
+            name,
+            category_id,
+            description,
+            base_price,
+            is_active !== undefined ? is_active : 1,
+            image_url || null,
+            nightChargeValue,
+            nightStartTimeValue,
+            nightEndTimeValue,
+            id,
+            category_id
+        ]);
+
         if (result.affectedRows === 0) {
             return res.status(404).json({ message: 'Subcategory not found' });
         }
-        res.json({ id, name, category_id, description, base_price, is_active, image_url: image_url || null });
+
+        res.json({
+            id,
+            name,
+            category_id,
+            description,
+            base_price,
+            is_active,
+            image_url: image_url || null,
+            night_charge: nightChargeValue,
+            night_start_time: nightStartTimeValue,
+            night_end_time: nightEndTimeValue
+        });
     } catch (err) {
         console.error('Error:', err);
         res.status(500).json({ message: 'Server error', error: err.message });

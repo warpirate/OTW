@@ -6,7 +6,7 @@ const { OAuth2Client } = require('google-auth-library');
 const pool = require('../../config/db');
 require('dotenv').config();
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const client = new OAuth2Client();
 
 // Google OAuth initiation
 router.get('/google', 
@@ -57,11 +57,40 @@ router.post('/google/mobile', async (req, res) => {
       return res.status(400).json({ error: 'ID token is required' });
     }
 
+    const configuredAudiences = [
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_MOBILE_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_CLIENT_ID,
+      process.env.GOOGLE_RELEASE_CLIENT_ID,
+    ]
+      .filter(Boolean)
+      .flatMap((v) => String(v).split(',').map((s) => s.trim()))
+      .filter(Boolean);
+
+    if (configuredAudiences.length === 0) {
+      return res.status(500).json({
+        error: 'Google OAuth is not configured',
+        message: 'Missing GOOGLE_CLIENT_ID / GOOGLE_MOBILE_CLIENT_ID in backend environment',
+      });
+    }
+
     // Verify the ID token with Google
-    const ticket = await client.verifyIdToken({
-      idToken: idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: idToken,
+        audience: configuredAudiences,
+      });
+    } catch (verifyError) {
+      console.error('Mobile Google OAuth token verification failed:', {
+        error: verifyError?.message,
+        configuredAudiences,
+      });
+      return res.status(401).json({
+        error: 'Invalid Google token',
+        message: 'Google token verification failed. Check OAuth client IDs for this build.',
+      });
+    }
 
     const payload = ticket.getPayload();
     if (!payload) {
@@ -202,7 +231,7 @@ router.post('/google/mobile', async (req, res) => {
 
   } catch (error) {
     console.error('Mobile Google OAuth error:', error);
-    res.status(500).json({ error: 'Authentication failed' });
+    res.status(500).json({ error: 'Authentication failed', message: error?.message || 'Authentication failed' });
   }
 });
 

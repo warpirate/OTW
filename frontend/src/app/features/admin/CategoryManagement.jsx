@@ -355,7 +355,10 @@ const CategoryManagement = () => {
       name: '',
       base_price: 0,
       category_id: categoryId, 
-      is_active: true
+      is_active: true,
+      night_charge: 0,
+      night_start_time: '17:00:00',
+      night_end_time: '06:00:00'
     });
     setSelectedCategory({
       ...selectedCategory, // Keep existing selectedCategory details
@@ -373,7 +376,11 @@ const CategoryManagement = () => {
     const { name, value, type, checked } = e.target;
     setSelectedSubcategory(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : (name === 'base_price' ? parseFloat(value) : value)
+      [name]: type === 'checkbox'
+        ? checked
+        : (name === 'base_price' || name === 'night_charge'
+            ? (value === '' ? '' : Number(value))
+            : value)
     }));
   };
 
@@ -845,7 +852,9 @@ const CategoryManagement = () => {
                               <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Base Price</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Night Charge</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Night Window</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                               </tr>
@@ -859,6 +868,12 @@ const CategoryManagement = () => {
                                     {subcategory.description || <span className="text-gray-400 italic">No description</span>}
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{subcategory.base_price}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{subcategory.night_charge ?? 0}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {subcategory.night_start_time && subcategory.night_end_time
+                                      ? `${subcategory.night_start_time} - ${subcategory.night_end_time}`
+                                      : '—'}
+                                  </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${subcategory.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                                       {subcategory.is_active ? 'Active' : 'Inactive'}
@@ -1005,9 +1020,9 @@ const CategoryManagement = () => {
       )}
       {/* Subcategory Modal */}
       {showSubcategoryModal && selectedSubcategory && (
-        <div className="fixed inset-0 overflow-y-auto z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black opacity-50"></div>
-          <div className="relative bg-white rounded-lg max-w-lg w-full mx-auto shadow-xl">
+          <div className="relative bg-white rounded-lg max-w-lg w-full mx-auto shadow-xl max-h-[80vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center border-b pb-3">
                 <h3 className="text-lg font-medium text-gray-900">
@@ -1033,6 +1048,18 @@ const CategoryManagement = () => {
                       <p className="text-sm font-medium text-gray-500">Base Price</p>
                       <p className="mt-1 text-sm text-gray-900">₹{selectedSubcategory.base_price}</p>
                     </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Night Charge</p>
+                      <p className="mt-1 text-sm text-gray-900">₹{selectedSubcategory.night_charge ?? 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Night Window</p>
+                      <p className="mt-1 text-sm text-gray-900">
+                        {selectedSubcategory.night_start_time && selectedSubcategory.night_end_time
+                          ? `${selectedSubcategory.night_start_time} - ${selectedSubcategory.night_end_time}`
+                          : '—'}
+                      </p>
+                    </div>
                     {selectedSubcategory.description && (
                       <div className="col-span-2">
                         <p className="text-sm font-medium text-gray-500">Description</p>
@@ -1052,6 +1079,43 @@ const CategoryManagement = () => {
                         onChange={handleSubcategoryChange}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       />
+                    </div>
+                    <div>
+                      <label htmlFor="nightCharge" className="block text-sm font-medium text-gray-700">Night Charge</label>
+                      <input
+                        type="number"
+                        name="night_charge"
+                        id="nightCharge"
+                        value={selectedSubcategory.night_charge ?? 0}
+                        onChange={handleSubcategoryChange}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="nightStartTime" className="block text-sm font-medium text-gray-700">Night Start Time</label>
+                        <input
+                          type="text"
+                          name="night_start_time"
+                          id="nightStartTime"
+                          placeholder="17:00:00"
+                          value={selectedSubcategory.night_start_time || ''}
+                          onChange={handleSubcategoryChange}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="nightEndTime" className="block text-sm font-medium text-gray-700">Night End Time</label>
+                        <input
+                          type="text"
+                          name="night_end_time"
+                          id="nightEndTime"
+                          placeholder="06:00:00"
+                          value={selectedSubcategory.night_end_time || ''}
+                          onChange={handleSubcategoryChange}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        />
+                      </div>
                     </div>
                     
                     <div>
