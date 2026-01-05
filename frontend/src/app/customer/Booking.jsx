@@ -1209,6 +1209,13 @@ const Booking = () => {
     return localDateTime.toISOString().slice(0, 19).replace('T', ' ');
   };
 
+  // Build local (customer) MySQL DATETIME string without timezone conversion.
+  // This is stored in bookings.scheduled_time_local so backend night-charge
+  // checks use the user's actual local time instead of UTC.
+  const buildLocalMySQLDateTime = (date, time) => {
+    return `${date} ${time}:00`;
+  };
+
   // Validate selected time is not in the past (respecting effective date for late-night slots)
   const validateSelectedTime = () => {
     if (!selectedDate || !selectedTimeSlot) {
@@ -1578,6 +1585,9 @@ const Booking = () => {
 
       const effectiveDate = getEffectiveDateForTime(selectedDate, selectedTimeSlot.time);
       const scheduledAt = buildUTCMySQLDateTime(effectiveDate, selectedTimeSlot.time);
+      const scheduledLocal = buildLocalMySQLDateTime(effectiveDate, selectedTimeSlot.time);
+      const timeZone = (Intl.DateTimeFormat().resolvedOptions().timeZone) || null;
+
       const totals = calculateTotals();
 
       // Prepare booking data
@@ -1587,7 +1597,12 @@ const Booking = () => {
           quantity: item.quantity,
           price: item.price
         })),
+        // scheduled_time is stored in UTC (string without timezone), while
+        // scheduled_time_local + timezone preserve the customer's local
+        // booking time so that night charges can be computed correctly.
         scheduled_time: scheduledAt,
+        scheduled_time_local: scheduledLocal,
+        timezone: timeZone,
         address_id: selectedAddress.address_id,
         notes: bookingNotes,
         payment_method: paymentType === 'pay_after_service' ? 'pay_after_service' : 'upi',

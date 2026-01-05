@@ -411,19 +411,21 @@ router.post('/check-worker-availability', verifyToken, async (req, res) => {
   }
 });
 
-// POST /create - Create a new booking
 router.post('/create', verifyToken, async (req, res) => {
   try {
     const customerId = req.user.id;
     const {
       cart_items,
       scheduled_time,
+      scheduled_time_local,
+      timezone,
       address_id,
       notes,
       payment_method = 'online',
       worker_preference = 'any'
     } = req.body;
-    console.log(req.body);
+    console.log("bookings val " , req.body);
+
     // Validate required fields
     if (!cart_items || !Array.isArray(cart_items) || cart_items.length === 0) {
       return res.status(400).json({ message: 'Cart items are required' });
@@ -435,13 +437,19 @@ router.post('/create', verifyToken, async (req, res) => {
       return res.status(400).json({ message: 'Address is required' });
     }
 
- 
     const nowUTC = new Date();
     // Treat incoming scheduled_time (YYYY-MM-DD HH:mm:ss) as UTC
     const scheduledUtcDate = new Date((scheduled_time + 'Z').replace(' ', 'T'));
     if (scheduledUtcDate <= nowUTC) {
       return res.status(400).json({ message: 'Cannot book for past time' });
     }
+
+    // Determine which value to use for night-charge checks and for the
+    // new scheduled_time_local column. Prefer the explicitly provided
+    // local time from the frontend; fall back to scheduled_time to keep
+    // backward compatibility with older clients.
+    const scheduledTimeLocalForNight = scheduled_time_local;
+    const timezoneValue = timezone;
 
     // Verify address belongs to customer
     const [addressResult] = await pool.query(
@@ -514,8 +522,12 @@ router.post('/create', verifyToken, async (req, res) => {
         const nightChargeRaw = subcategory.night_charge != null ? subcategory.night_charge : 0;
         const perUnitNightCharge = Number((parseFloat(nightChargeRaw) || 0).toFixed(2));
 
+        // Use the customer's local scheduled time (scheduled_time_local)
+        // when deciding whether night charges apply. If that value is not
+        // provided (older clients), fall back to the legacy scheduled_time
+        // behaviour.
         const isNightBooking = perUnitNightCharge > 0 && isNightTimeForSubcategory(
-          scheduled_time,
+          scheduledTimeLocalForNight,
           subcategory.night_start_time || '17:00:00',
           subcategory.night_end_time || '06:00:00'
         );
@@ -542,18 +554,20 @@ router.post('/create', verifyToken, async (req, res) => {
         // Accumulate total amount for all items with 2-decimal precision
         totalAmount = Number((totalAmount + totalPrice).toFixed(2));
 
-        // Create booking with explicit UTC created_at and full pricing breakdown
+        // Create booking with explicit UTC created_at and full pricing breakdown.
+        // Persist both the UTC scheduled_time and the customer's local
+        // scheduled_time_local + timezone for correct night-charge logic.
         const [bookingResult] = await pool.query(
           `INSERT INTO bookings
            (user_id, provider_id, booking_type, subcategory_id, service_unit_count,
             base_item_price, night_charge_per_unit, night_charge_amount, is_night_booking,
-            scheduled_time, gst, discount_percentage, discount_amount, subtotal_before_gst, night_charge,
+            scheduled_time, scheduled_time_local, timezone, gst, discount_percentage, discount_amount, subtotal_before_gst, night_charge,
             estimated_cost, actual_cost, price, total_amount,
             service_status, payment_status, created_at, duration, cost_type)
            VALUES
            (?, ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
             'pending', 'pending', ?, ?, ?)`,
           [
@@ -569,6 +583,8 @@ router.post('/create', verifyToken, async (req, res) => {
             isNightBooking ? 1 : 0,
 
             scheduled_time,
+            scheduledTimeLocalForNight,
+            timezoneValue,
             gst,
             discountPercentage,
             discountAmount,
@@ -906,12 +922,16 @@ router.get('/:id', verifyToken, async (req, res) => {
           ? Number(booking.subcategory_night_charge)
           : 0);
 
+    // When recomputing, use the customer's local scheduled_time_local if
+    // available; fall back to legacy scheduled_time for older rows.
+    const scheduledForNightCheck = booking.scheduled_time_local || booking.scheduled_time;
+
     // Prefer stored is_night_booking; otherwise recompute using time window
     let isNightBooking = booking.is_night_booking != null
       ? Boolean(booking.is_night_booking)
-      : (perUnitNightCharge > 0 && booking.scheduled_time
+      : (perUnitNightCharge > 0 && scheduledForNightCheck
           ? isNightTimeForSubcategory(
-              booking.scheduled_time,
+              scheduledForNightCheck,
               booking.subcategory_night_start_time || '17:00:00',
               booking.subcategory_night_end_time || '06:00:00'
             )
